@@ -1,0 +1,9 @@
+// ============================================================
+//  HIER DEINE SUPABASE-ZUGANGSDATEN EINTRAGEN
+//  Die beiden Werte stehen in Supabase unter:
+//  Project Settings → API   (Project URL und anon public key)
+//  Die Anführungszeichen unbedingt stehen lassen.
+// ============================================================
+
+const SUPABASE_URL = "https://ybjlqaknligeidoxckks.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InliamxxYWtubGlnZWlkb3hja2tzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTM1MTk4MTcsImV4cCI6MjEwOTA5NTgxN30.v8s-eYSaYGXKg56CjK_cxH11Vjtyjw43TVNjKF_O_v0";

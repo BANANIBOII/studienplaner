@@ -1,0 +1,337 @@
+/* ---------- Zusätze: Übergänge, Themen, Formulare, Ganztags-Leiste, Raster-Blöcke ---------- */
+
+/* Seitenwechsel-Animation (Wochen- und Tagesansicht) */
+.anim-next { animation: slideNext .28s cubic-bezier(.2,.7,.2,1); }
+.anim-prev { animation: slidePrev .28s cubic-bezier(.2,.7,.2,1); }
+@keyframes slideNext { from { transform: translateX(40px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes slidePrev { from { transform: translateX(-40px); opacity: 0; } to { transform: none; opacity: 1; } }
+
+/* Langes Drücken: kein Textmarkieren und kein Kontextmenü */
+.ev, .grid, .dayhead {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.dayhead { cursor: pointer; }
+
+/* Tagesansicht: eine Spalte nutzt die volle Breite */
+.daycol.wide { flex: 1; min-width: 0; }
+
+/* Zweispaltige Formularfelder */
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+/* Farbauswahl als Kreise */
+.swatch-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.sw {
+  width: 32px; height: 32px; border-radius: 50%;
+  border: 3px solid var(--card);
+  box-shadow: 0 0 0 1px var(--line);
+  cursor: pointer;
+}
+.sw.on { box-shadow: 0 0 0 2px var(--text); }
+
+/* Themenliste im Protokoll */
+.topic {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 4px; border-bottom: 1px solid var(--line);
+}
+.topic:last-of-type { border-bottom: 0; }
+.topic .title { flex: 1; font-weight: 600; cursor: pointer; }
+.topic .title.done-title { font-weight: 500; }
+.count {
+  font-size: 12px; color: var(--muted);
+  background: var(--bg); padding: 3px 9px; border-radius: 999px;
+}
+
+/* Ganztägige To-dos, Abgaben und Klausuren oberhalb des Rasters */
+.allday { padding: 12px; }
+.allday .chip:last-child { margin-bottom: 0; }
+.chip {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px; border-radius: 12px; margin-bottom: 8px;
+}
+.chip .grow { cursor: pointer; }
+.chip.filled {
+  background: color-mix(in srgb, var(--c) 18%, var(--card));
+  border-left: 4px solid var(--c);
+}
+.chip.outlined {
+  background: transparent;
+  border: 2px solid var(--c);
+}
+
+/* Protokoll-Karten: ausgeblendete (ohne Stundenplan-Termin) gedämpft, Menü-Knopf */
+.modcard { cursor: pointer; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+.modcard.dimmed { opacity: .55; }
+.menu-btn { padding: 2px 8px; font-size: 18px; line-height: 1; }
+
+/* ---------- Optik-Feinschliff ---------- */
+:root { --hour-px: 42px; }
+
+/* Icons in Navigation */
+.ic { width: 20px; height: 20px; flex: none; }
+.side-nav button { display: flex; align-items: center; gap: 12px; }
+.tabbar button .ic { width: 22px; height: 22px; display: block; margin: 0 auto 2px; }
+
+/* Karten: weicher Schatten und ruhige Hover-Bewegung */
+.card { box-shadow: 0 6px 24px rgba(0, 0, 0, .18); transition: box-shadow .2s ease; }
+.hero { background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 22%, var(--card)), var(--card)); }
+
+/* Raster: Linien passen sich der Stunden-Höhe an, Blöcke etwas schlanker */
+.grid { height: auto; background-image: repeating-linear-gradient(to bottom, var(--line) 0 1px, transparent 1px var(--hour-px)); }
+.ev { border-radius: 9px; padding: 4px 6px; }
+.ev b { font-size: 11px; line-height: 1.2; }
+.ev small { font-size: 10px; }
+
+/* Protokoll: Kopf, Themen, Einträge */
+.modcard { border-left: 4px solid var(--mc); }
+.mod-name { font-size: 16px; }
+.mod-head { margin-bottom: 14px; }
+.mod-title { font-size: 20px; font-weight: 800; letter-spacing: -0.01em; }
+.sec-title { font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+.topic-card {
+  display: flex; align-items: center; gap: 12px; padding: 12px 14px; margin-bottom: 8px;
+  border-radius: 14px; background: var(--bg); border: 1px solid var(--line); cursor: pointer;
+}
+.topic-card:hover { border-color: var(--accent); }
+.topic-card .chev { color: var(--muted); font-size: 20px; }
+.pct { font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 999px; white-space: nowrap; }
+.note-card {
+  display: flex; align-items: flex-start; gap: 10px; padding: 12px; margin-top: 8px;
+  border-radius: 14px; background: var(--bg); border: 1px solid var(--line);
+}
+.note-card.is-done { opacity: .6; }
+.note-check, .np-entry .note-check { margin-top: 4px; width: 18px; height: 18px; accent-color: var(--accent); flex: none; }
+.note-date { font-size: 12px; }
+.note-card .note-text { white-space: pre-wrap; line-height: 1.45; }
+.is-done { text-decoration: line-through; }
+.menu-list { display: flex; flex-direction: column; gap: 8px; margin: 12px 0; }
+
+/* Inline-Notizfeld (Stundenplan und Dashboard) */
+.notepanel { border: 2px solid var(--accent); }
+.notepanel select, .notepanel textarea { margin-bottom: 8px; }
+.np-list { margin-top: 10px; border-top: 1px solid var(--line); padding-top: 6px; }
+.np-entry { display: flex; gap: 10px; align-items: flex-start; padding: 6px 0; }
+.np-entry .grow { white-space: pre-wrap; }
+.pill-topic {
+  display: inline-block; font-size: 11px; font-weight: 700; color: var(--accent);
+  background: var(--accent-soft); padding: 2px 8px; border-radius: 999px; margin-bottom: 4px;
+}
+
+/* Dashboard: kompakte To-Do-Liste */
+.todo-compact .item { padding: 7px 0; font-size: 13px; }
+.todo-compact .item .muted { font-size: 11px; }
+
+/* Schnelleingaben im Dashboard */
+.quick-row { gap: 8px; margin: 8px 0 10px; }
+.quick-row input[type="date"] { width: auto; }
+.quicknote { margin-top: 12px; }
+.quicknote select { margin-bottom: 8px; }
+.quicknote textarea { min-height: 64px; }
+
+/* Zeitachse: halbe Stunden kleiner und blasser */
+.axis-h.half { font-size: 9px; opacity: .6; }
+
+/* Dashboard-Stundenplan: Kopf mit Datum */
+.excerpt .dayhead small { display: block; font-weight: 500; font-size: 11px; opacity: .85; }
+
+/* Heute-Ausschnitt im Dashboard: kompakt */
+.excerpt .daycol { min-width: 0; }
+.excerpt .grid { border-radius: 12px; }
+.note-text { white-space: pre-wrap; line-height: 1.5; }
+
+/* Leere Zustände: freundlich statt grau und nackt */
+.empty { text-align: center; padding: 18px 10px; color: var(--muted); font-size: 14px; }
+.empty .ei { font-size: 26px; margin-bottom: 6px; opacity: .8; }
+
+/* Feinere Abstände auf dem Handy */
+@media (max-width: 480px) {
+  .dash-grid { gap: 12px; }
+  .card { border-radius: 16px; }
+}
+
+/* Handy: Wochenraster passt auf die Bildschirmbreite */
+@media (max-width: 760px) {
+  .week { gap: 4px; }
+  .daycol { min-width: 0; }
+  .axis { width: 28px; }
+  .ev b { font-size: 11px; }
+  .ev small { font-size: 9.5px; }
+}
+
+/* Netlify-Badge („Powered by Netlify“) im kostenlosen Plan ausblenden */
+#nl-badge-frame, iframe[title="Powered by Netlify"] { display: none !important; }
+
+/* Anmeldesperre: ohne Login nur das Login-Fenster */
+.locked .sidebar, .locked .tabbar, .locked .topbar { display: none !important; }
+.locked .shell { margin-left: 0 !important; }
+.login-card { max-width: 420px; margin: 40px auto; }
+
+/* Eigene Karten im Dashboard */
+.linkgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; margin-top: 10px; }
+.linkcard {
+  border: 2px solid var(--accent); border-radius: 14px; padding: 12px;
+  background: var(--bg); display: flex; flex-direction: column; justify-content: space-between; gap: 6px;
+}
+.linkmain { display: flex; flex-direction: column; gap: 4px; color: var(--text); text-decoration: none; min-height: 40px; word-break: break-word; }
+
+/* Rückgängig-Knopf: klein und dezent oben rechts */
+.top-actions { display: flex; align-items: center; gap: 10px; }
+.hist-row { display: inline-flex; align-items: center; gap: 2px; }
+.hist-btn {
+  background: transparent; border: 0; color: var(--muted);
+  font-size: 16px; line-height: 1; padding: 4px 6px; border-radius: 8px; cursor: pointer;
+}
+.hist-btn:hover { color: var(--text); background: var(--accent-soft); }
+.hist-btn:disabled { opacity: .3; cursor: default; }
+.side-foot .hist-row { margin-bottom: 6px; }
+
+/* Raster-Blöcke für zeitgebundene To-dos, Abgaben und Klausuren */
+.block-todo { color: #fff; cursor: pointer; }
+.block-outline { color: var(--text); cursor: pointer; }
+
+/* Kalender: Ziehen von To-dos auf einen Tag */
+.drag-ghost {
+  position: fixed; left: 0; top: 0; z-index: 999; pointer-events: none;
+  background: var(--card); border: 1px solid var(--accent); border-radius: 10px;
+  padding: 6px 10px; font-size: 13px; font-weight: 600; max-width: 60vw;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .3);
+}
+.mday.drop { outline: 2px dashed var(--accent); outline-offset: -2px; background: var(--accent-soft); }
+.dropzone {
+  display: none; margin-top: 12px; padding: 12px; border: 2px dashed var(--line);
+  border-radius: 12px; text-align: center; color: var(--muted); font-size: 13px;
+}
+body.is-dragging .dropzone { display: block; }
+.dropzone.drop { border-color: var(--accent); color: var(--text); }
+body.is-dragging { user-select: none; -webkit-user-select: none; }
+.listrow[data-drag] { cursor: grab; }
+
+/* Reiterleiste: vom Benutzer gewählt (pro Gerät). Überschreibt die automatische Wahl. */
+body.nav-left:not(.locked) .sidebar {
+  display: flex !important; flex-direction: column;
+  position: fixed; left: 0; top: 0; bottom: 0; width: 240px;
+  background: var(--card); border-right: 1px solid var(--line);
+  padding: 22px 16px; z-index: 20;
+}
+body.nav-left:not(.locked) .shell { margin-left: 240px !important; }
+body.nav-left:not(.locked) .topbar,
+body.nav-left:not(.locked) .tabbar { display: none !important; }
+body.nav-left:not(.locked) { padding-bottom: 0 !important; }
+body.nav-left:not(.locked) main { padding: 28px 32px !important; }
+body.nav-bottom:not(.locked) .sidebar { display: none !important; }
+body.nav-bottom:not(.locked) .shell { margin-left: 0 !important; }
+body.nav-bottom:not(.locked) .topbar { display: flex !important; }
+body.nav-bottom:not(.locked) .tabbar { display: flex !important; }
+
+/* Farbwähler: klein und ruhig statt breiter Balken */
+input[type="color"] {
+  width: 56px; height: 34px; padding: 3px; border-radius: 10px;
+  border: 1px solid var(--line); background: var(--card); cursor: pointer; vertical-align: middle;
+}
+input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+input[type="color"]::-webkit-color-swatch { border: 0; border-radius: 7px; }
+input[type="color"]::-moz-color-swatch { border: 0; border-radius: 7px; }
+
+/* Designs: Karte, Auswahlfenster und Vorschauen */
+.dprev-mini {
+  width: 64px; height: 42px; border-radius: 10px; border: 1px solid var(--line);
+  position: relative; overflow: hidden; flex: none;
+}
+.dprev-mini span { position: absolute; left: 8px; right: 8px; top: 8px; bottom: 8px; border-radius: 6px; }
+.dprev-mini i { position: absolute; right: 12px; bottom: 12px; width: 12px; height: 12px; border-radius: 50%; }
+.dgrid { display: grid; grid-template-columns: 1fr; gap: 12px; max-height: 62vh; overflow-y: auto; padding-right: 2px; }
+@media (min-width: 700px) { .dgrid { grid-template-columns: 1fr 1fr; } }
+.dcard { border: 1px solid var(--line); border-radius: 14px; padding: 12px; background: var(--bg); }
+.dcard.on { border: 2px solid var(--accent); }
+.dprev-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 10px; }
+.dprev {
+  border-radius: 10px; padding: 8px; border: 1px solid var(--line); min-height: 70px;
+}
+.dprev-card {
+  border-radius: 8px; border: 1px solid; padding: 8px; display: flex; flex-direction: column; gap: 6px;
+}
+.dprev-dot { width: 10px; height: 10px; border-radius: 50%; }
+.dprev-bar { height: 6px; border-radius: 3px; width: 80%; opacity: .9; }
+.dprev-bar.short { width: 50%; opacity: .6; }
+
+/* Dashboard: links Heute im Stundenplan, rechts To-Dos und darunter Countdown */
+.dash-main { display: grid; grid-template-columns: 1fr; gap: 14px; align-items: start; }
+.dash-side { display: flex; flex-direction: column; gap: 14px; }
+.dash-side > .card { margin: 0; }
+@media (min-width: 800px) { .dash-main { grid-template-columns: 1.35fr 1fr; } }
+
+/* Kalender: Layout links Monat, rechts Tag und Übersicht. Breite und Höhe pro Gerät (in %). */
+.cal-layout { display: grid; grid-template-columns: 1fr; gap: 14px; align-items: start; }
+.cal-left { width: calc(100% * var(--calw, 100) / 100); max-width: 100%; }
+.cal-right { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.cal-right > .card { margin: 0; }
+@media (min-width: 900px) {
+  .cal-layout { grid-template-columns: calc(460px * var(--calw, 100) / 100) minmax(0, 1fr); }
+  .cal-left { width: auto; }
+}
+.mday { position: relative; min-height: calc(64px * var(--calh, 100) / 100); overflow: hidden; }
+.mday .mnum { font-size: 13px; font-weight: 600; }
+.mday .dot { margin-top: 4px; }
+.mpills { display: flex; flex-direction: column; gap: 3px; margin-top: 3px; }
+.mpill {
+  display: flex; align-items: center; gap: 4px; font-size: 10px; line-height: 1.2;
+  padding: 2px 5px; border-radius: 6px; white-space: nowrap; overflow: hidden;
+  background: color-mix(in srgb, var(--pc) 20%, transparent); color: var(--text);
+}
+.mpill span { overflow: hidden; text-overflow: ellipsis; }
+.mpill.is-done { opacity: .45; text-decoration: line-through; }
+.mmore { font-size: 10px; color: var(--muted); }
+.mday.today .mpill { background: rgba(0, 0, 0, .18); color: var(--bg); }
+.micons { display: flex; gap: 4px; margin-top: 5px; align-items: center; flex-wrap: wrap; }
+.style-ring { text-align: center; }
+.mring {
+  width: calc(30px * var(--calh, 100) / 100); height: calc(30px * var(--calh, 100) / 100); margin: 4px auto 0; border-radius: 50%;
+  border: 2.5px solid var(--ring); display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 600; min-height: 0; line-height: 1;
+}
+.mday.style-ring .mring { width: 30px; height: 30px; }
+.mcount { font-size: 10px; color: var(--muted); margin-top: 3px; }
+.mday.style-ring .dot { margin: 3px auto 0; display: block; }
+.mday.today .mring { border-color: var(--bg); }
+.mday.today .mcount { color: var(--bg); }
+
+/* Erledigt-Bereich: eingeklappt */
+.donebox { margin-top: 10px; border-top: 1px solid var(--line); padding-top: 6px; }
+.donebox > summary { cursor: pointer; color: var(--muted); font-size: 13px; padding: 6px 0; list-style: none; }
+.donebox > summary::-webkit-details-marker { display: none; }
+.donebox > summary::before { content: "▸ "; }
+.donebox[open] > summary::before { content: "▾ "; }
+.donebox .listrow { opacity: .75; }
+
+/* Stundenplan: Tage als durchgehende Tabelle, ohne Abstand zwischen den Spalten */
+.week, .week.excerpt { gap: 0 !important; }
+.week .daycol .dayhead, .week .daycol .grid { border-radius: 0; }
+.week .daycol + .daycol .dayhead,
+.week .daycol + .daycol .grid { border-left: 0; }
+.week .daycol:first-of-type .dayhead { border-top-left-radius: 12px; }
+.week .daycol:first-of-type .grid { border-bottom-left-radius: 12px; }
+.week .daycol:last-of-type .dayhead { border-top-right-radius: 12px; }
+.week .daycol:last-of-type .grid { border-bottom-right-radius: 12px; }
+
+/* Stundenplan: linke Ecke der ersten Tagesspalte rund (die Zeitachse steht davor) */
+.week .axis + .daycol .dayhead { border-top-left-radius: 12px; border-left: 1px solid var(--line); }
+.week .axis + .daycol .grid { border-bottom-left-radius: 12px; border-left: 1px solid var(--line); }
+
+/* Stundenplan: Scrollleiste gut sichtbar */
+.week { scrollbar-width: thin; scrollbar-color: var(--muted) var(--line); }
+.week::-webkit-scrollbar { width: 10px; height: 10px; }
+.week::-webkit-scrollbar-track { background: var(--line); border-radius: 8px; }
+.week::-webkit-scrollbar-thumb { background: var(--muted); border-radius: 8px; border: 2px solid var(--line); }
+
+/* Stundenplan: Ziel beim Ziehen einer Aufgabe */
+.grid.drop { outline: 2px dashed var(--accent); outline-offset: -2px; }
+.allday .chip[data-drag] { cursor: grab; }
+
+/* Tagesansicht: Wochentag fett im Spaltenkopf, Datum darunter */
+.daycol.wide .dayhead small { display: block; font-weight: 500; font-size: 11px; opacity: .85; }
+
+/* Tagesansicht: Wochentag groß und gut lesbar im Spaltenkopf */
+.daycol.wide .dayhead { height: 52px; display: flex; align-items: center; justify-content: center; }
+.daycol.wide .dayhead .daytitle { font-size: 18px; font-weight: 800; letter-spacing: .01em; }
