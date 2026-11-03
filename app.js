@@ -62,6 +62,8 @@ const DEVICE_DEFAULTS = {
   dash: { zoomY: 1, grid: "", now: "" },
   planLook: { grid: "", now: "" },
   navSide: "",
+  checkSide: "left",
+  layouts: {},
   cal: { style: "bar", w: 100, h: 100 },
 };
 const DEVICE_KEYS = Object.keys(DEVICE_DEFAULTS);
@@ -264,7 +266,7 @@ function applyDevice(settings) {
 function deviceFromSettings(s) {
   return {
     dark: s.dark, weekend: s.weekend, colors: s.colors, zoomY: s.zoomY, autoRange: s.autoRange,
-    dayStart: s.dayStart, dayEnd: s.dayEnd, dash: s.dash, navSide: s.navSide || "", cal: s.cal || DEVICE_DEFAULTS.cal,
+    dayStart: s.dayStart, dayEnd: s.dayEnd, dash: s.dash, navSide: s.navSide || "", checkSide: s.checkSide || "left", layouts: s.layouts || {}, cal: s.cal || DEVICE_DEFAULTS.cal,
     planLook: { grid: (s.plan && s.plan.grid) || "", now: (s.plan && s.plan.now) || "" },
   };
 }
@@ -460,6 +462,7 @@ const ui = {
   modKind: "alle",
   calShowDone: false,
   dashNext: null,
+  layEdit: false,
   showHidden: false,
   noteFor: null,
   editNote: null,
@@ -477,6 +480,7 @@ function applyTheme() {
   document.body.classList.toggle("dark", !!state.settings.dark);
   document.body.classList.toggle("nav-left", state.settings.navSide === "left");
   document.body.classList.toggle("nav-bottom", state.settings.navSide === "bottom");
+  document.body.classList.toggle("check-right", state.settings.checkSide === "right");
   const c = themeColors();
   const r = document.documentElement.style;
   r.setProperty("--accent", c.accent);
@@ -586,7 +590,8 @@ function render() {
     protokolle: viewModules,
     einstellungen: viewSettings,
   };
-  document.getElementById("app").innerHTML = views[ui.tab]();
+  document.getElementById("app").innerHTML = (ui.layEdit ? layBarHTML() : "") + views[ui.tab]();
+  document.querySelectorAll(".lay-btn").forEach((b) => b.classList.toggle("on", ui.layEdit));
   // Stundenplan: Eintragskarte als eigenes Fenster
   if (ui.tab === "stundenplan" && ui.noteFor && ui.noteWindow) openModal(notePanelHTML(ui.noteFor.name, ui.noteFor.date));
   ui.anim = null;
@@ -668,18 +673,16 @@ function viewDashboard() {
     ${greet.lines.map((l) => `<p>${l}</p>`).join("")}
   </div>`;
 
-  // Links: Heute im Stundenplan. Rechts oben: To-Dos, darunter: Countdown. Am Handy untereinander.
-  h += `<div class="dash-main">
-    <div class="card">
+  // Karten: Stundenplan heute, To-Dos, Countdown, Links. Ohne Layout-Bearbeitung wie bisher.
+  const planCard = `<div class="card">
       <div class="row" style="justify-content:space-between"><h3 style="margin:0">${iso(dashDay(now)) === iso(now) ? "Heute im Stundenplan" : "Stundenplan"}</h3>
         <button class="btn ghost menu-btn" data-act="dashmenu" title="Einstellungen">⋮</button></div>
       ${todayPlanHTML()}
       ${dashDayButton(now)}
       ${quickNoteHTML()}
       ${iso(dashDay(now)) === iso(now) ? tomorrowHTML() : ""}
-    </div>
-    <div class="dash-side">
-      <div class="card todo-compact">
+    </div>`;
+  const todoCard = `<div class="card todo-compact">
         <h3>Anstehende To-Dos · diese Woche</h3>
         <form data-form="quicktodo" class="row quick-row">
           <input name="title" required placeholder="Neue Aufgabe …" style="flex:1">
@@ -688,12 +691,16 @@ function viewDashboard() {
         </form>
         ${open.length ? open.slice(0, 5).map(todoItem).join("") : `<div class="empty"><div class="ei">🎉</div>Diese Woche ist nichts offen.</div>`}
         ${open.length > 8 ? `<div class="muted" style="margin-top:10px">… und ${open.length - 8} weitere im Kalender.</div>` : ""}
-      </div>
-      ${countdownBlock()}
-    </div>
-  </div>`;
-
-  h += `<div style="margin-top:18px">${linksBlock()}</div>`;
+      </div>`;
+  const countCard = countdownBlock();
+  const linksCard = linksBlock();
+  const flow = `<div class="dash-main">${planCard}<div class="dash-side">${todoCard}${countCard}</div></div><div style="margin-top:18px">${linksCard}</div>`;
+  h += laid("dash", [
+    { id: "plan", w: 7, h: 20, html: planCard },
+    { id: "todo", w: 5, h: 12, html: todoCard },
+    { id: "count", w: 5, h: 8, html: countCard },
+    { id: "links", w: 12, h: 8, html: linksCard },
+  ], flow);
   return h;
 }
 
@@ -940,9 +947,7 @@ function viewPlan() {
       ${menuBtn}
     </div>
     ${allDayHTML([ui.dayDate], false)}
-    <div class="${animCls}"><div class="week"><div class="axis" style="height:${50 + gridHeight()}px">${axisHTML()}</div>
-      ${dayColumn(ui.dayDate, `<b class="daytitle">${wd}</b>`, true, today)}
-    </div>${emptyPlanHint()}</div>`;
+    <div class="${animCls}">${planLaid(`<div class="week"><div class="axis" style="height:${50 + gridHeight()}px">${axisHTML()}</div>${dayColumn(ui.dayDate, `<b class="daytitle">${wd}</b>`, true, today)}</div>`)}</div>${emptyPlanHint()}`;
   }
 
   const mon = addDays(mondayOf(today), ui.weekOffset * 7);
@@ -964,7 +969,7 @@ function viewPlan() {
     const d = addDays(mon, i);
     cols += dayColumn(iso(d), `${WEEKDAYS[i]}<br>${pad(d.getDate())}.${pad(d.getMonth() + 1)}.`, false, today);
   }
-  h += `<div class="${animCls}"><div class="week"><div class="axis" style="height:${50 + gridHeight()}px">${axisHTML()}</div>${cols}</div>${emptyPlanHint()}</div>`;
+  h += `<div class="${animCls}">${planLaid(`<div class="week"><div class="axis" style="height:${50 + gridHeight()}px">${axisHTML()}</div>${cols}</div>`)}</div>${emptyPlanHint()}`;
   return h;
 }
 
@@ -1042,13 +1047,29 @@ function openEventEdit(id) {
       <input type="hidden" name="color" value="${color}">
       <div class="row" style="margin-bottom:8px"><span class="muted">Farbe wählen:</span><input type="color" id="evColorPick" value="${color}"></div>
       ${mod ? "" : `<label class="row" style="margin-top:12px"><input type="checkbox" name="protokoll"> Auch im Vorlesungs-Protokoll anlegen</label>`}
-      <div class="row" style="margin-top:14px">
-        <button class="btn">Speichern</button>
-        <button type="button" class="btn danger" data-act="evdel" data-id="${ev.id}">Diesen Termin löschen</button>
-        <button type="button" class="btn danger" data-act="evdelfuture" data-id="${ev.id}">Diesen und alle späteren löschen</button>
-        <button type="button" class="btn ghost" data-act="mclose">Abbrechen</button>
+      <div class="sheet-actions">
+        <button type="button" class="danger-text" data-act="evdelmenu" data-id="${ev.id}">Löschen</button>
+        <div class="right">
+          <button type="button" class="btn ghost" data-act="mclose">Abbrechen</button>
+          <button class="btn">Speichern</button>
+        </div>
       </div>
     </form>`);
+}
+
+// Auswahl beim Löschen eines Termins
+function openDeleteChoice(id) {
+  const ev = state.events.find((x) => x.id === id);
+  if (!ev) return;
+  openModal(`
+    <h3>Termin löschen</h3>
+    <p class="muted" style="margin-top:0">„${esc(ev.name)}“ am ${fmtD(parseIso(ev.date))}</p>
+    <div class="choice-list">
+      <button type="button" class="choice" data-act="evdel" data-id="${ev.id}">Nur diesen Termin</button>
+      <button type="button" class="choice" data-act="evdelfuture" data-id="${ev.id}">Diesen und alle späteren</button>
+      <button type="button" class="choice" data-act="evdelall" data-id="${ev.id}">Alle Termine dieser Vorlesung</button>
+    </div>
+    <div class="row" style="justify-content:flex-end;margin-top:14px"><button class="btn ghost" data-act="mclose">Abbrechen</button></div>`);
 }
 
 function openEventCreate(date, startMin) {
@@ -1203,10 +1224,15 @@ function viewCal() {
     ${body || `<div class="empty"><div class="ei">✨</div>Nichts in dieser Auswahl.</div>`}
   </div>`;
 
-  h += `<div class="cal-layout" style="--calw:${cal.w};--calh:${cal.h}">
+  const calFlow = `<div class="cal-layout" style="--calw:${cal.w};--calh:${cal.h}">
     <div class="cal-left">${monthCard}</div>
     <div class="cal-right">${dayCard}${allCard}</div>
   </div>`;
+  h += laid("kal", [
+    { id: "month", w: 6, h: 16, html: monthCard },
+    { id: "day", w: 6, h: 14, html: dayCard },
+    { id: "all", w: 6, h: 14, html: allCard },
+  ], calFlow, `--calw:${cal.w};--calh:${cal.h}`);
   return h;
 }
 
@@ -1287,7 +1313,7 @@ function viewModules() {
     const list = visible.filter((n) => kindOf(n) === k);
     if (!list.length) return "";
     return (kf === "alle" ? `<h4 style="margin-top:18px">${kindLabel[k]}</h4>` : "") +
-      `<div class="dash-grid">` + list.map((n) => cardHTML(n, false)).join("") + `</div>`;
+      laid("prot-" + k, list.map((n) => ({ id: n, w: 4, h: 3, html: cardHTML(n, false) })), `<div class="dash-grid">` + list.map((n) => cardHTML(n, false)).join("") + `</div>`);
   }).join("") || `<div class="card muted">Keine Einträge in dieser Auswahl.</div>`;
   if (ui.showHidden && hidden.length) {
     h += `<h4 style="margin-top:18px">Ausgeblendet (keine Termine im Stundenplan)</h4><div class="dash-grid">` +
@@ -1437,6 +1463,11 @@ function viewSettings() {
         `<button class="btn ${(s.navSide || "") === v ? "" : "ghost"}" data-act="navset" data-v="${v}">${l}</button>`).join("")}
     </div>
     <p class="muted" style="margin-bottom:0">Automatisch: links am PC, unten am Handy.</p>
+    <label class="muted" style="display:block;margin-top:14px">Haken bei Listen (nur dieses Gerät)</label>
+    <div class="row" style="gap:6px">
+      ${[["left", "Links vom Namen"], ["right", "Rechts vom Namen"]].map(([v, l]) =>
+        `<button class="btn ${(s.checkSide || "left") === v ? "" : "ghost"}" data-act="checkset" data-v="${v}">${l}</button>`).join("")}
+    </div>
   </div>`;
   h += viewDesignCard();
   h += `<div class="card"><h3>Farben (${mode === "dark" ? "Dunkel" : "Hell"}-Modus)</h3>
@@ -1509,6 +1540,155 @@ function cloudSection() {
 function openModal(html) {
   document.getElementById("modalRoot").innerHTML = `<div class="modal" data-act="mbg"><div class="sheet">${html}</div></div>`;
 }
+// ---------- Layout bearbeiten (Schloss-Symbol) ----------
+// Karten liegen auf einem Raster mit 12 Spalten und Zeilen von je 40 px. Pro Gerät gespeichert.
+const LAY_COLS = 12, LAY_ROW = 40, LAY_GAP = 10, LAY_STRIDE_Y = LAY_ROW + LAY_GAP;
+const layNarrow = () => window.innerWidth < 800;
+const layScopeSaved = (scope) => {
+  const L = (state.settings.layouts || {})[scope];
+  return !!(L && Object.keys(L).length);
+};
+// Ein Bereich wird nur als Raster gezeigt, wenn gerade bearbeitet wird oder schon ein Layout gespeichert ist
+function laid(scope, items0, flowHtml, extraStyle = "") {
+  if (!ui.layEdit && !layScopeSaved(scope)) return flowHtml;
+  const items = items0.filter((it) => it.html);
+  const saved = (state.settings.layouts || {})[scope] || {};
+  const place = placeLayout(items, saved);
+  const cards = items.map((it) => {
+    const p = place[it.id];
+    return `<div class="lcard" data-scope="${scope}" data-card="${esc(it.id)}" data-c="${p.c}" data-r="${p.r}" data-w="${p.w}" data-h="${p.h}" style="grid-column:${p.c} / span ${p.w};grid-row:${p.r} / span ${p.h}">${it.html}</div>`;
+  }).join("");
+  return `<div class="lay${ui.layEdit ? " lay-edit" : ""}" data-scope="${scope}" style="${extraStyle}">${cards}</div>`;
+}
+// Gespeicherte Positionen übernehmen, die übrigen Karten der Reihe nach einsortieren
+function placeLayout(items, saved) {
+  const occ = [];
+  const used = (c, r, w, h) => {
+    for (let y = r; y < r + h; y++) for (let x = c; x < c + w; x++) if (occ[y] && occ[y][x]) return true;
+    return false;
+  };
+  const mark = (c, r, w, h) => {
+    for (let y = r; y < r + h; y++) { occ[y] = occ[y] || []; for (let x = c; x < c + w; x++) occ[y][x] = true; }
+  };
+  const out = {};
+  items.forEach((it) => {
+    const q = saved[it.id];
+    if (!q) return;
+    const w = Math.max(1, Math.min(LAY_COLS, Math.round(q.w)));
+    const h = Math.max(1, Math.round(q.h));
+    const c = Math.max(1, Math.min(LAY_COLS - w + 1, Math.round(q.c)));
+    const r = Math.max(1, Math.round(q.r));
+    out[it.id] = { c, r, w, h };
+    mark(c, r, w, h);
+  });
+  items.forEach((it) => {
+    if (out[it.id]) return;
+    const w = layNarrow() ? LAY_COLS : Math.min(LAY_COLS, it.w || 6);
+    const h = it.h || 6;
+    for (let r = 1; ; r++) {
+      let placed = false;
+      for (let c = 1; c <= LAY_COLS - w + 1 && !placed; c++) {
+        if (!used(c, r, w, h)) { out[it.id] = { c, r, w, h }; mark(c, r, w, h); placed = true; }
+      }
+      if (placed) break;
+    }
+  });
+  return out;
+}
+// Lage aller Karten eines Bereichs speichern (aus dem Bildschirm), optional eine Karte ändern
+function saveScopeLayout(scope, id, p) {
+  const map = {};
+  document.querySelectorAll(`.lcard[data-scope="${scope}"]`).forEach((c) => {
+    map[c.dataset.card] = { c: +c.dataset.c, r: +c.dataset.r, w: +c.dataset.w, h: +c.dataset.h };
+  });
+  if (id && p) map[id] = p;
+  state.settings.layouts = { ...(state.settings.layouts || {}), [scope]: map };
+  commit();
+}
+const layClamp = (v, a, b) => Math.min(b, Math.max(a, v));
+function planLaid(html) { return laid("plan", [{ id: "tt", w: 12, h: 24, html }], html); }
+function layOverlaps(scope, id, p) {
+  return [...document.querySelectorAll(`.lcard[data-scope="${scope}"]`)].some((c) => {
+    if (c.dataset.card === id) return false;
+    const c0 = +c.dataset.c, r0 = +c.dataset.r, w0 = +c.dataset.w, h0 = +c.dataset.h;
+    return p.c < c0 + w0 && c0 < p.c + p.w && p.r < r0 + h0 && r0 < p.r + p.h;
+  });
+}
+// Leiste oben im Bearbeitungsmodus
+function layBarHTML() {
+  return `<div class="card laybar">
+    <div class="grow"><b>Layout bearbeiten</b>
+      <div class="muted" style="font-size:13px">Am Rand ziehen: Größe · in der Mitte ziehen: verschieben · einmal tippen: Zahlen eingeben</div></div>
+    <button class="btn ghost" data-act="layreset">Zurücksetzen</button>
+  </div>`;
+}
+function openLayoutModal(scope, id) {
+  const card = [...document.querySelectorAll(`.lcard[data-scope="${scope}"]`)].find((c) => c.dataset.card === id);
+  if (!card) return;
+  openModal(`<h3>Karte anpassen</h3>
+    <form data-form="layoutform" data-scope="${scope}" data-id="${esc(id)}">
+      <div class="grid2">
+        <div><label class="muted">Spalte (1–12)</label><input type="number" name="c" min="1" max="12" value="${card.dataset.c}"></div>
+        <div><label class="muted">Breite (Spalten)</label><input type="number" name="w" min="1" max="12" value="${card.dataset.w}"></div>
+      </div>
+      <div class="grid2">
+        <div><label class="muted">Zeile</label><input type="number" name="r" min="1" max="200" value="${card.dataset.r}"></div>
+        <div><label class="muted">Höhe (Zeilen)</label><input type="number" name="h" min="1" max="200" value="${card.dataset.h}"></div>
+      </div>
+      <div class="sheet-actions">
+        <button type="button" class="btn ghost" data-act="mclose">Abbrechen</button>
+        <div class="right"><button class="btn">Übernehmen</button></div>
+      </div>
+    </form>`);
+}
+
+// Ziehen und Größe ändern im Layout-Modus. Rand (rechts/unten) = Größe, Mitte = verschieben.
+let lay = null;
+const LAY_EDGE = 16;
+function applyLayCell(el, p) {
+  el.style.gridColumn = `${p.c} / span ${p.w}`;
+  el.style.gridRow = `${p.r} / span ${p.h}`;
+  el.dataset.c = p.c; el.dataset.r = p.r; el.dataset.w = p.w; el.dataset.h = p.h;
+}
+document.addEventListener("pointerdown", (e) => {
+  if (!ui.layEdit || e.button > 0) return;
+  const card = e.target.closest(".lay-edit .lcard");
+  if (!card) return;
+  const rect = card.getBoundingClientRect();
+  const nearEdge = rect.right - e.clientX < LAY_EDGE || rect.bottom - e.clientY < LAY_EDGE;
+  lay = {
+    el: card, grid: card.closest(".lay"), scope: card.dataset.scope, id: card.dataset.card,
+    mode: nearEdge ? "size" : "move", sx: e.clientX, sy: e.clientY, moved: false,
+    c0: +card.dataset.c, r0: +card.dataset.r, w0: +card.dataset.w, h0: +card.dataset.h,
+  };
+}, true);
+document.addEventListener("pointermove", (e) => {
+  if (!lay) return;
+  const dx = e.clientX - lay.sx, dy = e.clientY - lay.sy;
+  if (!lay.moved && Math.hypot(dx, dy) < 6) return;
+  lay.moved = true;
+  const gap = LAY_GAP;
+  const colStep = (lay.grid.getBoundingClientRect().width - gap * (LAY_COLS - 1)) / LAY_COLS + gap;
+  const dc = Math.round(dx / colStep), dr = Math.round(dy / LAY_STRIDE_Y);
+  const p = lay.mode === "move"
+    ? { c: layClamp(lay.c0 + dc, 1, LAY_COLS - lay.w0 + 1), r: Math.max(1, lay.r0 + dr), w: lay.w0, h: lay.h0 }
+    : { c: lay.c0, r: lay.r0, w: layClamp(lay.w0 + dc, 1, LAY_COLS - lay.c0 + 1), h: Math.max(1, lay.h0 + dr) };
+  if (layOverlaps(lay.scope, lay.id, p)) return;
+  applyLayCell(lay.el, p);
+});
+document.addEventListener("pointerup", () => {
+  const L = lay;
+  lay = null;
+  if (!L) return;
+  if (L.moved) saveScopeLayout(L.scope);
+  else openLayoutModal(L.scope, L.id);
+});
+document.addEventListener("pointercancel", () => { if (lay) { lay = null; render(); } });
+// Im Layout-Modus öffnen Klicks in Karten kein Modul oder Menü, sondern nur das Zahlenfenster
+document.addEventListener("click", (e) => {
+  if (e.target.closest(".lay-edit .lcard")) { e.preventDefault(); e.stopPropagation(); }
+}, true);
+
 // Eigene Fenster statt Browser-Dialoge. Wer auf ein Fenster wartet, bekommt die Antwort über modalResolve.
 let modalResolve = null;
 function closeModal() {
@@ -1873,6 +2053,16 @@ document.addEventListener("click", async (e) => {
       form.querySelectorAll(".sw").forEach((s) => s.classList.toggle("on", s === el));
       break;
     }
+    case "evdelmenu": openDeleteChoice(id); break;
+    case "evdelall": {
+      const ev = state.events.find((x) => x.id === id);
+      if (!ev) break;
+      const all = state.events.filter((x) => x.name === ev.name);
+      if (!(await appConfirm(`${all.length} Termine von „${ev.name}“ in den Papierkorb verschieben?`))) break;
+      all.forEach((x) => trashAdd("event", x));
+      state.events = state.events.filter((x) => x.name !== ev.name);
+      closeModal(); commit(); break;
+    }
     case "evdel": {
       if (!(await appConfirm("Diesen Termin in den Papierkorb verschieben?"))) break;
       const ev = state.events.find((x) => x.id === id);
@@ -1911,6 +2101,14 @@ document.addEventListener("click", async (e) => {
     }
     case "navset": state.settings.navSide = el.dataset.v; commit(); break;
     case "calmenu": openCalMenu(); break;
+    case "checkset": state.settings.checkSide = el.dataset.v; commit(); break;
+    case "laytoggle": ui.layEdit = !ui.layEdit; render(); break;
+    case "layreset": {
+      if (!(await appConfirm("Layout auf diesem Gerät auf die Standardanordnung zurücksetzen?", "Zurücksetzen"))) break;
+      state.settings.layouts = {};
+      commit(); break;
+    }
+
     case "calstyle": state.settings.cal = { ...calSet(), style: el.dataset.v }; commit(); openCalMenu(); break;
     case "calreset": state.settings.cal = { ...DEVICE_DEFAULTS.cal }; commit(); openCalMenu(); break;
     case "calshowdone": ui.calShowDone = el.checked; render(); break;
@@ -2210,6 +2408,18 @@ document.addEventListener("submit", async (e) => {
     return;
   }
   switch (f.dataset.form) {
+    case "layoutform": {
+      const p = { c: parseInt(data.c, 10), r: parseInt(data.r, 10), w: parseInt(data.w, 10), h: parseInt(data.h, 10) };
+      if ([p.c, p.r, p.w, p.h].some((n) => !Number.isFinite(n))) { await appAlert("Bitte nur ganze Zahlen eingeben."); break; }
+      p.w = layClamp(p.w, 1, LAY_COLS);
+      p.c = layClamp(p.c, 1, LAY_COLS - p.w + 1);
+      p.r = Math.max(1, p.r);
+      p.h = Math.max(1, p.h);
+      if (layOverlaps(f.dataset.scope, f.dataset.id, p)) { await appAlert("Dort liegt schon eine andere Karte. Bitte andere Werte wählen."); break; }
+      closeModal();
+      saveScopeLayout(f.dataset.scope, f.dataset.id, p);
+      break;
+    }
     case "topic": {
       const mod = state.modules[dec(f.dataset.m)];
       mod.topics.push({ id: uid(), title: data.title.trim(), done: false });

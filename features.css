@@ -335,3 +335,60 @@ input[type="color"]::-moz-color-swatch { border: 0; border-radius: 7px; }
 /* Tagesansicht: Wochentag groß und gut lesbar im Spaltenkopf */
 .daycol.wide .dayhead { height: 52px; display: flex; align-items: center; justify-content: center; }
 .daycol.wide .dayhead .daytitle { font-size: 18px; font-weight: 800; letter-spacing: .01em; }
+
+/* Bearbeitungsfenster: Knöpfe einheitlich, Löschen links, Speichern rechts */
+.sheet-actions { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 18px; flex-wrap: wrap; }
+.sheet-actions .right { display: flex; gap: 8px; margin-left: auto; }
+button.danger-text {
+  background: none; border: 0; color: #ef4444; font-weight: 700; font-size: 14px;
+  padding: 10px 6px; cursor: pointer; border-radius: 10px;
+}
+button.danger-text:hover { background: rgba(239, 68, 68, .12); }
+.choice-list { display: flex; flex-direction: column; gap: 8px; }
+button.choice {
+  text-align: left; padding: 14px 16px; border-radius: 14px; cursor: pointer;
+  background: var(--bg); color: var(--text); border: 1px solid var(--line); font-weight: 600; font-size: 15px;
+}
+button.choice:hover { border-color: var(--accent); }
+button.choice:last-child { color: #ef4444; }
+
+/* Haken: abgerundetes Kästchen, überall gleich */
+input[type="checkbox"] {
+  -webkit-appearance: none; appearance: none;
+  width: 20px; height: 20px; margin: 0; flex: none; cursor: pointer;
+  border: 2px solid var(--muted); border-radius: 6px; background: var(--card);
+  display: inline-grid; place-content: center;
+}
+input[type="checkbox"]::after {
+  content: ""; width: 5px; height: 10px; margin-top: -2px;
+  border: solid var(--bg); border-width: 0 2.5px 2.5px 0; transform: rotate(45deg) scale(0);
+  transition: transform .12s ease;
+}
+input[type="checkbox"]:checked { background: var(--accent); border-color: var(--accent); }
+input[type="checkbox"]:checked::after { transform: rotate(45deg) scale(1); }
+input[type="checkbox"]:disabled { opacity: .4; cursor: default; }
+
+/* Haken rechts vom Namen (Schalter in den Einstellungen) */
+body.check-right .listrow > input[type="checkbox"],
+body.check-right .chip > input[type="checkbox"],
+body.check-right .np-entry > input[type="checkbox"] { order: 2; }
+body.check-right .listrow > .prio { order: 1; }
+body.check-right .listrow > .btn,
+body.check-right .chip > .btn,
+body.check-right .np-entry > .btn { order: 3; }
+
+/* ---------- Layout bearbeiten (Schloss) ---------- */
+.lay { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); grid-auto-rows: 40px; gap: 10px; margin-top: 10px; align-items: stretch; }
+.lcard { min-width: 0; min-height: 0; overflow: auto; position: relative; border-radius: 16px; }
+.lcard > .card { height: 100%; margin: 0; box-sizing: border-box; }
+.lay-edit .lcard { outline: 2px dashed var(--accent); outline-offset: 3px; cursor: move; touch-action: none; user-select: none; }
+.lay-edit .lcard > * { pointer-events: none; }
+.lay-edit .lcard::after {
+  content: ""; position: absolute; right: 5px; bottom: 5px; width: 12px; height: 12px; pointer-events: none;
+  border-right: 3px solid var(--accent); border-bottom: 3px solid var(--accent); border-radius: 2px; opacity: .8;
+}
+.laybar { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; border: 2px solid var(--accent); }
+.lay-btn svg { width: 16px; height: 16px; }
+.lay-btn.on { color: var(--accent); }
+.lay-btn.on svg { stroke: var(--accent); }
+@media (max-width: 799px) { .lay { gap: 8px; } }
