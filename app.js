@@ -57,7 +57,8 @@ const PLAN_DEFAULTS = { grid: "", now: "", todo: "#60a5fa", abgabe: "#f59e0b", k
 // Gerätespezifisch: bleibt im Browser dieses Geräts und geht NICHT in den Cloud-Abgleich
 const DEVICE_LS = "studienplaner-device-v1";
 const DEVICE_DEFAULTS = {
-  dark: true, weekend: false, colors: { dark: {}, light: {} },
+  dark: true, weekend: false, scrollbars: true, colors: { dark: {}, light: {} },
+  themeMode: "", fontScale: 100, startTab: "dashboard",
   zoomY: 1, autoRange: false, dayStart: 7, dayEnd: 20,
   dash: { zoomY: 1, grid: "", now: "" },
   planLook: { grid: "", now: "" },
@@ -165,22 +166,25 @@ function openDesignModal() {
 }
 
 // Eigene Karten im Dashboard (Verknüpfungen, Notizen)
-function linksBlock() {
-  const cards = state.cards || [];
-  return `<div class="card">
-    <div class="row" style="justify-content:space-between;margin-bottom:8px"><h3 style="margin:0">Meine Karten</h3>
-      <button class="btn" data-act="cardnew">+ Karte</button></div>
-    ${cards.length ? `<div class="linkgrid">${cards.map((c) => {
-      const inner = `<b>${esc(c.title)}</b>${c.note ? `<span class="muted">${esc(c.note)}</span>` : ""}${c.url ? `<span class="muted" style="font-size:12px">↗ ${esc(c.url.replace(/^https?:\/\//, ""))}</span>` : ""}`;
-      const main = c.url
-        ? `<a class="linkmain" href="${esc(c.url)}" target="_blank" rel="noopener">${inner}</a>`
-        : `<div class="linkmain">${inner}</div>`;
-      return `<div class="linkcard" style="border-color:${c.color || "var(--accent)"}">
-        ${main}
-        <div class="row" style="gap:4px;justify-content:flex-end"><button class="btn ghost" data-act="cardedit" data-id="${c.id}">✎</button></div>
-      </div>`;
-    }).join("")}</div>` : `<div class="muted">Noch keine Karten. Lege Verknüpfungen zu Websites, Ordnern oder Notizen an.</div>`}
+// Meine Karten: jede Karte steht für sich (keine Rahmenkarte mehr), damit sie im Layout frei beweglich ist
+function linkItemHTML(c) {
+  const inner = `<b>${esc(c.title)}</b>${c.note ? `<span class="muted">${esc(c.note)}</span>` : ""}${c.url ? `<span class="muted" style="font-size:12px">↗ ${esc(c.url.replace(/^https?:\/\//, ""))}</span>` : ""}`;
+  const main = c.url
+    ? `<a class="linkmain" href="${esc(c.url)}" target="_blank" rel="noopener">${inner}</a>`
+    : `<div class="linkmain">${inner}</div>`;
+  return `<div class="linkcard" style="border-color:${c.color || "var(--accent)"}">
+    ${main}
+    <div class="row" style="gap:4px;justify-content:flex-end"><button class="btn ghost" data-act="cardedit" data-id="${c.id}">✎</button></div>
   </div>`;
+}
+// Ohne Bearbeitungsmodus: einfache Reihe der Karten
+function linksFlow() {
+  const cards = state.cards || [];
+  return `<div class="linkgrid">${cards.map(linkItemHTML).join("")}</div>`;
+}
+// Im Layout: jede Karte als eigene Kachel
+function linksItems() {
+  return (state.cards || []).map((c) => ({ id: "card-" + c.id, w: 3, h: 3, html: linkItemHTML(c) }));
 }
 
 function openCardModal(id) {
@@ -266,7 +270,7 @@ function applyDevice(settings) {
 function deviceFromSettings(s) {
   return {
     dark: s.dark, weekend: s.weekend, colors: s.colors, zoomY: s.zoomY, autoRange: s.autoRange,
-    dayStart: s.dayStart, dayEnd: s.dayEnd, dash: s.dash, navSide: s.navSide || "", checkSide: s.checkSide || "left", layouts: s.layouts || {}, cal: s.cal || DEVICE_DEFAULTS.cal,
+    dayStart: s.dayStart, dayEnd: s.dayEnd, dash: s.dash, navSide: s.navSide || "", checkSide: s.checkSide || "left", scrollbars: s.scrollbars !== false, themeMode: s.themeMode || "", fontScale: s.fontScale || 100, startTab: s.startTab || "dashboard", layouts: s.layouts || {}, cal: s.cal || DEVICE_DEFAULTS.cal,
     planLook: { grid: (s.plan && s.plan.grid) || "", now: (s.plan && s.plan.now) || "" },
   };
 }
@@ -471,16 +475,21 @@ const ui = {
 };
 
 // ---------- Farben / Design ----------
-function currentMode() { return state.settings.dark ? "dark" : "light"; }
+function currentMode() {
+  if (state.settings.themeMode === "system") return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  return state.settings.dark ? "dark" : "light";
+}
 function themeColors() {
   const mode = currentMode();
   return { ...THEME_DEFAULTS[mode], ...((state.settings.colors || {})[mode] || {}) };
 }
 function applyTheme() {
-  document.body.classList.toggle("dark", !!state.settings.dark);
+  document.body.classList.toggle("dark", currentMode() === "dark");
+  document.body.style.zoom = String((state.settings.fontScale || 100) / 100);
   document.body.classList.toggle("nav-left", state.settings.navSide === "left");
   document.body.classList.toggle("nav-bottom", state.settings.navSide === "bottom");
   document.body.classList.toggle("check-right", state.settings.checkSide === "right");
+  document.body.classList.toggle("no-scrollbars", state.settings.scrollbars === false);
   const c = themeColors();
   const r = document.documentElement.style;
   r.setProperty("--accent", c.accent);
@@ -694,7 +703,7 @@ function viewDashboard() {
         ${open.length > 8 ? `<div class="muted" style="margin-top:10px">… und ${open.length - 8} weitere im Kalender.</div>` : ""}
       </div>`;
   const countCard = countdownBlock();
-  const linksCard = linksBlock();
+  const linksCard = linksFlow();
   const mensaCard = mensaCardHTML();
   const flow = `<div class="dash-main">${planCard}<div class="dash-side">${todoCard}${countCard}</div></div><div style="margin-top:18px">${mensaCard}</div><div style="margin-top:18px">${linksCard}</div>`;
   h += laid("dash", [
@@ -702,7 +711,7 @@ function viewDashboard() {
     { id: "todo", w: 5, h: 12, html: todoCard },
     { id: "count", w: 5, h: 8, html: countCard },
     { id: "mensa", w: 5, h: 8, html: mensaCard },
-    { id: "links", w: 12, h: 8, html: linksCard },
+    ...linksItems(),
   ], flow);
   return h;
 }
@@ -1459,7 +1468,19 @@ function viewSettings() {
 
   let h = `<h2 style="margin-bottom:14px">Einstellungen</h2>`;
   h += `<div class="card"><h3>Darstellung</h3>
-    <label class="row"><input type="checkbox" data-change="dark" ${s.dark ? "checked" : ""}> Dunkler Modus</label>
+    <label class="muted" style="display:block;margin-bottom:6px">Design (nur auf diesem Gerät)</label>
+    <div class="row" style="gap:6px;flex-wrap:wrap;margin-bottom:14px">
+      ${[["light", "Hell"], ["dark", "Dunkel"], ["system", "Wie Gerät"]].map(([v, l]) =>
+        `<button class="btn ${(s.themeMode === "system" ? "system" : s.dark ? "dark" : "light") === v ? "" : "ghost"}" data-act="themeset" data-v="${v}">${l}</button>`).join("")}
+    </div>
+    <label class="muted" style="display:block;margin-bottom:6px">Schriftgröße: ${s.fontScale || 100} % (nur auf diesem Gerät)</label>
+    <input type="range" min="80" max="150" step="5" value="${s.fontScale || 100}" data-change="fontscale" style="width:100%;margin-bottom:14px">
+    <label class="muted" style="display:block;margin-bottom:6px">Startseite beim Öffnen (nur auf diesem Gerät)</label>
+    <div class="row" style="gap:6px;flex-wrap:wrap;margin-bottom:14px">
+      ${[["dashboard", "Dashboard"], ["stundenplan", "Stundenplan"], ["kalender", "Kalender"], ["protokolle", "Protokolle"], ["einstellungen", "Einstellungen"]].map(([v, l]) =>
+        `<button class="btn ${(s.startTab || "dashboard") === v ? "" : "ghost"}" data-act="startset" data-v="${v}">${l}</button>`).join("")}
+    </div>
+    <label class="row" style="margin-top:10px"><input type="checkbox" data-change="scrollbars" ${s.scrollbars !== false ? "checked" : ""}> Scrollbalken anzeigen (nur auf diesem Gerät)</label>
     <label class="muted" style="display:block;margin-top:14px">Reiterleiste (nur auf diesem Gerät)</label>
     <div class="row" style="gap:6px;flex-wrap:wrap">
       ${[["", "Automatisch"], ["left", "Links"], ["bottom", "Unten"]].map(([v, l]) =>
@@ -1569,7 +1590,8 @@ function mensaCardHTML() {
   }
   return `<div class="card mensa-card">
     <div class="row" style="justify-content:space-between"><h3 style="margin:0">Mensa heute</h3>
-      <button class="btn ghost menu-btn" data-act="mensareload" title="Neu laden">↻</button></div>
+      <span class="row" style="gap:6px"><a class="btn ghost lay-keep" href="https://werkswelt.de/?id=mohm" target="_blank" rel="noopener" title="Speiseplan auf der Website öffnen">↗</a>
+      <button class="btn ghost menu-btn" data-act="mensareload" title="Neu laden">↻</button></span></div>
     <div style="margin-top:10px">${body}</div>
   </div>`;
 }
@@ -1675,6 +1697,7 @@ function layBarHTML() {
   return `<div class="card laybar">
     <div class="grow"><b>Layout bearbeiten</b>
       <div class="muted" style="font-size:13px">Am Rand ziehen: Größe · in der Mitte ziehen: verschieben · einmal tippen: Zahlen eingeben</div></div>
+    <button class="btn" data-act="cardnew">+ Karte</button>
     <button class="btn ghost" data-act="layreset">Zurücksetzen</button>
   </div>`;
 }
@@ -1701,6 +1724,8 @@ function openLayoutModal(scope, id) {
 // Ziehen und Größe ändern im Layout-Modus. Rand (rechts/unten) = Größe, Mitte = verschieben.
 let lay = null;
 const LAY_EDGE = 16;
+// Diese Bedienelemente funktionieren auch im Bearbeitungsmodus
+const LAY_KEEP = '[data-act="cardnew"],[data-act="cardedit"],[data-act="mensareload"],.lay-keep';
 function applyLayCell(el, p) {
   el.style.gridColumn = `${p.c} / span ${p.w}`;
   el.style.gridRow = `${p.r} / span ${p.h}`;
@@ -1709,7 +1734,7 @@ function applyLayCell(el, p) {
 document.addEventListener("pointerdown", (e) => {
   if (!ui.layEdit || e.button > 0) return;
   const card = e.target.closest(".lay-edit .lcard");
-  if (!card) return;
+  if (!card || e.target.closest(LAY_KEEP)) return;
   const rect = card.getBoundingClientRect();
   const nearEdge = rect.right - e.clientX < LAY_EDGE || rect.bottom - e.clientY < LAY_EDGE;
   lay = {
@@ -1742,7 +1767,7 @@ document.addEventListener("pointerup", () => {
 document.addEventListener("pointercancel", () => { if (lay) { lay = null; render(); } });
 // Im Layout-Modus öffnen Klicks in Karten kein Modul oder Menü, sondern nur das Zahlenfenster
 document.addEventListener("click", (e) => {
-  if (e.target.closest(".lay-edit .lcard")) { e.preventDefault(); e.stopPropagation(); }
+  if (e.target.closest(".lay-edit .lcard") && !e.target.closest(LAY_KEEP)) { e.preventDefault(); e.stopPropagation(); }
 }, true);
 
 // Eigene Fenster statt Browser-Dialoge. Wer auf ein Fenster wartet, bekommt die Antwort über modalResolve.
@@ -2045,7 +2070,14 @@ document.addEventListener("click", async (e) => {
     case "undo": undo(); break;
     case "redo": redo(); break;
 
-    case "modetoggle": state.settings.dark = !state.settings.dark; commit(); break;
+    case "modetoggle": { const m = currentMode(); state.settings.themeMode = ""; state.settings.dark = m !== "dark"; commit(); break; }
+    case "themeset": {
+      const v = el.dataset.v;
+      state.settings.themeMode = v === "system" ? "system" : "";
+      if (v !== "system") state.settings.dark = v === "dark";
+      commit(); break;
+    }
+    case "startset": state.settings.startTab = el.dataset.v; commit(); break;
 
     // Stundenplan
     case "wk": {
@@ -2372,6 +2404,17 @@ document.addEventListener("change", async (e) => {
   }
   if (t.hasAttribute && t.hasAttribute("data-dash-zoom")) {
     state.settings.dash.zoomY = Number(t.value) / 100;
+    commit();
+    return;
+  }
+  if (t.dataset.change === "fontscale") {
+    state.settings.fontScale = Number(t.value);
+    saveDevice();
+    applyTheme();
+    return;
+  }
+  if (t.dataset.change === "scrollbars") {
+    state.settings.scrollbars = t.checked;
     commit();
     return;
   }
@@ -2722,8 +2765,13 @@ function scheduleCloud() {
 
 // ---------- Start ----------
 lastSnap = snapshot();
+ui.tab = state.settings.startTab || ui.tab;
 initCloud();
 render();
+// Systemfarbe folgen: beim Wechsel des Geräte-Designs neu zeichnen
+window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+  if (state.settings.themeMode === "system") render();
+});
 setInterval(() => { if (ui.tab === "stundenplan" && !document.querySelector(".modal")) render(); }, 60000);
 
 if ("serviceWorker" in navigator) {

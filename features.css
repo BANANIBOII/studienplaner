@@ -397,3 +397,13 @@ body.check-right .np-entry > .btn { order: 3; }
 .mensa-row { display: grid; grid-template-columns: 104px 1fr auto; gap: 10px; align-items: baseline; padding: 9px 0; border-top: 1px solid var(--line); }
 .mensa-row:first-child { border-top: 0; }
 .mensa-price { white-space: nowrap; font-weight: 600; }
+.lay-edit .lcard [data-act="cardnew"], .lay-edit .lcard [data-act="cardedit"], .lay-edit .lcard [data-act="mensareload"], .lay-edit .lcard .lay-keep { pointer-events: auto; }
+
+/* Scrollbalken überall gleich schlank und passend zum Design */
+* { scrollbar-width: thin; scrollbar-color: var(--muted) transparent; }
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb { background: var(--muted); border-radius: 8px; }
+/* Scrollbalken ausgeblendet (Einstellung „Scrollbalken anzeigen“ aus) */
+body.no-scrollbars *, body.no-scrollbars .week { scrollbar-width: none; }
+body.no-scrollbars *::-webkit-scrollbar, body.no-scrollbars .week::-webkit-scrollbar { display: none; width: 0; height: 0; }
