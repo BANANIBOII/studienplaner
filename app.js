@@ -592,6 +592,7 @@ function render() {
   };
   document.getElementById("app").innerHTML = (ui.layEdit ? layBarHTML() : "") + views[ui.tab]();
   document.querySelectorAll(".lay-btn").forEach((b) => b.classList.toggle("on", ui.layEdit));
+  if (ui.tab === "dashboard") loadMensa(false);
   // Stundenplan: Eintragskarte als eigenes Fenster
   if (ui.tab === "stundenplan" && ui.noteFor && ui.noteWindow) openModal(notePanelHTML(ui.noteFor.name, ui.noteFor.date));
   ui.anim = null;
@@ -694,11 +695,13 @@ function viewDashboard() {
       </div>`;
   const countCard = countdownBlock();
   const linksCard = linksBlock();
-  const flow = `<div class="dash-main">${planCard}<div class="dash-side">${todoCard}${countCard}</div></div><div style="margin-top:18px">${linksCard}</div>`;
+  const mensaCard = mensaCardHTML();
+  const flow = `<div class="dash-main">${planCard}<div class="dash-side">${todoCard}${countCard}</div></div><div style="margin-top:18px">${mensaCard}</div><div style="margin-top:18px">${linksCard}</div>`;
   h += laid("dash", [
     { id: "plan", w: 7, h: 20, html: planCard },
     { id: "todo", w: 5, h: 12, html: todoCard },
     { id: "count", w: 5, h: 8, html: countCard },
+    { id: "mensa", w: 5, h: 8, html: mensaCard },
     { id: "links", w: 12, h: 8, html: linksCard },
   ], flow);
   return h;
@@ -1540,6 +1543,59 @@ function cloudSection() {
 function openModal(html) {
   document.getElementById("modalRoot").innerHTML = `<div class="modal" data-act="mbg"><div class="sheet">${html}</div></div>`;
 }
+// ---------- Mensa-Karte (Speiseplan über die Supabase-Funktion "mensa") ----------
+const MENSA_LS = "studienplaner-mensa-v1";
+let mensaTried = null;   // Tag, für den schon geladen wurde (verhindert Schleifen)
+let mensaErr = false;
+let mensaBusy = false;
+function mensaCached() {
+  try { return JSON.parse(localStorage.getItem(MENSA_LS) || "null"); } catch { return null; }
+}
+function mensaCardHTML() {
+  const today = iso(new Date());
+  const c = mensaCached();
+  const fresh = c && c.day === today ? c.data : null;
+  let body;
+  if (fresh && fresh.gerichte && fresh.gerichte.length) {
+    body = fresh.gerichte.map((g) =>
+      `<div class="mensa-row"><span class="muted">${esc(g.label)}</span><span><b>${esc(g.name)}</b>${g.allergene ? ` <span class="muted">${esc(g.allergene)}</span>` : ""}</span><span class="mensa-price">${esc(g.preis.stud)}</span></div>`
+    ).join("") + `<div class="muted" style="font-size:12px;margin-top:8px">Preise für Studierende</div>`;
+  } else if (fresh) {
+    body = `<div class="muted">${esc(fresh.hinweis || "Heute kein Speiseplan online.")}</div>`;
+  } else if (mensaErr) {
+    body = `<div class="muted">Speiseplan gerade nicht erreichbar. Mit ↻ erneut versuchen.</div>`;
+  } else {
+    body = `<div class="muted">Speiseplan wird geladen …</div>`;
+  }
+  return `<div class="card mensa-card">
+    <div class="row" style="justify-content:space-between"><h3 style="margin:0">Mensa heute</h3>
+      <button class="btn ghost menu-btn" data-act="mensareload" title="Neu laden">↻</button></div>
+    <div style="margin-top:10px">${body}</div>
+  </div>`;
+}
+async function loadMensa(force) {
+  const today = iso(new Date());
+  const c = mensaCached();
+  if (!force && ((c && c.day === today) || mensaTried === today)) return;
+  if (mensaBusy || !cloudConfigured()) return;
+  mensaBusy = true;
+  mensaTried = today;
+  try {
+    const r = await fetch(SUPABASE_URL + "/functions/v1/mensa", {
+      headers: { Authorization: "Bearer " + SUPABASE_ANON_KEY, apikey: SUPABASE_ANON_KEY },
+    });
+    const data = await r.json();
+    mensaErr = false;
+    // Nur erfolgreiche Antworten für den Tag merken
+    if (data && Array.isArray(data.gerichte)) localStorage.setItem(MENSA_LS, JSON.stringify({ day: today, data }));
+  } catch {
+    mensaErr = true;
+  } finally {
+    mensaBusy = false;
+  }
+  if (ui.tab === "dashboard") render();
+}
+
 // ---------- Layout bearbeiten (Schloss-Symbol) ----------
 // Karten liegen auf einem Raster mit 12 Spalten und Zeilen von je 40 px. Pro Gerät gespeichert.
 const LAY_COLS = 12, LAY_ROW = 40, LAY_GAP = 10, LAY_STRIDE_Y = LAY_ROW + LAY_GAP;
@@ -2103,6 +2159,7 @@ document.addEventListener("click", async (e) => {
     case "calmenu": openCalMenu(); break;
     case "checkset": state.settings.checkSide = el.dataset.v; commit(); break;
     case "laytoggle": ui.layEdit = !ui.layEdit; render(); break;
+    case "mensareload": loadMensa(true); break;
     case "layreset": {
       if (!(await appConfirm("Layout auf diesem Gerät auf die Standardanordnung zurücksetzen?", "Zurücksetzen"))) break;
       state.settings.layouts = {};

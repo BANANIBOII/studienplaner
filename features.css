@@ -392,3 +392,8 @@ body.check-right .np-entry > .btn { order: 3; }
 .lay-btn.on { color: var(--accent); }
 .lay-btn.on svg { stroke: var(--accent); }
 @media (max-width: 799px) { .lay { gap: 8px; } }
+
+/* ---------- Mensa-Karte ---------- */
+.mensa-row { display: grid; grid-template-columns: 104px 1fr auto; gap: 10px; align-items: baseline; padding: 9px 0; border-top: 1px solid var(--line); }
+.mensa-row:first-child { border-top: 0; }
+.mensa-price { white-space: nowrap; font-weight: 600; }
