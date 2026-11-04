@@ -1544,7 +1544,7 @@ function openModal(html) {
   document.getElementById("modalRoot").innerHTML = `<div class="modal" data-act="mbg"><div class="sheet">${html}</div></div>`;
 }
 // ---------- Mensa-Karte (Speiseplan über die Supabase-Funktion "mensa") ----------
-const MENSA_LS = "studienplaner-mensa-v1";
+const MENSA_LS = "studienplaner-mensa-v2";
 let mensaTried = null;   // Tag, für den schon geladen wurde (verhindert Schleifen)
 let mensaErr = false;
 let mensaBusy = false;
