@@ -407,3 +407,79 @@ body.check-right .np-entry > .btn { order: 3; }
 /* Scrollbalken ausgeblendet (Einstellung „Scrollbalken anzeigen“ aus) */
 body.no-scrollbars *, body.no-scrollbars .week { scrollbar-width: none; }
 body.no-scrollbars *::-webkit-scrollbar, body.no-scrollbars .week::-webkit-scrollbar { display: none; width: 0; height: 0; }
+
+/* ---------- Hinweis (Rückgängig) ---------- */
+#toast {
+  position: fixed; left: 50%; bottom: 96px; transform: translate(-50%, 20px); z-index: 60;
+  background: var(--card); color: var(--text); border: 1px solid var(--accent); border-radius: 14px;
+  padding: 10px 16px; box-shadow: 0 8px 30px rgba(0,0,0,.35); opacity: 0; pointer-events: none;
+  transition: opacity .2s, transform .2s; max-width: calc(100vw - 32px); text-align: center; font-weight: 600;
+}
+#toast small { display: block; font-weight: 500; color: var(--muted); margin-top: 2px; }
+#toast.show { opacity: 1; transform: translate(-50%, 0); }
+body.nav-left #toast, body.nav-bottom #toast { bottom: 96px; }
+
+/* ---------- Nächste Frist ---------- */
+.deadline { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+.dl-num { font-size: 52px; font-weight: 800; line-height: 1; min-width: 96px; }
+.dl-unit { font-size: 14px; margin-top: -6px; }
+.dl-info { display: grid; gap: 2px; flex: 1; min-width: 180px; }
+
+/* ---------- App-Gefühl am Handy ---------- */
+html, body { overscroll-behavior-y: none; }                    /* kein Gummiband und kein Ziehen zum Neuladen */
+button, a, .tabbar button, .hist-btn { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+.tabbar, .topbar, .sidebar, .side-foot { -webkit-user-select: none; user-select: none; }
+button:active, .tabbar button:active, .hist-btn:active { transform: scale(.94); transition: transform .08s; }
+@keyframes appIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+#app.tab-in > * { animation: appIn .2s ease-out; }
+@media (max-width: 799px) {
+  /* iPhone zoomt beim Antippen eines Feldes, wenn die Schrift kleiner als 16 px ist */
+  input, select, textarea { font-size: 16px; }
+}
+
+/* ---------- Mehr Bewegung (ruhig, ohne Blitzen) ---------- */
+/* Häkchen: Farbe fließt sanft, das Häkchen springt leicht auf */
+input[type="checkbox"] { transition: background-color .18s ease, border-color .18s ease, transform .12s ease; }
+input[type="checkbox"]:active { transform: scale(.9); }
+input[type="checkbox"]::after { transition: transform .22s cubic-bezier(.34, 1.56, .64, 1); }
+
+/* Fenster: gleitet von unten ein, Hintergrund blendet ab */
+@keyframes sheetUp { from { opacity: 0; transform: translateY(24px) scale(.98); } to { opacity: 1; transform: none; } }
+@keyframes fadeBg { from { opacity: 0; } to { opacity: 1; } }
+.modal { animation: fadeBg .18s ease-out; }
+.modal .sheet { animation: sheetUp .24s cubic-bezier(.2, .8, .2, 1); }
+
+/* Listen: beim Drücken leichte Hervorhebung */
+.listrow { transition: background-color .15s ease; }
+.listrow:active { background: var(--accent-soft); }
+
+/* Beim Reiterwechsel: Karten nacheinander einblenden */
+#app.tab-in > :nth-child(2) { animation-delay: .04s; }
+#app.tab-in > :nth-child(3) { animation-delay: .08s; }
+#app.tab-in > :nth-child(n+4) { animation-delay: .12s; }
+
+/* Für Menschen, die weniger Bewegung wollen: alles ohne Animation */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+
+/* ---------- Stundenplan füllt den Bildschirm ---------- */
+.plan-nav { display: none; }
+@media (min-width: 800px) {
+  .plan-nav { display: flex; align-items: center; justify-content: center; gap: 10px; margin: 0 0 8px; flex-wrap: wrap; }
+  .plan-nav b { min-width: 220px; text-align: center; }
+}
+.plan-fab {
+  position: fixed; right: 14px; bottom: calc(84px + env(safe-area-inset-bottom)); z-index: 30;
+  width: 42px; height: 42px; border-radius: 50%; border: 0; cursor: pointer;
+  background: var(--accent); color: var(--bg); font-size: 20px; font-weight: 700;
+  box-shadow: 0 6px 18px rgba(0,0,0,.25);
+}
+@media (min-width: 800px) { .plan-fab { bottom: 18px; right: 22px; } }
+
+/* ---------- Kalender: Monat oben, Liste, Suche unten ---------- */
+.calstack { display: flex; flex-direction: column; gap: 14px; }
+.calsearch { padding: 12px; }
+.calfilters { display: none; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 10px; }
+.calfilters.open { display: flex; }
+.calfilters label.muted { display: flex; flex-direction: column; gap: 4px; font-size: 12px; }

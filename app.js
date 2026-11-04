@@ -29,7 +29,7 @@ function applyDayRange() {
   }
   START_MIN = start;
   END_MIN = end;
-  HOUR_PX = 42 * (s.zoomY || 1);
+  HOUR_PX = ui.tab === "stundenplan" && planFitPx ? planFitPx : 42 * (s.zoomY || 1);
   PX_PER_MIN = HOUR_PX / 60;
   document.documentElement.style.setProperty("--hour-px", HOUR_PX + "px");
 }
@@ -332,10 +332,37 @@ const saveLocal = () => localStorage.setItem(LS_KEY, JSON.stringify(state));
 const snapshot = () => JSON.stringify({ ...syncable(state), history: undefined, future: undefined, updatedAt: undefined });
 let lastSnap = snapshot();
 
+// Hinweis, was geändert wurde, und in welchem Reiter das war (für Rückgängig)
+let histMeta = [], futMeta = [], layHist = [];
+function diffLabel(prevStr, curStr) {
+  let a, b;
+  try { a = JSON.parse(prevStr); b = JSON.parse(curStr); } catch { return "Änderung"; }
+  for (const [k, noun] of [["todos", "Aufgabe"], ["events", "Termin"], ["cards", "Karte"]]) {
+    const x = a[k] || [], y = b[k] || [];
+    if (x.length > y.length) return `${noun} gelöscht`;
+    if (x.length < y.length) return `${noun} hinzugefügt`;
+    const i = x.findIndex((t, j) => JSON.stringify(t) !== JSON.stringify(y[j]));
+    if (i >= 0) {
+      if (k === "todos" && x[i].done !== y[i].done) return `${y[i].done ? "Aufgabe erledigt" : "Aufgabe wieder offen"}: ${y[i].title}`;
+      return `${noun} geändert${y[i].title ? ": " + y[i].title : ""}`;
+    }
+  }
+  const ma = Object.keys(a.modules || {}), mb = Object.keys(b.modules || {});
+  if (ma.length !== mb.length) return ma.length > mb.length ? "Protokoll gelöscht" : "Protokoll angelegt";
+  const na = ma.reduce((n, m) => n + (a.modules[m].notes || []).length, 0);
+  const nb = mb.reduce((n, m) => n + (b.modules[m].notes || []).length, 0);
+  if (na !== nb) return na > nb ? "Protokoll-Eintrag gelöscht" : "Protokoll-Eintrag hinzugefügt";
+  return "Änderung";
+}
+function pushLayHist(label) {
+  layHist = [...layHist, { ts: Date.now(), label, tab: ui.tab, modOpen: ui.modOpen || null, prev: JSON.stringify(state.settings.layouts || {}) }].slice(-HISTORY_MAX);
+}
 function commit() {
   saveDevice();
   const snap = snapshot();
   if (lastSnap !== snap) {
+    histMeta = [...histMeta, { label: diffLabel(lastSnap, snap), tab: ui.tab, modOpen: ui.modOpen || null, ts: Date.now() }].slice(-HISTORY_MAX);
+    futMeta = [];
     state.history = [...(state.history || []), lastSnap].slice(-HISTORY_MAX);
     state.future = [];
     lastSnap = snap;
@@ -349,10 +376,31 @@ function commit() {
 }
 
 function undo() {
+  // Zuletzt geändert: Layout oder Daten?
+  const lastLay = layHist[layHist.length - 1];
+  const lastData = histMeta[histMeta.length - 1];
+  if (lastLay && (!lastData || lastLay.ts >= lastData.ts)) {
+    layHist = layHist.slice(0, -1);
+    state.settings.layouts = JSON.parse(lastLay.prev);
+    saveDevice();
+    ui.tab = lastLay.tab || ui.tab;
+    ui.modOpen = lastLay.modOpen;
+    showToast(`Rückgängig: ${lastLay.label}`);
+    render();
+    return;
+  }
   const hist = state.history || [];
   if (!hist.length) return;
   const fut = [...(state.future || []), lastSnap].slice(-HISTORY_MAX);
   const prev = hist[hist.length - 1];
+  const meta = lastData;
+  if (meta) {
+    histMeta = histMeta.slice(0, -1);
+    futMeta = [...futMeta, meta];
+    ui.tab = meta.tab || ui.tab;
+    ui.modOpen = meta.modOpen;
+    showToast(`Rückgängig: ${meta.label}<small>Zu: ${TAB_NAMES[ui.tab] || ui.tab}</small>`, 9000);
+  }
   state = normalize(JSON.parse(prev));
   state.history = hist.slice(0, -1);
   state.future = fut;
@@ -368,6 +416,8 @@ function redo() {
   if (!fut.length) return;
   const hist = [...(state.history || []), lastSnap].slice(-HISTORY_MAX);
   const next = fut[fut.length - 1];
+  const m = futMeta[futMeta.length - 1];
+  if (m) { futMeta = futMeta.slice(0, -1); histMeta = [...histMeta, m]; }
   state = normalize(JSON.parse(next));
   state.history = hist;
   state.future = fut.slice(0, -1);
@@ -462,6 +512,10 @@ const ui = {
   topicOpen: null,
   modSearch: "",
   calSearch: "",
+  calFilterOpen: false,
+  dayPop: null,
+  calFrom: "", calTo: "", calType: "", calMod: "",
+  rueckRange: "woche",
   calFilter: "alle",
   modKind: "alle",
   calShowDone: false,
@@ -486,6 +540,9 @@ function themeColors() {
 function applyTheme() {
   document.body.classList.toggle("dark", currentMode() === "dark");
   document.body.style.zoom = String((state.settings.fontScale || 100) / 100);
+  // Farbe der Statusleiste am Handy an den aktuellen Hintergrund anpassen
+  const tc = document.querySelector('meta[name="theme-color"]');
+  if (tc) tc.setAttribute("content", currentMode() === "dark" ? "#0a1414" : "#eef2f7");
   document.body.classList.toggle("nav-left", state.settings.navSide === "left");
   document.body.classList.toggle("nav-bottom", state.settings.navSide === "bottom");
   document.body.classList.toggle("check-right", state.settings.checkSide === "right");
@@ -590,7 +647,7 @@ function render() {
     return;
   }
   document.querySelectorAll("[data-tab]").forEach((b) => b.classList.toggle("active", b.dataset.tab === ui.tab));
-  document.querySelectorAll('[data-act="undo"]').forEach((b) => (b.disabled = !(state.history || []).length));
+  document.querySelectorAll('[data-act="undo"]').forEach((b) => (b.disabled = !((state.history || []).length || layHist.length)));
   document.querySelectorAll('[data-act="redo"]').forEach((b) => (b.disabled = !(state.future || []).length));
   const views = {
     dashboard: viewDashboard,
@@ -599,9 +656,20 @@ function render() {
     protokolle: viewModules,
     einstellungen: viewSettings,
   };
-  document.getElementById("app").innerHTML = (ui.layEdit ? layBarHTML() : "") + views[ui.tab]();
+  const appEl = document.getElementById("app");
+  const tabChanged = appEl.dataset.shownTab !== ui.tab;
+  appEl.innerHTML = (ui.layEdit ? layBarHTML() : "") + views[ui.tab]();
+  appEl.dataset.shownTab = ui.tab;
+  // Einblenden nur beim Wechsel des Reiters, nicht bei jedem Haken oder Klick
+  if (tabChanged) {
+    appEl.classList.add("tab-in");
+    clearTimeout(appEl._tabIn);
+    appEl._tabIn = setTimeout(() => appEl.classList.remove("tab-in"), 260);
+  }
   document.querySelectorAll(".lay-btn").forEach((b) => b.classList.toggle("on", ui.layEdit));
   if (ui.tab === "dashboard") loadMensa(false);
+  if (ui.dayPop) openDayModal(ui.dayPop);
+  if (ui.tab === "stundenplan" && !ui.layEdit) fitPlan();
   // Stundenplan: Eintragskarte als eigenes Fenster
   if (ui.tab === "stundenplan" && ui.noteFor && ui.noteWindow) openModal(notePanelHTML(ui.noteFor.name, ui.noteFor.date));
   ui.anim = null;
@@ -705,12 +773,16 @@ function viewDashboard() {
   const countCard = countdownBlock();
   const linksCard = linksFlow();
   const mensaCard = mensaCardHTML();
-  const flow = `<div class="dash-main">${planCard}<div class="dash-side">${todoCard}${countCard}</div></div><div style="margin-top:18px">${mensaCard}</div><div style="margin-top:18px">${linksCard}</div>`;
+  const nextCard = nextDeadlineCard();
+  const rueckCard = rueckblickCard();
+  const flow = `<div style="margin-bottom:18px">${nextCard}</div><div class="dash-main">${planCard}<div class="dash-side">${todoCard}${countCard}</div></div><div style="margin-top:18px">${mensaCard}</div><div style="margin-top:18px">${rueckCard}</div><div style="margin-top:18px">${linksCard}</div>`;
   h += laid("dash", [
     { id: "plan", w: 7, h: 20, html: planCard },
     { id: "todo", w: 5, h: 12, html: todoCard },
     { id: "count", w: 5, h: 8, html: countCard },
+    { id: "next", w: 12, h: 4, html: nextCard },
     { id: "mensa", w: 5, h: 8, html: mensaCard },
+    { id: "rueck", w: 7, h: 8, html: rueckCard },
     ...linksItems(),
   ], flow);
   return h;
@@ -951,38 +1023,49 @@ function viewPlan() {
   if (ui.view === "day") {
     const d = parseIso(ui.dayDate);
     const wd = WEEKDAYS_LONG[(d.getDay() + 6) % 7];
-    return `<div class="card row">
-      <button class="btn ghost" data-act="dprev">‹</button>
-      <div class="grow" style="text-align:center"><b>KW ${kwOf(d)} (${parityOf(d)})</b><div class="muted">${fmtD(d)}</div></div>
-      <button class="btn ghost" data-act="dnext">›</button>
-      <button class="btn ghost" data-act="heutewoche">Woche</button>
-      ${menuBtn}
-    </div>
-    ${allDayHTML([ui.dayDate], false)}
-    <div class="${animCls}">${planLaid(`<div class="week"><div class="axis" style="height:${50 + gridHeight()}px">${axisHTML()}</div>${dayColumn(ui.dayDate, `<b class="daytitle">${wd}</b>`, true, today)}</div>`)}</div>${emptyPlanHint()}`;
+    return `${allDayHTML([ui.dayDate], false)}
+    ${planNavHTML(`KW ${kwOf(d)} · ${fmtD(d)}`, "day")}
+    <div class="${animCls}">${planLaid(`<div class="week"><div class="axis" style="height:${50 + gridHeight()}px">${axisHTML()}</div>${dayColumn(ui.dayDate, `<b class="daytitle">${wd}</b>`, true, today)}</div>`)}</div>${emptyPlanHint()}${planFabHTML()}`;
   }
 
   const mon = addDays(mondayOf(today), ui.weekOffset * 7);
   const sun = addDays(mon, 6);
   const dayCount = state.settings.weekend ? 7 : 5;
   const weekDates = Array.from({ length: 7 }, (_, i) => iso(addDays(mon, i)));
-  let h = `<div class="card row">
-    <button class="btn ghost" data-act="wk" data-v="-1">‹</button>
-    <div class="grow" style="text-align:center"><b>KW ${kwOf(mon)} (${parityOf(mon)})</b><div class="muted">${fmtD(mon)} – ${fmtD(sun)}</div></div>
-    <button class="btn ghost" data-act="wk" data-v="1">›</button>
-    <button class="btn ghost" data-act="wk" data-v="0">Heute</button>
-    ${menuBtn}
-  </div>`;
-
-  h += allDayHTML(weekDates, true);
+  let h = allDayHTML(weekDates, true);
+  h += planNavHTML(`KW ${kwOf(mon)} (${parityOf(mon)}) · ${fmtD(mon)} – ${fmtD(sun)}`, "week");
 
   let cols = "";
   for (let i = 0; i < dayCount; i++) {
     const d = addDays(mon, i);
     cols += dayColumn(iso(d), `${WEEKDAYS[i]}<br>${pad(d.getDate())}.${pad(d.getMonth() + 1)}.`, false, today);
   }
-  h += `<div class="${animCls}">${planLaid(`<div class="week"><div class="axis" style="height:${50 + gridHeight()}px">${axisHTML()}</div>${cols}</div>`)}</div>${emptyPlanHint()}`;
+  h += `<div class="${animCls}">${planLaid(`<div class="week"><div class="axis" style="height:${50 + gridHeight()}px">${axisHTML()}</div>${cols}</div>`)}</div>${emptyPlanHint()}${planFabHTML()}`;
   return h;
+}
+
+// Leiste für den PC (am Handy wischt man), Knopf für die Einstellungen
+function planNavHTML(label, view) {
+  const prev = view === "week" ? `data-act="wk" data-v="-1"` : `data-act="dprev"`;
+  const next = view === "week" ? `data-act="wk" data-v="1"` : `data-act="dnext"`;
+  // Ein Knopf: in der Wochenansicht „Heute“, in der Tagesansicht „Woche“
+  const toggle = view === "week"
+    ? `<button class="btn ghost" data-act="wk" data-v="0">Heute</button>`
+    : `<button class="btn ghost" data-act="planview">Woche</button>`;
+  return `<div class="plan-nav">
+    <button class="btn ghost" ${prev} title="Zurück">‹</button>
+    <b>${label}</b>
+    <button class="btn ghost" ${next} title="Weiter">›</button>
+    ${toggle}
+  </div>`;
+}
+function planFabHTML() {
+  return `<button class="plan-fab" data-act="planmenu" title="Einstellungen">⋮</button>`;
+}
+// Wochen- und Tagesansicht umschalten (einmal antippen auf den Reiter oder den Knopf)
+function planToggle() {
+  if (ui.view === "week") { ui.view = "day"; ui.dayDate = iso(new Date()); ui.anim = null; render(); }
+  else toWeekView();
 }
 
 function emptyPlanHint() {
@@ -1151,23 +1234,65 @@ function calCellInner(style, d, dayT, evCount) {
   return `<div class="mnum">${num}</div><div class="mpills">${dayT.slice(0, 2).map((t) => `<span class="mpill ${t.done ? "is-done" : ""}" style="--pc:${catColor(t.type)}">${typeIcon(t.type, catColor(t.type), 11)}<span>${esc(shortTitle(t.title))}</span></span>`).join("")}${dayT.length > 2 ? `<span class="mmore">+${dayT.length - 2}</span>` : ""}${evCount ? `<span class="dot" style="background:var(--muted)"></span>` : ""}</div>`;
 }
 
+// Inhalt eines Tages (Einträge, To-Dos, erledigte eingeklappt) — für das Tages-Fenster
+function dayPanelHTML(date) {
+  const doneBox = (list) => list.length ? `<details class="donebox"><summary>Erledigt (${list.length})</summary>${list.map(todoRow).join("")}</details>` : "";
+  const dayAll = state.todos.filter((t) => t.date === date).sort((a, b) => (a.time || "").localeCompare(b.time || ""));
+  const dayEvents = layout(state.events.filter((e) => e.date === date).map((e) => ({ ...e })));
+  return `${dayEvents.map((e) => `<div class="listrow"><span class="pdot" style="background:${colorOf(e.name)}"></span><div class="grow"><b>${esc(e.name)}</b><div class="muted">${fmtMin(e.start)}–${fmtMin(e.end)} · ${esc(e.room)}</div></div></div>`).join("")}
+    ${dayAll.filter((t) => !t.done).map(todoRow).join("")}
+    ${!dayAll.length && !dayEvents.length ? `<div class="empty"><div class="ei">✨</div>Nichts an diesem Tag.</div>` : ""}
+    ${doneBox(dayAll.filter((t) => t.done))}`;
+}
+// Tippen auf einen Tag: kleines Fenster mit den Einträgen dieses Tages
+function openDayModal(date) {
+  ui.selDate = date;
+  openModal(`<div class="row" style="justify-content:space-between;margin-bottom:8px"><h3 style="margin:0">${fmtD(parseIso(date))}</h3>
+      <button class="btn ghost" data-act="mclose" title="Schließen">✕</button></div>
+    ${dayPanelHTML(date)}
+    <div class="sheet-actions"><button class="btn ghost" data-act="daypopopen" data-d="${date}">Im Stundenplan</button>
+      <div class="right"><button class="btn" data-act="tnew">+ Eintrag</button></div></div>`);
+  ui.dayPop = date;
+}
+
 function viewCal() {
   const today = iso(new Date());
   const cal = calSet();
+  const cq = (ui.calSearch || "").trim().toLowerCase();
+  const filtering = !!(cq || ui.calFrom || ui.calTo || ui.calType || ui.calMod);
+  const modNames = Object.keys(state.modules).sort((a, b) => a.localeCompare(b, "de"));
+  const filterCount = [ui.calFrom, ui.calTo, ui.calType, ui.calMod].filter(Boolean).length;
+  const filtersOpen = !!ui.calFilterOpen || filtering;
+
+  // Suchleiste ganz unten. Die Filter erscheinen erst beim Antippen.
+  const searchBar = `<div class="card calsearch">
+    <div class="row" style="gap:8px">
+      <input id="calSearch" placeholder="Suchen: Titel, Modul, Raum …" value="${esc(ui.calSearch || "")}" style="flex:1">
+      <button class="btn ghost" data-act="calfiltertoggle">Filter${filterCount ? ` (${filterCount})` : ""}</button>
+    </div>
+    <div id="calFilters" class="calfilters${filtersOpen ? " open" : ""}">
+      <label class="muted">Von <input type="date" data-sf="from" value="${ui.calFrom}"></label>
+      <label class="muted">bis <input type="date" data-sf="to" value="${ui.calTo}"></label>
+      <select data-sf="type">${[["", "Alle Arten"], ["todo", "Aufgaben"], ["abgabe", "Abgaben"], ["klausur", "Klausuren"], ["vorlesung", "Vorlesungen"]].map(([v, l]) => `<option value="${v}" ${ui.calType === v ? "selected" : ""}>${l}</option>`).join("")}</select>
+      <select data-sf="mod"><option value="">Alle Module</option>${modNames.map((n) => `<option value="${esc(n)}" ${ui.calMod === n ? "selected" : ""}>${esc(n)}</option>`).join("")}</select>
+      ${filtering ? `<button class="btn ghost" data-act="calsfreset">Zurücksetzen</button>` : ""}
+    </div>
+  </div>`;
 
   let h = `<h2 style="margin-bottom:14px">Kalender &amp; To-Dos</h2>`;
-  h += `<div class="card" style="padding:12px"><input id="calSearch" placeholder="Kalender durchsuchen (Titel, Modul, Raum) …" value="${esc(ui.calSearch || "")}"></div>`;
-  const cq = (ui.calSearch || "").trim().toLowerCase();
-  if (cq) {
-    const tHits = state.todos.filter((t) => `${t.title} ${CAT_LABEL[t.type] || ""}`.toLowerCase().includes(cq)).sort(todoSort);
-    const eHits = state.events.filter((e) => `${e.name} ${e.room || ""}`.toLowerCase().includes(cq))
+  if (filtering) {
+    const inRange = (d) => (!ui.calFrom || (d && d >= ui.calFrom)) && (!ui.calTo || (d && d <= ui.calTo));
+    const tOk = (t) => !ui.calMod && (!ui.calType || (ui.calType !== "vorlesung" && t.type === ui.calType));
+    const eOk = (e) => (!ui.calType || ui.calType === "vorlesung") && (!ui.calMod || e.name === ui.calMod);
+    const tHits = state.todos.filter((t) => tOk(t) && inRange(t.date) && (!cq || `${t.title} ${CAT_LABEL[t.type] || ""}`.toLowerCase().includes(cq))).sort(todoSort);
+    const eHits = state.events.filter((e) => eOk(e) && inRange(e.date) && (!cq || `${e.name} ${e.room || ""}`.toLowerCase().includes(cq)))
       .sort((a, b) => a.date.localeCompare(b.date) || a.start - b.start);
     const hitRow = (dot, title, sub, attrs) => `<div class="listrow" ${attrs} style="cursor:pointer"><span class="pdot" style="background:${dot}"></span><div class="grow"><b>${esc(title)}</b><div class="muted">${sub}</div></div></div>`;
     const tRows = tHits.map((t) => hitRow(catColor(t.type), t.title, `${CAT_LABEL[t.type] || "To-Do"} · ${t.date ? fmtD(parseIso(t.date)) : "ohne Datum"}${t.time ? " · " + esc(t.time) : ""}`, `data-act="tedit" data-id="${t.id}"`));
     const eRows = eHits.map((e) => hitRow(colorOf(e.name), e.name, `Vorlesung · ${fmtD(parseIso(e.date))} · ${fmtMin(e.start)}${e.room ? " · " + esc(e.room) : ""}`, `data-act="calgo" data-d="${e.date}"`));
     const total = tRows.length + eRows.length;
     h += `<div class="card"><h4 style="margin-top:0">${total} Treffer</h4>${tRows.join("")}${eRows.join("")}${total ? "" : `<div class="empty"><div class="ei">🔍</div>Nichts gefunden.</div>`}</div>`;
-    return h;
+    return h + searchBar;
   }
 
   // Links: Monat. Rechts: Tagesliste und Übersicht. Am Handy untereinander.
@@ -1198,26 +1323,6 @@ function viewCal() {
     <div class="muted" style="margin-top:10px">To-Do auf einen Tag ziehen, um das Datum zu ändern (Handy: kurz gedrückt halten)</div>
   </div>`;
 
-  // Tagesliste: offene oben, erledigte eingeklappt
-  const doneBox = (list) => list.length ? `<details class="donebox"><summary>Erledigt (${list.length})</summary>${list.map(todoRow).join("")}</details>` : "";
-  const dayAll = state.todos.filter((t) => t.date === ui.selDate).sort((a, b) => (a.time || "").localeCompare(b.time || ""));
-  const dayEvents = layout(state.events.filter((e) => e.date === ui.selDate).map((e) => ({ ...e })));
-  const dayCard = `<div class="card">
-    <div class="row" style="justify-content:space-between;margin-bottom:6px"><h3 style="margin:0">${fmtD(parseIso(ui.selDate))}</h3>
-      <button class="btn" data-act="tnew">+ Eintrag</button></div>
-    ${dayEvents.map((e) => `<div class="listrow"><span class="pdot" style="background:${colorOf(e.name)}"></span><div class="grow"><b>${esc(e.name)}</b><div class="muted">${fmtMin(e.start)}–${fmtMin(e.end)} · ${esc(e.room)}</div></div></div>`).join("")}
-    ${dayAll.filter((t) => !t.done).map(todoRow).join("")}
-    ${!dayAll.length && !dayEvents.length ? `<div class="empty"><div class="ei">✨</div>Nichts an diesem Tag.</div>` : ""}
-    ${doneBox(dayAll.filter((t) => t.done))}
-    ${(() => {
-      const noAll = state.todos.filter((t) => !t.date && t.type === "todo").sort(todoSort);
-      const noOpen = noAll.filter((t) => !t.done);
-      return `${noOpen.length ? `<h4>To-dos ohne Datum</h4>${noOpen.map(todoRow).join("")}` : ""}
-        ${doneBox(noAll.filter((t) => t.done))}`;
-    })()}
-    <div class="dropzone" data-dropnone>Hier loslassen, um das Datum zu entfernen</div>
-  </div>`;
-
   // Übersicht: alle To-Dos, Abgaben und Klausuren, filterbar
   const fType = ui.calFilter || "alle";
   const showDone = !!ui.calShowDone;
@@ -1236,19 +1341,14 @@ function viewCal() {
     ${body || `<div class="empty"><div class="ei">✨</div>Nichts in dieser Auswahl.</div>`}
   </div>`;
 
-  const calFlow = `<div class="cal-layout" style="--calw:${cal.w};--calh:${cal.h}">
-    <div class="cal-left">${monthCard}</div>
-    <div class="cal-right">${dayCard}${allCard}</div>
-  </div>`;
+  const calFlow = `<div class="calstack">${monthCard}${allCard}${searchBar}</div>`;
   h += laid("kal", [
-    { id: "month", w: 6, h: 16, html: monthCard },
-    { id: "day", w: 6, h: 14, html: dayCard },
-    { id: "all", w: 6, h: 14, html: allCard },
+    { id: "month", w: 12, h: 16, html: monthCard },
+    { id: "all", w: 12, h: 14, html: allCard },
+    { id: "search", w: 12, h: 4, html: searchBar },
   ], calFlow, `--calw:${cal.w};--calh:${cal.h}`);
   return h;
 }
-
-// Kalender-Einstellungen im ⋮-Menü: Darstellung, Breite und Höhe (pro Gerät)
 function openCalMenu() {
   const cal = calSet();
   const styleBtn = (v, label) => `<button class="btn ${cal.style === v ? "" : "ghost"}" data-act="calstyle" data-v="${v}">${label}</button>`;
@@ -1562,54 +1662,150 @@ function cloudSection() {
 
 // ---------- Modale Fenster ----------
 function openModal(html) {
+  ui.dayPop = null;
   document.getElementById("modalRoot").innerHTML = `<div class="modal" data-act="mbg"><div class="sheet">${html}</div></div>`;
 }
+// ---------- Nächste Frist (Countdown, groß) und Rückblick ----------
+const TAB_NAMES = { dashboard: "Dashboard", stundenplan: "Stundenplan", kalender: "Kalender & To-Dos", protokolle: "Vorlesungs-Protokolle", einstellungen: "Einstellungen" };
+function nextDeadlineCard() {
+  const today = iso(new Date());
+  const next = state.todos
+    .filter((t) => ["klausur", "abgabe"].includes(t.type) && !t.done && t.date && t.date >= today)
+    .sort((a, b) => a.date.localeCompare(b.date))[0];
+  if (!next) return `<div class="card muted">Keine Klausur oder Abgabe in Sicht.</div>`;
+  const days = Math.round((parseIso(next.date) - parseIso(today)) / 86400000);
+  const big = days === 0 ? "Heute" : days === 1 ? "Morgen" : String(days);
+  const unit = days > 1 ? "Tage" : "";
+  const col = catColor(next.type);
+  return `<div class="card deadline" style="border-left:6px solid ${col}">
+    <div class="dl-num" style="color:${col}">${big}</div>
+    <div class="dl-unit muted">${unit}</div>
+    <div class="dl-info"><span class="muted">${CAT_LABEL[next.type] || "Frist"}</span><b>${esc(next.title)}</b><span class="muted">${fmtD(parseIso(next.date))}${next.time ? " · " + esc(next.time) : ""}</span></div>
+  </div>`;
+}
+function rueckRange(v) {
+  const now = new Date();
+  const today = iso(now);
+  if (v === "4wochen") return { from: iso(addDays(now, -27)), to: today, label: "Letzte 4 Wochen" };
+  if (v === "alles") return { from: "", to: today, label: "Alles bisher" };
+  return { from: iso(mondayOf(now)), to: today, label: "Diese Woche" };
+}
+function rueckData(v) {
+  const r = rueckRange(v);
+  const inR = (d) => d && d >= r.from && d <= r.to;
+  // Zählt nach dem Tag, an dem es erledigt wurde (ältere Einträge ohne Datum nach Fälligkeit)
+  const doneDay = (t) => t.doneAt || t.date || "";
+  const done = state.todos.filter((t) => t.done && inR(doneDay(t))).sort((a, b) => doneDay(b).localeCompare(doneDay(a)));
+  const notes = [];
+  for (const [name, m] of Object.entries(state.modules)) for (const n of m.notes) if (inR(n.date)) notes.push({ name, n });
+  notes.sort((a, b) => b.n.date.localeCompare(a.n.date));
+  const termine = state.events.filter((e) => inR(e.date)).sort((a, b) => b.date.localeCompare(a.date) || b.start - a.start);
+  return { r, done, notes, termine };
+}
+function rueckblickCard() {
+  const d = rueckData("woche");
+  const rows = d.done.slice(0, 4).map((t) =>
+    `<div class="listrow"><span class="pdot" style="background:${catColor(t.type)}"></span><div class="grow"><b>${esc(t.title)}</b></div></div>`).join("");
+  return `<div class="card">
+    <div class="row" style="justify-content:space-between"><h3 style="margin:0">Diese Woche</h3>
+      <button class="btn ghost" data-act="rueckblick">Ganzer Rückblick</button></div>
+    <div class="muted" style="margin:6px 0 10px">${d.done.length} erledigt · ${d.notes.length} Protokoll-Einträge · ${d.termine.length} Termine</div>
+    ${rows || `<div class="muted">Diese Woche noch nichts erledigt.</div>`}
+  </div>`;
+}
+function openRueckblick() {
+  const v = ui.rueckRange || "woche";
+  const d = rueckData(v);
+  const seg = [["woche", "Diese Woche"], ["4wochen", "4 Wochen"], ["alles", "Alles"]]
+    .map(([k, l]) => `<button class="btn ${k === v ? "" : "ghost"}" data-act="rueckrange" data-v="${k}">${l}</button>`).join("");
+  const sec = (title, rows) => `<h4>${title} <span class="muted">(${rows.length})</span></h4>` + (rows.join("") || `<div class="muted">Keine Einträge.</div>`);
+  openModal(`<h3>Rückblick · ${d.r.label}</h3>
+    <div class="row" style="gap:6px;flex-wrap:wrap;margin-bottom:10px">${seg}</div>
+    ${sec("Erledigt", d.done.map((t) => `<div class="listrow"><span class="pdot" style="background:${catColor(t.type)}"></span><div class="grow"><b>${esc(t.title)}</b><div class="muted">${CAT_LABEL[t.type] || "Aufgabe"} · ${fmtD(parseIso(t.date))}</div></div></div>`))}
+    ${sec("Protokolle", d.notes.map(({ name, n }) => `<div class="note"><div class="muted">${fmtD(parseIso(n.date))} · <b>${esc(name)}</b></div>${esc(n.done)}${n.todo ? `<div class="muted" style="margin-top:6px">Noch zu lernen: ${esc(n.todo)}</div>` : ""}</div>`))}
+    ${sec("Termine", d.termine.map((e) => `<div class="listrow"><span class="bar" style="background:${colorOf(e.name)}"></span><div class="grow"><b>${esc(e.name)}</b><div class="muted">${fmtD(parseIso(e.date))} · ${fmtMin(e.start)}${e.room ? " · " + esc(e.room) : ""}</div></div></div>`))}
+    <div class="sheet-actions"><button class="btn ghost" data-act="mclose">Schließen</button></div>`);
+}
+function showToast(html, ms = 5000) {
+  let t = document.getElementById("toast");
+  if (!t) { t = document.createElement("div"); t.id = "toast"; document.body.appendChild(t); }
+  t.innerHTML = html;
+  t.classList.add("show");
+  clearTimeout(t._h);
+  t._h = setTimeout(() => t.classList.remove("show"), ms);
+}
+document.addEventListener("change", (e) => {
+  const k = e.target.dataset && e.target.dataset.sf;
+  if (!k) return;
+  ui[{ from: "calFrom", to: "calTo", type: "calType", mod: "calMod" }[k]] = e.target.value;
+  render();
+});
+
 // ---------- Mensa-Karte (Speiseplan über die Supabase-Funktion "mensa") ----------
-const MENSA_LS = "studienplaner-mensa-v2";
+const MENSA_LS = "studienplaner-mensa-v3";
 let mensaTried = null;   // Tag, für den schon geladen wurde (verhindert Schleifen)
 let mensaErr = false;
 let mensaBusy = false;
-function mensaCached() {
-  try { return JSON.parse(localStorage.getItem(MENSA_LS) || "null"); } catch { return null; }
+// Speicher: je Datum ein Eintrag, nur die letzten 10 Tage
+function mensaCache() {
+  try { return JSON.parse(localStorage.getItem(MENSA_LS) || "{}") || {}; } catch { return {}; }
 }
+function mensaTarget() { return ui.mensaDay || iso(new Date()); }
 function mensaCardHTML() {
+  const target = mensaTarget();
   const today = iso(new Date());
-  const c = mensaCached();
-  const fresh = c && c.day === today ? c.data : null;
+  const fresh = mensaCache()[target] || null;
   let body;
   if (fresh && fresh.gerichte && fresh.gerichte.length) {
     body = fresh.gerichte.map((g) =>
-      `<div class="mensa-row"><span class="muted">${esc(g.label)}</span><span><b>${esc(g.name)}</b>${g.allergene ? ` <span class="muted">${esc(g.allergene)}</span>` : ""}</span><span class="mensa-price">${esc(g.preis.stud)}</span></div>`
+      `<div class="mensa-row"><span class="muted">${esc(g.label)}</span><span><b>${esc(g.name)}</b></span><span class="mensa-price">${esc(g.preis.stud)}</span></div>`
     ).join("") + `<div class="muted" style="font-size:12px;margin-top:8px">Preise für Studierende</div>`;
   } else if (fresh) {
-    body = `<div class="muted">${esc(fresh.hinweis || "Heute kein Speiseplan online.")}</div>`;
+    body = `<div class="muted">${esc(fresh.hinweis || "Kein Speiseplan für diesen Tag.")}</div>`;
   } else if (mensaErr) {
     body = `<div class="muted">Speiseplan gerade nicht erreichbar. Mit ↻ erneut versuchen.</div>`;
   } else {
     body = `<div class="muted">Speiseplan wird geladen …</div>`;
   }
+  const hinweisDatum = fresh && fresh.datum && fresh.datum !== target
+    ? `<div class="muted" style="font-size:12px;margin-bottom:6px">Angezeigt wird ${parseIso(fresh.datum).toLocaleDateString("de-DE", { weekday: "long" })}</div>` : "";
+  const wochentag = parseIso(target).toLocaleDateString("de-DE", { weekday: "long" });
+  const title = target === today ? "Mensa heute" : `Mensa · ${wochentag}`;
+  const datumKlein = `<div class="muted" style="font-size:12px;margin-top:2px">${fmtD(parseIso(target))}</div>`;
   return `<div class="card mensa-card">
-    <div class="row" style="justify-content:space-between"><h3 style="margin:0">Mensa heute</h3>
-      <span class="row" style="gap:6px"><a class="btn ghost lay-keep" href="https://werkswelt.de/?id=mohm" target="_blank" rel="noopener" title="Speiseplan auf der Website öffnen">↗</a>
-      <button class="btn ghost menu-btn" data-act="mensareload" title="Neu laden">↻</button></span></div>
-    <div style="margin-top:10px">${body}</div>
+    <div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:6px">
+      <div><h3 style="margin:0">${title}</h3>${datumKlein}</div>
+      <span class="row" style="gap:6px">
+        <button class="btn ghost" data-act="mensanav" data-v="-1" title="Tag zurück">‹</button>
+        <button class="btn ghost" data-act="mensanav" data-v="0" title="Zu heute">Heute</button>
+        <button class="btn ghost" data-act="mensanav" data-v="1" title="Tag vor">›</button>
+        <a class="btn ghost lay-keep" href="https://werkswelt.de/?id=mohm" target="_blank" rel="noopener" title="Speiseplan auf der Website öffnen">↗</a>
+        <button class="btn ghost menu-btn" data-act="mensareload" title="Neu laden">↻</button>
+      </span>
+    </div>
+    <div style="margin-top:10px">${hinweisDatum}${body}</div>
   </div>`;
 }
 async function loadMensa(force) {
-  const today = iso(new Date());
-  const c = mensaCached();
-  if (!force && ((c && c.day === today) || mensaTried === today)) return;
+  const target = mensaTarget();
+  if (!force && (mensaCache()[target] || mensaTried === target)) return;
   if (mensaBusy || !cloudConfigured()) return;
   mensaBusy = true;
-  mensaTried = today;
+  mensaTried = target;
   try {
-    const r = await fetch(SUPABASE_URL + "/functions/v1/mensa", {
+    const r = await fetch(SUPABASE_URL + "/functions/v1/mensa?tag=" + target, {
       headers: { Authorization: "Bearer " + SUPABASE_ANON_KEY, apikey: SUPABASE_ANON_KEY },
+      signal: AbortSignal.timeout(20000),
     });
     const data = await r.json();
     mensaErr = false;
-    // Nur erfolgreiche Antworten für den Tag merken
-    if (data && Array.isArray(data.gerichte)) localStorage.setItem(MENSA_LS, JSON.stringify({ day: today, data }));
+    if (data && Array.isArray(data.gerichte)) {
+      const c = mensaCache();
+      c[target] = data;
+      const keep = {};
+      Object.keys(c).sort().slice(-10).forEach((k) => { keep[k] = c[k]; });
+      localStorage.setItem(MENSA_LS, JSON.stringify(keep));
+    }
   } catch {
     mensaErr = true;
   } finally {
@@ -1675,6 +1871,7 @@ function placeLayout(items, saved) {
 }
 // Lage aller Karten eines Bereichs speichern (aus dem Bildschirm), optional eine Karte ändern
 function saveScopeLayout(scope, id, p) {
+  pushLayHist("Layout verschoben");
   const map = {};
   document.querySelectorAll(`.lcard[data-scope="${scope}"]`).forEach((c) => {
     map[c.dataset.card] = { c: +c.dataset.c, r: +c.dataset.r, w: +c.dataset.w, h: +c.dataset.h };
@@ -1691,6 +1888,29 @@ function layOverlaps(scope, id, p) {
     const c0 = +c.dataset.c, r0 = +c.dataset.r, w0 = +c.dataset.w, h0 = +c.dataset.h;
     return p.c < c0 + w0 && c0 < p.c + p.w && p.r < r0 + h0 && r0 < p.r + p.h;
   });
+}
+// Stundenplan füllt den Bildschirm: Stundenhöhe so wählen, dass alle Stunden sichtbar sind (Höhe % = Anteil davon)
+let fitting = false;
+let planFitPx = null;   // zuletzt berechnete Stundenhöhe für den Stundenplan
+function fitPlan() {
+  if (fitting) return;
+  const wk = document.querySelector(".week");
+  if (!wk) return;
+  const tb = document.querySelector(".tabbar");
+  const tbH = tb && getComputedStyle(tb).display !== "none" ? tb.offsetHeight : 0;
+  const top = wk.getBoundingClientRect().top;
+  const hours = (END_MIN - START_MIN) / 60;
+  const avail = window.innerHeight - top - tbH - 8 - 50;
+  const zoom = state.settings.zoomY || 1;
+  const px = Math.max(30, Math.floor(avail / hours)) * zoom;
+  if (Math.abs(px - HOUR_PX) >= 1) {
+    planFitPx = px;
+    HOUR_PX = px;
+    PX_PER_MIN = HOUR_PX / 60;
+    fitting = true;
+    render();
+    fitting = false;
+  }
 }
 // Leiste oben im Bearbeitungsmodus
 function layBarHTML() {
@@ -1773,6 +1993,7 @@ document.addEventListener("click", (e) => {
 // Eigene Fenster statt Browser-Dialoge. Wer auf ein Fenster wartet, bekommt die Antwort über modalResolve.
 let modalResolve = null;
 function closeModal() {
+  ui.dayPop = null;
   const pending = modalResolve;
   modalResolve = null;
   document.getElementById("modalRoot").innerHTML = "";
@@ -2036,6 +2257,7 @@ document.addEventListener("click", async (e) => {
     const nowT = Date.now();
     const isDouble = key === ui.tab && lastTabTap.k === key && nowT - lastTabTap.t < 450;
     lastTabTap = { k: key, t: nowT };
+    if (key === "stundenplan" && ui.tab === "stundenplan") { planToggle(); return; }
     if (isDouble && key === "stundenplan") {
       // Doppeltippen auf den aktiven Reiter: Woche ↔ Tag
       if (ui.view === "week") { ui.view = "day"; ui.dayDate = iso(new Date()); ui.anim = null; render(); }
@@ -2068,6 +2290,9 @@ document.addEventListener("click", async (e) => {
     case "confno": closeModal(); break;
     case "mclose": closeModal(); break;
     case "undo": undo(); break;
+    case "rueckblick": openRueckblick(); break;
+    case "rueckrange": ui.rueckRange = el.dataset.v; openRueckblick(); break;
+    case "calsfreset": ui.calFrom = ui.calTo = ui.calType = ui.calMod = ui.calSearch = ""; render(); break;
     case "redo": redo(); break;
 
     case "modetoggle": { const m = currentMode(); state.settings.themeMode = ""; state.settings.dark = m !== "dark"; commit(); break; }
@@ -2192,8 +2417,23 @@ document.addEventListener("click", async (e) => {
     case "checkset": state.settings.checkSide = el.dataset.v; commit(); break;
     case "laytoggle": ui.layEdit = !ui.layEdit; render(); break;
     case "mensareload": loadMensa(true); break;
+    case "dtoday": ui.dayDate = iso(new Date()); ui.anim = null; render(); break;
+    case "planview": planToggle(); break;
+    case "mensanav": {
+      const v = Number(el.dataset.v);
+      if (v === 0) ui.mensaDay = null;
+      else {
+        // Wochenende überspringen: Freitag → Montag und umgekehrt
+        let d = addDays(parseIso(mensaTarget()), v);
+        while (d.getDay() === 0 || d.getDay() === 6) d = addDays(d, v);
+        ui.mensaDay = iso(d);
+      }
+      render();
+      break;
+    }
     case "layreset": {
       if (!(await appConfirm("Layout auf diesem Gerät auf die Standardanordnung zurücksetzen?", "Zurücksetzen"))) break;
+      pushLayHist("Layout zurückgesetzt");
       state.settings.layouts = {};
       commit(); break;
     }
@@ -2208,23 +2448,16 @@ document.addEventListener("click", async (e) => {
       ui.calSearch = "";
       render(); break;
     }
-    case "sel": {
-      const now = Date.now();
-      if (lastDayTap.d === el.dataset.d && now - lastDayTap.t < 450) {
-        lastDayTap = { d: "", t: 0 };
-        ui.tab = "stundenplan";
-        ui.view = "day";
-        ui.dayDate = el.dataset.d;
-        ui.anim = null;
-        window.scrollTo(0, 0);
-        render();
-      } else {
-        lastDayTap = { d: el.dataset.d, t: now };
-        ui.selDate = el.dataset.d;
-        render();
-      }
+    case "sel": openDayModal(el.dataset.d); break;
+    case "calfiltertoggle": ui.calFilterOpen = !ui.calFilterOpen; render(); break;
+    case "daypopopen":
+      ui.tab = "stundenplan";
+      ui.view = "day";
+      ui.dayDate = el.dataset.d;
+      ui.anim = null;
+      closeModal();
+      render();
       break;
-    }
     case "tnew": openTodoModal(null, ui.selDate); break;
     case "tedit": openTodoModal(id); break;
     case "tdelm": {
@@ -2239,6 +2472,7 @@ document.addEventListener("click", async (e) => {
       if (!t) break;
       if (!canCheck(t)) { appAlert("Klausuren kannst du erst am Prüfungstag abhaken."); render(); break; }
       t.done = !t.done;
+      t.doneAt = t.done ? iso(new Date()) : null;
       commit(); break;
     }
 
@@ -2883,6 +3117,35 @@ function endDrag(cancelled, x, y) {
   }
   commit();
 }
+// Am Handy: waagerecht wischen wechselt Tag bzw. Woche
+let swipeStart = null;
+document.addEventListener("touchstart", (e) => {
+  swipeStart = null;
+  if (ui.tab !== "stundenplan" || ui.layEdit || e.touches.length !== 1) return;
+  if (!e.target.closest || !e.target.closest(".week")) return;
+  const t = e.touches[0];
+  swipeStart = { x: t.clientX, y: t.clientY, t: Date.now() };
+}, { passive: true });
+document.addEventListener("touchend", (e) => {
+  const st = swipeStart;
+  swipeStart = null;
+  if (!st || (drag && drag.active) || e.changedTouches.length !== 1) return;
+  const t = e.changedTouches[0];
+  const dx = t.clientX - st.x, dy = t.clientY - st.y;
+  if (Date.now() - st.t > 700 || Math.abs(dx) < 70 || Math.abs(dx) < Math.abs(dy) * 1.6) return;
+  navigate(dx < 0 ? 1 : -1);
+}, { passive: true });
+
+// Kurzes Vibrieren beim Antippen der unteren Leiste (nur Geräte, die es unterstützen)
+document.addEventListener("focusin", (e) => {
+  if (e.target.id === "calSearch") {
+    ui.calFilterOpen = true;
+    document.getElementById("calFilters")?.classList.add("open");
+  }
+});
+document.addEventListener("pointerdown", (e) => {
+  if (e.target.closest && e.target.closest(".tabbar button") && navigator.vibrate) navigator.vibrate(6);
+}, true);
 document.addEventListener("pointerup", (e) => endDrag(false, e.clientX, e.clientY));
 document.addEventListener("pointercancel", () => endDrag(true));
 document.addEventListener("click", async (e) => {
