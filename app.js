@@ -638,6 +638,7 @@ function seriesDates(first, repeat, until) {
 
 // ---------- Render ----------
 function render() {
+  syncHistoryNav();
   applyTheme();
   applyDayRange();
   // Mit Cloud-Sync: ohne Anmeldung sieht man nur das Login-Fenster
@@ -851,6 +852,7 @@ function openDashMenu() {
 // Dashboard: Notizfeld für das gerade laufende Fach (oder das angetippte Fach)
 // Dashboard: Notizfeld für das laufende Fach, wieder schließbar
 function quickNoteHTML() {
+  return ""; // Notizen öffnen sich als Popup
   if (ui.noteFor && !ui.noteWindow) return notePanelHTML(ui.noteFor.name, ui.noteFor.date);
   if (ui.dashNoteDismissed) return "";
   const now = new Date();
@@ -902,7 +904,7 @@ function tomorrowHTML() {
   const evs = state.events.filter((e) => e.date === iso(t)).sort((a, b) => a.start - b.start);
   const head = `<div class="muted" style="margin:14px 0 4px;font-weight:700">Morgen · ${WEEKDAYS_LONG[(t.getDay() + 6) % 7]}</div>`;
   if (!evs.length) return head + `<div class="muted">Keine Termine.</div>`;
-  return head + evs.map((e) => `<div class="listrow">
+  return head + evs.map((e) => `<div class="listrow" data-act="modgo" data-m="${enc(e.name)}" style="cursor:pointer">
       <span class="pdot" style="background:${colorOf(e.name)}"></span>
       <div class="grow"><b>${esc(e.name)}</b><div class="muted">${fmtMin(e.start)}–${fmtMin(e.end)}${e.room ? " · " + esc(e.room) : ""}</div></div>
     </div>`).join("");
@@ -1242,7 +1244,7 @@ const calSet = () => ({ ...DEVICE_DEFAULTS.cal, ...(state.settings.cal || {}) })
 function calCellInner(style, d, dayT, evCount) {
   const num = d.getDate();
   if (style === "bar") {
-    return `<div class="mnum">${num}</div><div class="micons">${dayT.slice(0, 3).map((t) => typeIcon(t.type, calColor(t), 13)).join("")}${evCount ? `<span class="dot" style="background:var(--muted)"></span>` : ""}</div>`;
+    return `<div class="mnum">${num}</div><div class="micons">${dayT.filter((t) => !(t.endDate && t.endDate > t.date) || t.endDate === iso(d)).slice(0, 3).map((t) => typeIcon(t.type, calColor(t), 13)).join("")}${evCount ? `<span class="dot" style="background:var(--muted)"></span>` : ""}</div>`;
   }
   if (style === "ring") {
     const top = ["klausur", "abgabe", "todo"].find((ty) => dayT.some((t) => t.type === ty && !t.done));
@@ -1330,20 +1332,28 @@ function viewCal() {
     const dayT = todosOn(k).sort((a, b) => Number(a.done) - Number(b.done));
     const evCount = state.events.filter((e) => e.date === k).length;
     const topType = ["klausur", "abgabe", "todo"].find((ty) => dayT.some((t) => t.type === ty && !t.done));
-    let border = cal.style !== "ring" && topType ? `border-color:${catColor(topType)};` : "";
-    // Mehrtägiger Eintrag: eine zusammenhängende Umrandung über alle Tage (pro Woche)
-    const spanT = todosOn(k).find((t) => t.endDate && t.endDate > t.date);
-    if (spanT) {
-      const same = (kk) => todosOn(kk).some((t) => t.id === spanT.id);
+    const spans0 = todosOn(k).filter((t) => t.endDate && t.endDate > t.date);
+    let border = cal.style !== "ring" && topType && !spans0.length ? `border-color:${catColor(topType)};` : "";
+    // Mehrtägige Einträge: jeder Eintrag bekommt einen eigenen Rahmen über seine Tage (pro Woche)
+    // Bei Überlappung liegen die Rahmen ineinander; der Tag bekommt einen leichten Farbton
+    const spans = todosOn(k).filter((t) => t.endDate && t.endDate > t.date);
+    let overlays = "";
+    spans.forEach((sp, i) => {
+      const same = (kk) => todosOn(kk).some((t) => t.id === sp.id);
       const L = d.getDay() === 1 || !same(iso(addDays(d, -1)));
       const R = d.getDay() === 0 || !same(iso(addDays(d, 1)));
       const T = !same(iso(addDays(d, -7)));
       const B = !same(iso(addDays(d, 7)));
-      const rr = 14;
-      border = `border-style:solid;border-color:${catColor(spanT.type)};border-width:${T ? 2 : 0}px ${R ? 2 : 0}px ${B ? 2 : 0}px ${L ? 2 : 0}px;border-radius:${T && L ? rr : 0}px ${T && R ? rr : 0}px ${B && R ? rr : 0}px ${B && L ? rr : 0}px;`;
+      const rr = Math.max(4, 14 - i * 4);
+      overlays += `<span class="sp" style="inset:${i * 4}px;border-color:${catColor(sp.type)};border-width:${T ? 2 : 0}px ${R ? 2 : 0}px ${B ? 2 : 0}px ${L ? 2 : 0}px;border-radius:${T && L ? rr : 0}px ${T && R ? rr : 0}px ${B && R ? rr : 0}px ${B && L ? rr : 0}px"></span>`;
+    });
+    if (spans.length && k !== ui.selDate) {
+      // Überlappende Zeiträume: Farben werden ineinander gemischt
+      const tint = spans.reduce((acc, sp) => `color-mix(in srgb, ${catColor(sp.type)} 14%, ${acc})`, "var(--bg)");
+      border += `background-color:${tint};`;
     }
-    const cls = ["mday", `style-${cal.style}`, d.getMonth() !== m.getMonth() ? "other" : "", k === today ? "today" : "", k === ui.selDate ? "sel" : ""].join(" ");
-    cells += `<div class="${cls}" data-act="sel" data-d="${k}" style="${border}">${calCellInner(cal.style, d, dayT, evCount)}</div>`;
+    const cls = ["mday", `style-${cal.style}`, d.getMonth() !== m.getMonth() ? "other" : "", k === today ? "today" : "", k === ui.selDate ? "sel" : "", spans0.length ? "has-span" : ""].join(" ");
+    cells += `<div class="${cls}" data-act="sel" data-d="${k}" style="${border}">${calCellInner(cal.style, d, dayT, evCount)}${overlays}</div>`;
   }
   const monthCard = `<div class="card">
     <div class="row" style="justify-content:space-between;margin-bottom:10px">
@@ -1405,7 +1415,7 @@ function openCalMenu() {
 function todoRow(t) {
   const prio = t.priority || "mittel";
   const c = catColor(t.type);
-  return `<div class="listrow" data-drag="${t.id}">
+  return `<div class="listrow${ui.popId === t.id ? " pop" : ""}" data-drag="${t.id}">
     <input type="checkbox" data-act="tdone" data-id="${t.id}" ${t.done ? "checked" : ""} ${canCheck(t) ? "" : "disabled"}>
     <div class="grow"><span class="${t.done ? "done-title" : ""}"><b>${esc(t.title)}</b></span>
       <div class="muted" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><span style="color:${c};display:inline-flex;align-items:center;gap:4px">${typeIcon(t.type, c, 13)}${CAT_LABEL[t.type] || "To-Do"}</span>${t.time ? " · " + esc(t.time) : ""}${t.date ? "" : " · Termin folgt"}</div></div>
@@ -1712,7 +1722,10 @@ function cloudSection() {
 // ---------- Modale Fenster ----------
 function openModal(html) {
   ui.dayPop = null;
-  document.getElementById("modalRoot").innerHTML = `<div class="modal" data-act="mbg"><div class="sheet">${html}</div></div>`;
+  const root = document.getElementById("modalRoot");
+  // Zurück-Taste schließt das Fenster: eigener Verlaufseintrag für das Fenster
+  if (!root.innerHTML) { try { history.pushState({ sp: "modal" }, ""); } catch (_) {} }
+  root.innerHTML = `<div class="modal" data-act="mbg"><div class="sheet">${html}</div></div>`;
 }
 // ---------- Nächste Frist (Countdown, groß) und Rückblick ----------
 const TAB_NAMES = { dashboard: "Dashboard", stundenplan: "Stundenplan", kalender: "Kalender & To-Dos", protokolle: "Vorlesungs-Protokolle", einstellungen: "Einstellungen" };
@@ -2042,6 +2055,8 @@ document.addEventListener("click", (e) => {
 // Eigene Fenster statt Browser-Dialoge. Wer auf ein Fenster wartet, bekommt die Antwort über modalResolve.
 let modalResolve = null;
 function closeModal() {
+  const root = document.getElementById("modalRoot");
+  if (root.innerHTML && history.state && history.state.sp === "modal") { try { history.back(); } catch (_) {} }
   ui.dayPop = null;
   const pending = modalResolve;
   modalResolve = null;
@@ -2085,31 +2100,60 @@ function appAlert(text) {
 function openNoteModal(name, date, noteId, presetTopic) {
   const m = ensureModule(name);
   const note = noteId ? m.notes.find((x) => x.id === noteId) : null;
+  const dayKey = date || (note ? note.date : iso(new Date()));
   const selTopic = note ? note.topicId : presetTopic;
-  const dayKey = date || (note ? note.date : "");
+  let topicTxt = (selTopic && m.topics.find((t) => t.id === selTopic)?.title) || "";
+  let text = note ? note.done : "";
+  // Entwurf merken: neue Notiz bleibt erhalten, wenn das Fenster versehentlich schließt
+  const draftKey = note ? "" : `studienplaner-draft-${name}-${dayKey}`;
+  if (draftKey) {
+    try {
+      const d = JSON.parse(localStorage.getItem(draftKey) || "null");
+      if (d) { text = d.text || ""; topicTxt = d.topic || ""; }
+    } catch (_) {}
+  }
   const hist = m.notes.filter((x) => x.date === dayKey && x.id !== noteId).sort(byDateDesc);
-  const topicOpts = `<option value="">— kein Thema —</option>` +
-    m.topics.map((t) => `<option value="${t.id}" ${selTopic === t.id ? "selected" : ""}>${esc(t.title)}</option>`).join("") +
-    `<option value="__new">+ Neues Thema …</option>`;
   openModal(`
-    <div class="row" style="justify-content:space-between"><h3 style="margin:0">${esc(name)}</h3>
-      <button type="button" class="btn ghost" data-act="gotoprot" data-m="${enc(name)}">Im Protokoll →</button></div>
-    <form data-form="note">
-      <input type="hidden" name="module" value="${esc(name)}">
-      <input type="hidden" name="id" value="${note ? note.id : ""}">
-      <label class="muted">Datum</label>
-      <input type="date" name="date" required value="${note ? note.date : date}">
-      <label class="muted">Thema</label>
-      <select name="topic">${topicOpts}</select>
-      <div id="newTopicWrap" style="display:none"><label class="muted">Name des neuen Themas</label><input name="newTopic" placeholder="z. B. Matrizen"></div>
-      <label class="muted">Notizen (was gemacht wurde und was noch zu lernen ist)</label>
-      <textarea name="done" rows="6">${esc(note ? note.done : "")}</textarea>
-      <div class="row"><button class="btn">Speichern</button><button type="button" class="btn ghost" data-act="mclose">Schließen</button></div>
-    </form>
-    <h4>Einträge am ${dayKey ? fmtD(parseIso(dayKey)) : ""}</h4>
-    ${hist.map((x) => noteBlock(name, x)).join("") || `<div class="muted">Noch keine Einträge.</div>`}
-  `);
+    <div class="note-sheet">
+      <div class="row" style="justify-content:space-between;align-items:center;gap:8px">
+        <b class="grow" style="font-size:17px;color:${m.color}">${esc(name)}</b>
+        <button type="button" class="btn ghost" data-act="gotoprot" data-m="${enc(name)}">Protokoll</button>
+        <button type="button" class="btn ghost" data-act="mclose" title="Schließen">✕</button>
+      </div>
+      <form data-form="note" ${draftKey ? `data-draft="${esc(draftKey)}"` : ""} class="note-form">
+        <input type="hidden" name="module" value="${esc(name)}">
+        <input type="hidden" name="id" value="${note ? note.id : ""}">
+        <div class="note-meta">
+          <label class="date-chip">${fmtD(parseIso(dayKey))}<input type="date" name="date" required value="${dayKey}"></label>
+          <input name="topic" class="topic-input" list="topicList" autocomplete="off" placeholder="Thema" value="${esc(topicTxt)}">
+          <datalist id="topicList">${m.topics.map((t) => `<option value="${esc(t.title)}">`).join("")}</datalist>
+        </div>
+        <textarea name="done" class="autogrow" rows="3" placeholder="Schreib einfach los. Stichpunkte reichen.">${esc(text)}</textarea>
+        <button class="btn wide">${note ? "Ändern" : "Speichern"}</button>
+      </form>
+      ${hist.length ? `<h4 class="note-hist-title">Früher an diesem Tag</h4>` + hist.map((x) => noteBlock(name, x)).join("") : ""}
+    </div>`);
+  const ta = document.querySelector("#modalRoot textarea.autogrow");
+  if (ta) growNoteBox(ta);
 }
+// Textbox wächst mit dem Text, bis etwa 60 % der Bildschirmhöhe
+function growNoteBox(el) {
+  el.style.height = "auto";
+  el.style.height = Math.min(el.scrollHeight + 2, Math.round(innerHeight * 0.6)) + "px";
+}
+document.addEventListener("input", (e) => {
+  const t = e.target;
+  if (t.matches && t.matches("textarea.autogrow")) growNoteBox(t);
+  const f = t.form;
+  if (f && f.dataset && f.dataset.draft) {
+    try {
+      localStorage.setItem(f.dataset.draft, JSON.stringify({
+        text: f.elements.done ? f.elements.done.value : "",
+        topic: f.elements.topic ? f.elements.topic.value : "",
+      }));
+    } catch (_) {}
+  }
+});
 
 function openTodoModal(id, date) {
   const t = id ? state.todos.find((x) => x.id === id) : null;
@@ -2167,6 +2211,22 @@ document.addEventListener("pointerdown", (e) => {
       pressStart = null;
       if (navigator.vibrate) navigator.vibrate(15);
       openTodoModal(id);
+    }, 500);
+    return;
+  }
+
+  // Protokoll: langes Drücken auf ein Thema benennt es um (falls Schreibfehler)
+  if (ui.tab === "protokolle" && e.target.closest(".topic-card") && !e.target.closest("button")) {
+    const tc = e.target.closest(".topic-card");
+    pressStart = { x: e.clientX, y: e.clientY, el: tc };
+    clearTimeout(pressTimer);
+    pressTimer = setTimeout(() => {
+      longFired = true;
+      const id = pressStart.el.dataset.id;
+      const name = dec(pressStart.el.dataset.m);
+      pressStart = null;
+      hapt(15);
+      renameTopicFlow(name, id);
     }, 500);
     return;
   }
@@ -2253,7 +2313,7 @@ function setZoom(scope, z) {
 document.addEventListener("touchstart", (e) => {
   if (e.touches.length !== 2) return;
   const el = e.target.closest(".week, .excerpt");
-  if (!el) { pinch = null; return; }
+  if (!el || el.classList.contains("excerpt")) { pinch = null; return; }
   const scope = zoomScope(el);
   const [a, b] = e.touches;
   pinch = { el, scope, d0: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY), z0: getZoom(scope), zNow: getZoom(scope), moved: false };
@@ -2278,7 +2338,7 @@ document.addEventListener("touchcancel", endPinch, { passive: true });
 document.addEventListener("wheel", (e) => {
   if (!e.ctrlKey) return;
   const el = e.target.closest(".week, .excerpt");
-  if (!el) return;
+  if (!el || el.classList.contains("excerpt")) return;
   e.preventDefault();
   const scope = zoomScope(el);
   setZoom(scope, getZoom(scope) * (e.deltaY < 0 ? 1.08 : 0.92));
@@ -2326,11 +2386,23 @@ document.addEventListener("click", async (e) => {
     ui.tab = key;
     ui.modOpen = null;
     ui.topicOpen = null;
+    // Zurück-Taste: springt vom Reiter aus zurück zum Startbildschirm
     render();
     window.scrollTo(0, 0);
     return;
   }
   const el = e.target.closest("[data-act]");
+  // Bearbeiten nur per Doppeltippen: To-Dos, Abgaben, Klausuren (✎-Button bleibt direkt)
+  const editRow = e.target.closest(".listrow[data-drag]");
+  const editId = el && el.dataset.act === "tedit" && !el.classList.contains("btn") ? el.dataset.id
+    : (editRow && !e.target.closest("button, input, select, textarea, label, [data-act]") ? editRow.dataset.drag : null);
+  if (editId) {
+    const now = Date.now();
+    const dbl = lastEditTap.id === editId && now - lastEditTap.t < 450;
+    lastEditTap = dbl ? { id: null, t: 0 } : { id: editId, t: now };
+    if (dbl) { hapt(10); openTodoModal(editId); }
+    return;
+  }
   if (!el || el.disabled) return;
   const act = el.dataset.act;
   const id = el.dataset.id;
@@ -2378,12 +2450,8 @@ document.addEventListener("click", async (e) => {
     case "note": {
       const ev = state.events.find((x) => x.id === id);
       if (!ev) break;
-      ensureModule(ev.name);
-      ui.noteFor = { name: ev.name, date: ev.date };
-      ui.editNote = null;
-      ui.noteWindow = ui.tab === "stundenplan";
-      ui.dashNoteDismissed = false;
-      render();
+      hapt(8);
+      openNoteModal(ev.name, ev.date);
       break;
     }
     case "npclose":
@@ -2525,12 +2593,20 @@ document.addEventListener("click", async (e) => {
       if (!canCheck(t)) { appAlert("Klausuren kannst du erst am Prüfungstag abhaken."); render(); break; }
       t.done = !t.done;
       t.doneAt = t.done ? iso(new Date()) : null;
+      ui.popId = id;
+      setTimeout(() => { ui.popId = null; }, 900);
       commit(); break;
     }
 
     // Protokolle
     case "showhidden": ui.showHidden = !ui.showHidden; render(); break;
     case "mopen": ui.modOpen = m; ui.topicOpen = null; render(); break;
+    case "ntopic": {
+      const inp = document.querySelector('#modalRoot form[data-form="note"] input[name="topic"]');
+      if (inp) { inp.value = dec(el.dataset.t); inp.dispatchEvent(new Event("input", { bubbles: true })); }
+      break;
+    }
+    case "modgo": ensureModule(m); ui.tab = "protokolle"; ui.modOpen = m; ui.topicOpen = null; render(); window.scrollTo(0, 0); break;
     case "mback": ui.modOpen = null; ui.topicOpen = null; render(); break;
     case "mmenu": openModuleMenu(m); break;
     case "mcolor": state.modules[ui.modOpen].color = el.dataset.c; commit(); break;
@@ -2551,12 +2627,7 @@ document.addEventListener("click", async (e) => {
       if (t) t.done = !t.done;
       commit(); break;
     }
-    case "ttitle": {
-      const t = topicOf(state.modules[m], id);
-      const val = t && (await appPrompt("Thema umbenennen:", t.title));
-      if (val && val.trim()) { t.title = val.trim(); commit(); }
-      break;
-    }
+    case "ttitle": await renameTopicFlow(m, id); break;
     case "tdel": {
       if (!(await appConfirm("Thema in den Papierkorb verschieben? Die Einträge bleiben erhalten."))) break;
       const mod = state.modules[m];
@@ -2588,15 +2659,20 @@ document.addEventListener("click", async (e) => {
       if (!(await appConfirm("Papierkorb endgültig leeren?"))) break;
       state.trash = []; commit(); break;
 
-    case "gotoprot":
-      closeModal();
+    case "gotoprot": {
+      // Fenster leeren, ohne dass die Zurück-Logik den alten Reiter wiederherstellt
+      document.getElementById("modalRoot").innerHTML = "";
+      modalResolve = null;
+      ui.dayPop = null; ui.noteFor = null; ui.editNote = null; ui.noteWindow = false;
       ui.tab = "protokolle";
       ui.modOpen = m;
       ui.topicOpen = null;
       ui.modSearch = "";
+      try { history.replaceState({ sp: "nav", nav: navSnap() }, ""); } catch (_) {}
       render();
       window.scrollTo(0, 0);
       break;
+    }
 
     // Design-Vorschläge
     case "preset": applyPreset(el.dataset.pid); break;
@@ -2813,11 +2889,20 @@ document.addEventListener("submit", async (e) => {
     }
     case "note": {
       const mod = ensureModule(data.module);
-      let topicId = data.topic || "";
-      if (topicId === "__new") {
-        const title = (data.newTopic || "").trim();
-        if (title) { topicId = uid(); mod.topics.push({ id: topicId, title, done: false }); }
-        else topicId = "";
+      const title = (data.topic || "").trim();
+      let topicId = "";
+      // Beim Ändern einer Notiz: ist der neue Name nur ein Schreibfehler-Abstand zum bisherigen Thema, wird dieses umbenannt
+      const editing = data.id ? mod.notes.find((x) => x.id === data.id) : null;
+      const curTopic = editing && editing.topicId ? mod.topics.find((t) => t.id === editing.topicId) : null;
+      if (title && curTopic && curTopic.title.toLowerCase() !== title.toLowerCase()
+        && !mod.topics.some((t) => t.title.toLowerCase() === title.toLowerCase())
+        && similarTitle(curTopic.title, title)) {
+        curTopic.title = title;
+        topicId = curTopic.id;
+      } else if (title) {
+        const hit = mod.topics.find((t) => t.title.toLowerCase() === title.toLowerCase());
+        if (hit) topicId = hit.id;
+        else { topicId = uid(); mod.topics.push({ id: topicId, title, done: false }); }
       }
       if (data.id) {
         const n = mod.notes.find((x) => x.id === data.id);
@@ -2829,6 +2914,7 @@ document.addEventListener("submit", async (e) => {
         const entry = { id: uid(), date: data.date, done: data.done.trim(), todo: "", created: Date.now() };
         if (topicId) entry.topicId = topicId;
         mod.notes.push(entry);
+        if (f.dataset.draft) { try { localStorage.removeItem(f.dataset.draft); } catch (_) {} }
       }
       closeModal(); commit(); break;
     }
@@ -3053,6 +3139,43 @@ function scheduleCloud() {
 // ---------- Start ----------
 lastSnap = snapshot();
 ui.tab = state.settings.startTab || ui.tab;
+// Verlauf für die Zurück-Taste: Grundeintrag (= Startbildschirm) und aktueller Reiter
+// Alles, was der Zurück-Taste als "Seite" gilt: Reiter, geöffnete Vorlesung, geöffnetes Thema
+function navSnap() {
+  return { tab: ui.tab, modOpen: ui.modOpen || null, topicOpen: ui.topicOpen || null };
+}
+const navKey = (x) => [x.tab, x.modOpen, x.topicOpen].join("|");
+let navRestoring = false;
+// Wird bei jedem Neuzeichnen aufgerufen: neue Unterseite = neuer Verlaufseintrag, neuer Reiter = ersetzen
+function syncHistoryNav() {
+  if (navRestoring) return;
+  try {
+    const cur = history.state;
+    if (!cur || cur.sp !== "nav" || !cur.nav) return;
+    const snap = navSnap();
+    if (navKey(cur.nav) === navKey(snap)) return;
+    if (cur.nav.tab === snap.tab) history.pushState({ sp: "nav", nav: snap }, "");
+    else history.replaceState({ sp: "nav", nav: snap }, "");
+  } catch (_) {}
+}
+try {
+  history.replaceState({ sp: "base" }, "");
+  history.pushState({ sp: "nav", nav: navSnap() }, "");
+} catch (_) {}
+window.addEventListener("popstate", (e) => {
+  const st = e.state || {};
+  const root = document.getElementById("modalRoot");
+  if (root && root.innerHTML) { closeModal(); return; }
+  const start = state.settings.startTab || "dashboard";
+  const x = st.sp === "nav" && st.nav ? st.nav : { tab: start, modOpen: null, topicOpen: null };
+  ui.tab = x.tab;
+  ui.modOpen = x.modOpen;
+  ui.topicOpen = x.topicOpen;
+  navRestoring = true;
+  try { render(); } finally { navRestoring = false; }
+  try { history.replaceState({ sp: "nav", nav: navSnap() }, ""); } catch (_) {}
+  window.scrollTo(0, 0);
+});
 initCloud();
 render();
 // Systemfarbe folgen: beim Wechsel des Geräte-Designs neu zeichnen
@@ -3192,3 +3315,148 @@ document.addEventListener("click", async (e) => {
 
 // Kein Browser-Zoom per Pinch (iPhone/Safari); die eigene Streckung des Stundenplans bleibt
 ["gesturestart", "gesturechange", "gestureend"].forEach((ev) => document.addEventListener(ev, (e) => e.preventDefault(), { passive: false }));
+
+
+// ---------- App-Gefühl ----------
+let lastEditTap = { id: null, t: 0 };
+const hapt = (ms = 8) => { try { navigator.vibrate && navigator.vibrate(ms); } catch (_) {} };
+
+// 2) Kurzes Vibrieren bei Häkchen und Buttons
+document.addEventListener("click", (e) => {
+  if (e.target.closest && e.target.closest('input[type="checkbox"], .btn')) hapt(8);
+}, true);
+
+// 1) Wischen auf einem To-Do: nach rechts abhaken, nach links bearbeiten
+let rowSwipe = null;
+document.addEventListener("touchstart", (e) => {
+  rowSwipe = null;
+  if (ui.layEdit || e.touches.length !== 1) return;
+  const row = e.target.closest && e.target.closest(".listrow[data-drag]");
+  if (!row) return;
+  const t = e.touches[0];
+  rowSwipe = { row, x: t.clientX, y: t.clientY, dx: 0 };
+}, { passive: true });
+document.addEventListener("touchmove", (e) => {
+  if (!rowSwipe) return;
+  const t = e.touches[0];
+  rowSwipe.dx = t.clientX - rowSwipe.x;
+  if (Math.abs(t.clientY - rowSwipe.y) > Math.abs(rowSwipe.dx)) { rowSwipe.row.style.transform = ""; rowSwipe = null; return; }
+  rowSwipe.row.style.transition = "none";
+  rowSwipe.row.style.transform = `translateX(${Math.max(-90, Math.min(90, rowSwipe.dx)) * 0.6}px)`;
+}, { passive: true });
+document.addEventListener("touchend", () => {
+  const sw = rowSwipe;
+  rowSwipe = null;
+  if (!sw) return;
+  sw.row.style.transition = "transform .25s ease";
+  sw.row.style.transform = "";
+  if (Math.abs(sw.dx) < 90) return;
+  if (sw.dx > 0) {
+    const cb = sw.row.querySelector('input[data-act="tdone"]');
+    if (cb && !cb.disabled) { hapt(12); cb.click(); }
+  }
+}, { passive: true });
+
+// 4) Fenster nach unten wischen (am oberen Rand des Fensters)
+let sheetDrag = null;
+document.addEventListener("touchstart", (e) => {
+  sheetDrag = null;
+  const sheet = e.target.closest && e.target.closest(".modal .sheet");
+  if (!sheet || e.touches.length !== 1) return;
+  const t = e.touches[0];
+  if (t.clientY - sheet.getBoundingClientRect().top > 56 || sheet.scrollTop > 0) return;
+  sheetDrag = { sheet, y: t.clientY, dy: 0 };
+}, { passive: true });
+document.addEventListener("touchmove", (e) => {
+  if (!sheetDrag) return;
+  sheetDrag.dy = Math.max(0, e.touches[0].clientY - sheetDrag.y);
+  sheetDrag.sheet.style.transition = "none";
+  sheetDrag.sheet.style.transform = `translateY(${sheetDrag.dy}px)`;
+}, { passive: true });
+document.addEventListener("touchend", () => {
+  if (!sheetDrag) return;
+  const { sheet, dy } = sheetDrag;
+  sheetDrag = null;
+  if (dy > 110) { hapt(10); closeModal(); return; }
+  sheet.style.transition = "transform .25s ease";
+  sheet.style.transform = "";
+}, { passive: true });
+
+// 5) Kurze Rückmeldung nach dem Speichern eines Formulars
+function showToast(text) {
+  let el = document.getElementById("appToast");
+  if (!el) { el = document.createElement("div"); el.id = "appToast"; document.body.appendChild(el); }
+  el.textContent = text;
+  el.classList.remove("show");
+  void el.offsetWidth;
+  el.classList.add("show");
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.classList.remove("show"), 1300);
+}
+document.addEventListener("submit", () => showToast("✓ Gespeichert"));
+
+// 6) Zum Aktualisieren nach unten ziehen (ganz oben auf der Seite)
+let pull = null;
+document.addEventListener("touchstart", (e) => {
+  pull = null;
+  if (window.scrollY > 0 || e.touches.length !== 1 || document.querySelector(".modal") || ui.layEdit) return;
+  pull = { y: e.touches[0].clientY, dy: 0 };
+}, { passive: true });
+document.addEventListener("touchmove", (e) => { if (pull) pull.dy = e.touches[0].clientY - pull.y; }, { passive: true });
+document.addEventListener("touchend", async () => {
+  if (!pull) return;
+  const dy = pull.dy;
+  pull = null;
+  if (dy < 90 || !session) return;
+  hapt(10);
+  await cloudPull();
+  render();
+}, { passive: true });
+
+// 7) Enter springt zum nächsten Feld; das Feld rutscht über die Tastatur in die Mitte
+const FIELD_SEL = "input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]):not([type=button]):not([type=submit]):not([type=hidden]), select, textarea";
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Enter" || e.shiftKey || e.isComposing || e.target.tagName === "TEXTAREA") return;
+  const el = e.target;
+  if (!el.form || !el.matches(FIELD_SEL)) return;
+  const fields = [...el.form.querySelectorAll(FIELD_SEL)].filter((f) => !f.disabled && f.offsetParent !== null);
+  const i = fields.indexOf(el);
+  if (i >= 0 && i < fields.length - 1) { e.preventDefault(); fields[i + 1].focus(); }
+}, true);
+document.addEventListener("focusin", (e) => {
+  if (!e.target.matches || !e.target.matches(FIELD_SEL)) return;
+  setTimeout(() => e.target.scrollIntoView({ block: "center", behavior: "smooth" }), 320);
+});
+
+// 8) Startbildschirm nur wenn die App vom Homescreen gestartet wird
+(() => {
+  const sp = document.getElementById("splash");
+  if (!sp) return;
+  if (!(matchMedia("(display-mode: standalone)").matches || navigator.standalone)) { sp.remove(); return; }
+  setTimeout(() => sp.classList.add("gone"), 700);
+  setTimeout(() => sp.remove(), 1200);
+})();
+
+// Thema umbenennen (✎ oder langes Drücken)
+async function renameTopicFlow(name, id) {
+  const t = topicOf(state.modules[name], id);
+  const val = t && (await appPrompt("Thema umbenennen:", t.title));
+  if (val && val.trim()) { t.title = val.trim(); commit(); }
+}
+
+// Ähnlichkeit zweier Themennamen (Schreibfehler, Groß-/Kleinschreibung, ein Buchstabe mehr oder weniger)
+function similarTitle(a, b) {
+  a = a.toLowerCase(); b = b.toLowerCase();
+  const n = a.length, m = b.length;
+  if (!n || !m) return false;
+  const prev = Array.from({ length: m + 1 }, (_, j) => j);
+  for (let i = 1; i <= n; i++) {
+    const cur = [i];
+    for (let j = 1; j <= m; j++) {
+      cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    }
+    prev.splice(0, prev.length, ...cur);
+  }
+  const dist = prev[m];
+  return dist <= Math.max(1, Math.floor(Math.max(n, m) / 4));
+}
