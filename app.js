@@ -52,7 +52,7 @@ const SWIPE_MIN_PX = 70;
 const HISTORY_MAX = 20;
 const TRASH_DAYS = 30;
 const DEFAULT_DURATION = 60;
-const PLAN_DEFAULTS = { grid: "", now: "", todo: "#60a5fa", abgabe: "#f59e0b", klausur: "#f43f5e" };
+const PLAN_DEFAULTS = { grid: "", now: "", todo: "#60a5fa", abgabe: "#f59e0b", klausur: "#f43f5e", done: "#22c55e" };
 
 // Gerätespezifisch: bleibt im Browser dieses Geräts und geht NICHT in den Cloud-Abgleich
 const DEVICE_LS = "studienplaner-device-v1";
@@ -496,6 +496,8 @@ function ensureModule(name) {
 const colorOf = (name) => (state.modules[name] ? state.modules[name].color : "#64748b");
 const topicOf = (m, id) => m.topics.find((t) => t.id === id);
 const catColor = (type) => state.settings.plan[type] || PLAN_DEFAULTS[type];
+// Erledigte Einträge bekommen eine eigene Farbe (in den Einstellungen anpassbar)
+const calColor = (t) => (t.done ? catColor("done") : catColor(t.type));
 const canCheck = (t) => t.type !== "klausur" || (!!t.date && t.date <= iso(new Date()));
 const moduleHasEvents = (name) => state.events.some((e) => e.name === name);
 
@@ -637,8 +639,6 @@ function seriesDates(first, repeat, until) {
 // ---------- Render ----------
 function render() {
   applyTheme();
-  // Stundenplan passt ganz auf den Bildschirm: dort gibt es kein Scrollen mehr
-  document.documentElement.classList.toggle("page-fit", ui.tab === "stundenplan" && !ui.layEdit);
   applyDayRange();
   // Mit Cloud-Sync: ohne Anmeldung sieht man nur das Login-Fenster
   const locked = cloudConfigured() && (!authChecked || !session);
@@ -920,7 +920,7 @@ function countdownBlock() {
     return `<h4 style="color:${catColor(type)}">${label}</h4>` + (items.length
       ? items.map((t) => `<div class="listrow" data-lp="${t.id}">
           <span class="pdot" style="background:${catColor(type)}"></span>
-          <div class="grow"><b>${esc(t.title)}</b><div class="muted">${t.date ? fmtD(parseIso(t.date)) + (t.time ? " · " + esc(t.time) : "") : "Termin folgt"}</div></div>
+          <div class="grow"><b>${esc(t.title)}</b><div class="muted">${t.date ? dateText(t) + (t.time ? " · " + esc(t.time) : "") : "Termin folgt"}</div></div>
           <div style="font-weight:700;white-space:nowrap;color:${catColor(type)}">${t.date ? countdownText(t.date) : "–"}</div>
           <span class="prio ${t.priority || "mittel"}">${t.priority || "mittel"}</span>
           <button class="btn ghost" data-act="tedit" data-id="${t.id}" title="Bearbeiten">✎</button></div>`).join("")
@@ -930,7 +930,7 @@ function countdownBlock() {
 
 function todoItem(t) {
   const sub = CAT_LABEL[t.type] || "To-Do";
-  const due = t.date ? ` · fällig ${fmtD(parseIso(t.date))}` : " · Termin folgt";
+  const due = t.date ? ` · fällig ${dateText(t)}` : " · Termin folgt";
   const prio = t.priority || "mittel";
   return `<div class="item" data-lp="${t.id}">
     <input type="checkbox" data-act="tdone" data-id="${t.id}" ${canCheck(t) ? "" : "disabled"}>
@@ -970,6 +970,19 @@ function allDayHTML(dates, showDate) {
       <button class="btn ghost" data-act="tedit" data-id="${t.id}">✎</button>
     </div>`;
   }).join("")}</div>`;
+}
+
+// Einträge, die an einem Tag liegen (auch Zeiträume über mehrere Tage)
+function todosOn(k) {
+  return state.todos.filter((t) => t.date && (t.endDate && t.endDate > t.date
+    ? t.date <= k && k <= t.endDate
+    : t.date === k));
+}
+// Datumstext: "5. Nov" oder "3. Nov – 7. Nov"
+function dateText(t) {
+  if (!t.date) return "";
+  const a = fmtD(parseIso(t.date));
+  return t.endDate && t.endDate > t.date ? `${a} – ${fmtD(parseIso(t.endDate))}` : a;
 }
 
 function timedTodoItems(k) {
@@ -1229,7 +1242,7 @@ const calSet = () => ({ ...DEVICE_DEFAULTS.cal, ...(state.settings.cal || {}) })
 function calCellInner(style, d, dayT, evCount) {
   const num = d.getDate();
   if (style === "bar") {
-    return `<div class="mnum">${num}</div><div class="micons">${dayT.slice(0, 3).map((t) => typeIcon(t.type, catColor(t.type), 13)).join("")}${evCount ? `<span class="dot" style="background:var(--muted)"></span>` : ""}</div>`;
+    return `<div class="mnum">${num}</div><div class="micons">${dayT.slice(0, 3).map((t) => typeIcon(t.type, calColor(t), 13)).join("")}${evCount ? `<span class="dot" style="background:var(--muted)"></span>` : ""}</div>`;
   }
   if (style === "ring") {
     const top = ["klausur", "abgabe", "todo"].find((ty) => dayT.some((t) => t.type === ty && !t.done));
@@ -1237,13 +1250,19 @@ function calCellInner(style, d, dayT, evCount) {
     return `<div class="mring" style="--ring:${ring}">${num}</div>${dayT.length ? `<div class="mcount">${dayT.length}</div>` : ""}${evCount ? `<span class="dot" style="background:var(--muted)"></span>` : ""}`;
   }
   // Pillen (Standard)
-  return `<div class="mnum">${num}</div><div class="mpills">${dayT.slice(0, 2).map((t) => `<span class="mpill ${t.done ? "is-done" : ""}" style="--pc:${catColor(t.type)}">${typeIcon(t.type, catColor(t.type), 11)}<span>${esc(shortTitle(t.title))}</span></span>`).join("")}${dayT.length > 2 ? `<span class="mmore">+${dayT.length - 2}</span>` : ""}${evCount ? `<span class="dot" style="background:var(--muted)"></span>` : ""}</div>`;
+  const k = iso(d);
+  const pill = (t) => {
+    const cont = t.endDate && t.endDate > t.date && t.date !== k;
+    const c = calColor(t);
+    return `<span class="mpill ${t.done ? "is-done" : ""} ${t.endDate ? "mspan" : ""} ${cont ? "mcont" : ""}" style="--pc:${c}">${cont ? "" : typeIcon(t.type, c, 11)}<span>${cont ? "&nbsp;" : esc(shortTitle(t.title))}</span></span>`;
+  };
+  return `<div class="mnum">${num}</div><div class="mpills">${dayT.slice(0, 2).map(pill).join("")}${dayT.length > 2 ? `<span class="mmore">+${dayT.length - 2}</span>` : ""}${evCount ? `<span class="dot" style="background:var(--muted)"></span>` : ""}</div>`;
 }
 
 // Inhalt eines Tages (Einträge, To-Dos, erledigte eingeklappt) — für das Tages-Fenster
 function dayPanelHTML(date) {
   const doneBox = (list) => list.length ? `<details class="donebox"><summary>Erledigt (${list.length})</summary>${list.map(todoRow).join("")}</details>` : "";
-  const dayAll = state.todos.filter((t) => t.date === date).sort((a, b) => (a.time || "").localeCompare(b.time || ""));
+  const dayAll = todosOn(date).sort((a, b) => (a.time || "").localeCompare(b.time || ""));
   const dayEvents = layout(state.events.filter((e) => e.date === date).map((e) => ({ ...e })));
   return `${dayEvents.map((e) => `<div class="listrow"><span class="pdot" style="background:${colorOf(e.name)}"></span><div class="grow"><b>${esc(e.name)}</b><div class="muted">${fmtMin(e.start)}–${fmtMin(e.end)} · ${esc(e.room)}</div></div></div>`).join("")}
     ${dayAll.filter((t) => !t.done).map(todoRow).join("")}
@@ -1308,10 +1327,21 @@ function viewCal() {
   for (let i = 0; i < 42; i++) {
     const d = addDays(grid0, i);
     const k = iso(d);
-    const dayT = state.todos.filter((t) => t.date === k).sort((a, b) => Number(a.done) - Number(b.done));
+    const dayT = todosOn(k).sort((a, b) => Number(a.done) - Number(b.done));
     const evCount = state.events.filter((e) => e.date === k).length;
     const topType = ["klausur", "abgabe", "todo"].find((ty) => dayT.some((t) => t.type === ty && !t.done));
-    const border = cal.style !== "ring" && topType ? `border-color:${catColor(topType)};` : "";
+    let border = cal.style !== "ring" && topType ? `border-color:${catColor(topType)};` : "";
+    // Mehrtägiger Eintrag: eine zusammenhängende Umrandung über alle Tage (pro Woche)
+    const spanT = todosOn(k).find((t) => t.endDate && t.endDate > t.date);
+    if (spanT) {
+      const same = (kk) => todosOn(kk).some((t) => t.id === spanT.id);
+      const L = d.getDay() === 1 || !same(iso(addDays(d, -1)));
+      const R = d.getDay() === 0 || !same(iso(addDays(d, 1)));
+      const T = !same(iso(addDays(d, -7)));
+      const B = !same(iso(addDays(d, 7)));
+      const rr = 14;
+      border = `border-style:solid;border-color:${catColor(spanT.type)};border-width:${T ? 2 : 0}px ${R ? 2 : 0}px ${B ? 2 : 0}px ${L ? 2 : 0}px;border-radius:${T && L ? rr : 0}px ${T && R ? rr : 0}px ${B && R ? rr : 0}px ${B && L ? rr : 0}px;`;
+    }
     const cls = ["mday", `style-${cal.style}`, d.getMonth() !== m.getMonth() ? "other" : "", k === today ? "today" : "", k === ui.selDate ? "sel" : ""].join(" ");
     cells += `<div class="${cls}" data-act="sel" data-d="${k}" style="${border}">${calCellInner(cal.style, d, dayT, evCount)}</div>`;
   }
@@ -1621,7 +1651,7 @@ function viewSettings() {
   </div>`;
   h += `<div class="card"><h3>Kategorie-Farben</h3>
     <p class="muted" style="margin-top:0">Gelten auf allen Geräten gleich.</p>
-    ${[["todo", "To-Do"], ["abgabe", "Abgabe"], ["klausur", "Klausur"]].map(([key, label]) =>
+    ${[["todo", "To-Do"], ["abgabe", "Abgabe"], ["klausur", "Klausur"], ["done", "Erledigt (im Kalender)"]].map(([key, label]) =>
       `<label class="muted" style="display:block;margin-top:10px">${label}</label>
       <input type="color" value="${s.plan[key] || PLAN_DEFAULTS[key]}" data-change="catcolor" data-key="${key}">`).join("")}
   </div>`;
@@ -2100,10 +2130,12 @@ function openTodoModal(id, date) {
       <select name="priority">
         ${[["hoch", "hoch"], ["mittel", "mittel"], ["niedrig", "niedrig"]].map(([v, l]) => `<option value="${v}" ${prio === v ? "selected" : ""}>${l}</option>`).join("")}
       </select>
-      <label class="muted">Datum (leer lassen = Termin folgt)</label>
-      <input type="date" name="date" value="${t ? t.date : date || ""}">
       <div class="grid2">
-        <div><label class="muted">Uhrzeit (leer = ganztägig oben)</label><input type="time" name="time" value="${t ? t.time : ""}"></div>
+        <div><label class="muted">Datum</label><input type="date" name="date" value="${t ? t.date : date || ""}"></div>
+        <div><label class="muted">Bis (optional)</label><input type="date" name="endDate" value="${t && t.endDate ? t.endDate : ""}"></div>
+      </div>
+      <div class="grid2">
+        <div><label class="muted">Uhrzeit</label><input type="time" name="time" value="${t ? t.time : ""}"></div>
         <div><label class="muted">Dauer in Minuten</label><input type="number" name="duration" min="15" step="15" value="${dur}"></div>
       </div>
       <div class="row" style="margin-top:12px">
@@ -2188,7 +2220,8 @@ document.addEventListener("pointermove", (e) => {
 
 let swipe = null;
 document.addEventListener("touchstart", (e) => {
-  if (ui.tab !== "stundenplan" || document.querySelector(".modal") || e.touches.length !== 1) { swipe = null; return; }
+  if (ui.tab !== "stundenplan" || ui.layEdit || document.querySelector(".modal") || e.touches.length !== 1) { swipe = null; return; }
+  if (!e.target.closest || !e.target.closest(".week")) { swipe = null; return; }
   const t = e.touches[0];
   swipe = { x: t.clientX, y: t.clientY, t: Date.now() };
 }, { passive: true });
@@ -2845,6 +2878,7 @@ document.addEventListener("submit", async (e) => {
         type: data.type,
         priority: data.priority || "mittel",
         date: data.date || "",
+        endDate: data.date && data.endDate && data.endDate > data.date ? data.endDate : "",
         time: data.time || "",
         duration: Math.max(15, Number(data.duration) || DEFAULT_DURATION),
       };
@@ -3136,24 +3170,6 @@ function endDrag(cancelled, x, y) {
   }
   commit();
 }
-// Am Handy: waagerecht wischen wechselt Tag bzw. Woche
-let swipeStart = null;
-document.addEventListener("touchstart", (e) => {
-  swipeStart = null;
-  if (ui.tab !== "stundenplan" || ui.layEdit || e.touches.length !== 1) return;
-  if (!e.target.closest || !e.target.closest(".week")) return;
-  const t = e.touches[0];
-  swipeStart = { x: t.clientX, y: t.clientY, t: Date.now() };
-}, { passive: true });
-document.addEventListener("touchend", (e) => {
-  const st = swipeStart;
-  swipeStart = null;
-  if (!st || (drag && drag.active) || e.changedTouches.length !== 1) return;
-  const t = e.changedTouches[0];
-  const dx = t.clientX - st.x, dy = t.clientY - st.y;
-  if (Date.now() - st.t > 700 || Math.abs(dx) < 70 || Math.abs(dx) < Math.abs(dy) * 1.6) return;
-  navigate(dx < 0 ? 1 : -1);
-}, { passive: true });
 
 // Kurzes Vibrieren beim Antippen der unteren Leiste (nur Geräte, die es unterstützen)
 document.addEventListener("focusin", (e) => {
@@ -3173,3 +3189,6 @@ document.addEventListener("click", async (e) => {
   e.stopPropagation();
   e.preventDefault();
 }, true);
+
+// Kein Browser-Zoom per Pinch (iPhone/Safari); die eigene Streckung des Stundenplans bleibt
+["gesturestart", "gesturechange", "gestureend"].forEach((ev) => document.addEventListener(ev, (e) => e.preventDefault(), { passive: false }));
