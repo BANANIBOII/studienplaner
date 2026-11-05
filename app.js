@@ -637,6 +637,8 @@ function seriesDates(first, repeat, until) {
 // ---------- Render ----------
 function render() {
   applyTheme();
+  // Stundenplan passt ganz auf den Bildschirm: dort gibt es kein Scrollen mehr
+  document.documentElement.classList.toggle("page-fit", ui.tab === "stundenplan" && !ui.layEdit);
   applyDayRange();
   // Mit Cloud-Sync: ohne Anmeldung sieht man nur das Login-Fenster
   const locked = cloudConfigured() && (!authChecked || !session);

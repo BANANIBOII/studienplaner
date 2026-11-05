@@ -507,3 +507,16 @@ input[type="checkbox"]::after { transition: transform .22s cubic-bezier(.34, 1.5
 .tabbar button:active { transform: scale(.9); }
 .card { transition: background-color .3s ease, border-color .3s ease; }
 .listrow { transition: background-color .2s ease; }
+
+/* ---------- Seiten, die ohne Scrollen auskommen (Stundenplan am Handy) ---------- */
+@media (max-width: 799px) {
+  html.page-fit, html.page-fit body { height: 100%; overflow: hidden; overscroll-behavior: none; }
+  html.page-fit body { padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
+  html.page-fit main { padding-bottom: 6px !important; }
+}
+
+/* ---------- Dashboard: keine inneren Scroll-Kästen, die ganze Seite scrollt ---------- */
+.dgrid { max-height: none !important; overflow: visible !important; }
+.lay[data-scope="dash"]:not(.lay-edit) { grid-auto-rows: auto; }
+.lay[data-scope="dash"]:not(.lay-edit) .lcard { overflow: visible; grid-row: auto !important; min-height: 0; }
+.lay[data-scope="dash"]:not(.lay-edit) .lcard > .card { height: auto; }
