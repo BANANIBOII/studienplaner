@@ -483,3 +483,27 @@ input[type="checkbox"]::after { transition: transform .22s cubic-bezier(.34, 1.5
 .calfilters { display: none; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 10px; }
 .calfilters.open { display: flex; }
 .calfilters label.muted { display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
+
+
+/* ---------- Handy: obere Leiste weg, Werkzeuge stehen in den Einstellungen ---------- */
+@media (max-width: 799px) {
+  .topbar { display: none !important; }
+  body.nav-bottom:not(.locked) .topbar,
+  body.nav-left:not(.locked) .topbar { display: none !important; }
+}
+@media (min-width: 800px) { .phone-tools { display: none; } }
+
+/* ---------- Übergänge (ruhiger, mit Richtung) ---------- */
+@keyframes tabFwd { from { opacity: .35; transform: translateX(22px); } to { opacity: 1; transform: none; } }
+@keyframes tabBack { from { opacity: .35; transform: translateX(-22px); } to { opacity: 1; transform: none; } }
+@keyframes appIn { from { opacity: .35; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+#app.tab-in.dir-fwd > * { animation: tabFwd .42s cubic-bezier(.2,.7,.2,1) both; }
+#app.tab-in.dir-back > * { animation: tabBack .42s cubic-bezier(.2,.7,.2,1) both; }
+#app.tab-in > * { animation-duration: .42s; }
+#app.tab-in > :nth-child(2) { animation-delay: .05s; }
+#app.tab-in > :nth-child(3) { animation-delay: .1s; }
+#app.tab-in > :nth-child(n+4) { animation-delay: .15s; }
+.tabbar button { transition: color .25s ease, transform .15s ease, background-color .25s ease; }
+.tabbar button:active { transform: scale(.9); }
+.card { transition: background-color .3s ease, border-color .3s ease; }
+.listrow { transition: background-color .2s ease; }

@@ -657,14 +657,18 @@ function render() {
     einstellungen: viewSettings,
   };
   const appEl = document.getElementById("app");
-  const tabChanged = appEl.dataset.shownTab !== ui.tab;
+  const tabOrder = ["dashboard", "stundenplan", "kalender", "protokolle", "einstellungen"];
+  const prevTab = appEl.dataset.shownTab;
+  const tabChanged = prevTab !== ui.tab;
+  const dir = tabOrder.indexOf(ui.tab) >= tabOrder.indexOf(prevTab) ? "dir-fwd" : "dir-back";
   appEl.innerHTML = (ui.layEdit ? layBarHTML() : "") + views[ui.tab]();
   appEl.dataset.shownTab = ui.tab;
   // Einblenden nur beim Wechsel des Reiters, nicht bei jedem Haken oder Klick
   if (tabChanged) {
-    appEl.classList.add("tab-in");
+    appEl.classList.remove("dir-fwd", "dir-back");
+    appEl.classList.add("tab-in", dir);
     clearTimeout(appEl._tabIn);
-    appEl._tabIn = setTimeout(() => appEl.classList.remove("tab-in"), 260);
+    appEl._tabIn = setTimeout(() => appEl.classList.remove("tab-in", "dir-fwd", "dir-back"), 480);
   }
   document.querySelectorAll(".lay-btn").forEach((b) => b.classList.toggle("on", ui.layEdit));
   if (ui.tab === "dashboard") loadMensa(false);
@@ -1561,12 +1565,25 @@ function noteBlock(name, x) {
 }
 
 // ---------- Einstellungen ----------
+function phoneToolsHTML() {
+  return `<div class="card phone-tools">
+    <h3 style="margin-top:0">Werkzeuge</h3>
+    <div class="row" style="gap:8px;flex-wrap:wrap">
+      <button class="btn ghost" data-act="undo">↶ Rückgängig</button>
+      <button class="btn ghost" data-act="redo">↷ Wiederholen</button>
+      <button class="btn ghost lay-btn" data-act="laytoggle">Layout bearbeiten</button>
+      <button class="btn ghost" data-act="navside">⇆ Leiste wechseln</button>
+    </div>
+    <p class="muted" style="margin:10px 0 0">Sync: <span class="syncStatus sync">lokal</span></p>
+  </div>`;
+}
 function viewSettings() {
   const s = state.settings;
   const mode = currentMode();
   const c = themeColors();
 
   let h = `<h2 style="margin-bottom:14px">Einstellungen</h2>`;
+  h += phoneToolsHTML();
   h += `<div class="card"><h3>Darstellung</h3>
     <label class="muted" style="display:block;margin-bottom:6px">Design (nur auf diesem Gerät)</label>
     <div class="row" style="gap:6px;flex-wrap:wrap;margin-bottom:14px">
