@@ -601,7 +601,8 @@ textarea.autogrow { resize: none; overflow: hidden; min-height: 96px; line-heigh
 
 
 /* ---------- Wischen ohne Zoom-Sprung: alles, was gleitet, bleibt im Bildschirm ---------- */
-#app { overflow-x: clip; }
+/* Begrenzung am festen Elternelement, damit die nächste Woche beim Wischen sichtbar bleibt */
+div:has(> #app) { overflow-x: clip; }
 .week, .allday-row { touch-action: pan-y; }
 
 /* ---------- Lebendigere Animationen ---------- */

@@ -2365,8 +2365,9 @@ document.addEventListener("touchend", () => {
   const app = document.getElementById("app");
   if (!app) return;
   const W = app.offsetWidth;
-  const quick = Date.now() - sw.t < 350 && Math.abs(sw.dx) > 40;
-  const commit = Math.abs(sw.dx) > W * 0.28 || quick;
+  // Nur ein deutlicher Wisch wechselt: halb über die Breite, oder ein schneller Wisch mit mindestens einem Viertel
+  const quick = Date.now() - sw.t < 250 && Math.abs(sw.dx) > W * 0.25;
+  const commit = Math.abs(sw.dx) > W * 0.42 || quick;
   app.style.transition = "transform .32s cubic-bezier(.2,.8,.2,1)";
   app.style.transform = commit ? `translateX(${-sw.dir * W}px)` : "translateX(0)";
   setTimeout(() => {
