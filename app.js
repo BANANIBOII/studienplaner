@@ -21,10 +21,15 @@ function applyDayRange() {
   let end = (s.dayEnd ?? 20) * 60;
   if (s.autoRange) {
     const dates = visibleDates();
-    const evs = state.events.filter((e) => dates.includes(e.date));
-    if (evs.length) {
-      start = Math.max(0, Math.min(...evs.map((e) => e.start)) - 30);
-      end = Math.min(24 * 60, Math.max(...evs.map((e) => e.end)) + 30);
+    // Termine und Aufgaben mit Uhrzeit bestimmen den sichtbaren Bereich
+    const pts = [
+      ...state.events.filter((e) => dates.includes(e.date)).map((e) => ({ start: e.start, end: e.end })),
+      ...state.todos.filter((t) => t.time && (dates.includes(t.date) || dates.includes(t.endDate)))
+        .map((t) => ({ start: toMin(t.time), end: toMin(t.time) + (Number(t.duration) || DEFAULT_DURATION) })),
+    ];
+    if (pts.length) {
+      start = Math.max(0, Math.min(...pts.map((p) => p.start)) - 30);
+      end = Math.min(24 * 60, Math.max(...pts.map((p) => p.end)) + 30);
     }
   }
   START_MIN = start;
@@ -808,9 +813,13 @@ function todayPlanHTML() {
   const day = dashDay(now);
   const today = iso(day);
   const evs = state.events.filter((e) => e.date === today);
-  if (!evs.length) return `<div class="empty"><div class="ei">☕</div>${today === iso(now) ? "Heute" : "An diesem Tag"} keine Termine.</div>`;
-  const from = Math.max(0, Math.min(...evs.map((e) => e.start)) - 30);
-  const to = Math.min(24 * 60, Math.max(...evs.map((e) => e.end)) + 30);
+  // Aufgaben mit Uhrzeit zählen für den Ausschnitt mit (am Starttag und am letzten Tag)
+  const tds = state.todos.filter((t) => t.time && (t.date === today || t.endDate === today))
+    .map((t) => ({ start: toMin(t.time), end: toMin(t.time) + (Number(t.duration) || DEFAULT_DURATION) }));
+  const pts = [...evs.map((e) => ({ start: e.start, end: e.end })), ...tds];
+  if (!pts.length) return `<div class="empty"><div class="ei">☕</div>${today === iso(now) ? "Heute" : "An diesem Tag"} keine Termine.</div>`;
+  const from = Math.max(0, Math.min(...pts.map((p) => p.start)) - 30);
+  const to = Math.min(24 * 60, Math.max(...pts.map((p) => p.end)) + 30);
   const dash = state.settings.dash;
   const saved = [START_MIN, END_MIN, HOUR_PX, PX_PER_MIN, PLAN_OVERRIDE];
   START_MIN = from;
@@ -1923,7 +1932,34 @@ let mensaBusy = false;
 function mensaCache() {
   try { return JSON.parse(localStorage.getItem(MENSA_LS) || "{}") || {}; } catch { return {}; }
 }
-function mensaTarget() { return ui.mensaDay || iso(new Date()); }
+// Wochenende ausblenden, wenn es in den Einstellungen aus ist (Sa/So → Montag)
+function mensaTarget() {
+  let d = parseIso(ui.mensaDay || iso(new Date()));
+  if (!state.settings.weekend) while (d.getDay() === 0 || d.getDay() === 6) d = addDays(d, 1);
+  return iso(d);
+}
+// Tag wechseln (v = ±1); 0 = heute. Ausgeblendete Wochentage werden übersprungen.
+function mensaStep(v) {
+  if (v === 0) { ui.mensaDay = null; render(); return; }
+  let d = addDays(parseIso(mensaTarget()), v);
+  if (!state.settings.weekend) while (d.getDay() === 0 || d.getDay() === 6) d = addDays(d, v);
+  ui.mensaDay = iso(d);
+  render();
+}
+// Wischen über die Mensa-Karte wechselt den Tag
+let mensaTouch = null;
+document.addEventListener("touchstart", (e) => {
+  const c = e.target.closest && e.target.closest(".mensa-card");
+  mensaTouch = c && e.touches.length === 1 ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : null;
+}, { passive: true });
+document.addEventListener("touchend", (e) => {
+  if (!mensaTouch) return;
+  const t = e.changedTouches[0];
+  const dx = t.clientX - mensaTouch.x, dy = t.clientY - mensaTouch.y;
+  mensaTouch = null;
+  if (Math.abs(dx) > 50 && Math.abs(dx) > 1.5 * Math.abs(dy)) mensaStep(dx < 0 ? 1 : -1);
+}, { passive: true });
+document.addEventListener("touchcancel", () => { mensaTouch = null; }, { passive: true });
 function mensaCardHTML() {
   const target = mensaTarget();
   const today = iso(new Date());
@@ -2408,6 +2444,7 @@ function resetSwipeTrack(app) {
   app.style.transition = "";
   app.style.transform = "";
   app.style.position = "";
+  app.querySelectorAll(".plan-fab").forEach((f) => { f.style.transition = ""; f.style.transform = ""; });
 }
 // Wisch sauber abbrechen (z.B. wenn ein zweiter Finger dazukommt): Geist entfernen, Ansicht zurücksetzen
 function removeGhosts(sw) {
@@ -2466,6 +2503,8 @@ document.addEventListener("touchmove", (e) => {
     if (!a) return;
     a.style.transition = "none";
     a.style.transform = `translateX(${swipe.dx}px)`;
+    // Der ⋮-Knopf bleibt an seiner Stelle (gleicht die Verschiebung aus)
+    a.querySelectorAll(".plan-fab").forEach((f) => { f.style.transition = "none"; f.style.transform = `translateX(${-swipe.dx}px)`; });
   });
 }, { passive: false });
 document.addEventListener("touchend", () => {
@@ -2482,6 +2521,7 @@ document.addEventListener("touchend", () => {
   const commit = Math.abs(sw.dx) > W * 0.3 || quick;
   app.style.transition = "transform .32s cubic-bezier(.2,.8,.2,1)";
   app.style.transform = commit ? `translateX(${-sw.dir * W}px)` : "translateX(0)";
+  app.querySelectorAll(".plan-fab").forEach((f) => { f.style.transition = "transform .32s cubic-bezier(.2,.8,.2,1)"; f.style.transform = "translateX(0)"; });
   setTimeout(() => {
     if (commit) {
       if (ui.view === "day") ui.dayDate = iso(addDays(parseIso(ui.dayDate), sw.dir));
@@ -2749,18 +2789,7 @@ document.addEventListener("click", async (e) => {
     case "mensareload": loadMensa(true); break;
     case "dtoday": ui.dayDate = iso(new Date()); ui.anim = null; render(); break;
     case "planview": planToggle(); break;
-    case "mensanav": {
-      const v = Number(el.dataset.v);
-      if (v === 0) ui.mensaDay = null;
-      else {
-        // Wochenende überspringen: Freitag → Montag und umgekehrt
-        let d = addDays(parseIso(mensaTarget()), v);
-        while (d.getDay() === 0 || d.getDay() === 6) d = addDays(d, v);
-        ui.mensaDay = iso(d);
-      }
-      render();
-      break;
-    }
+    case "mensanav": mensaStep(Number(el.dataset.v)); break;
     case "layreset": {
       if (!(await appConfirm("Layout auf diesem Gerät auf die Standardanordnung zurücksetzen?", "Zurücksetzen"))) break;
       pushLayHist("Layout zurückgesetzt");
