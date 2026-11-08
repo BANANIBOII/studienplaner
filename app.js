@@ -995,8 +995,9 @@ function dayTintStyle(k) {
   const src = open.length ? open : all;
   const colorFor = (t) => (open.length ? catColor(t.type) : catColor("done"));
   const bg = src.reduce((acc, t) => `color-mix(in srgb, ${colorFor(t)} 24%, ${acc})`, "var(--card, #142025)");
-  // Umrandung in der Farbe – immer sichtbar (inset, verändert die Größe nicht)
-  return `background:${bg};box-shadow:inset 0 0 0 2px ${colorFor(src[0])};`;
+  // Gestrichelte Umrandung in der Farbe; erledigte nur ganz leicht (transparent)
+  const ring = open.length ? `2px dashed ${catColor(open[0].type)}` : `1px dashed color-mix(in srgb, ${catColor("done")} 50%, transparent)`;
+  return `background:${bg};outline:${ring};outline-offset:-3px;`;
 }
 // Einträge, die an einem Tag liegen (auch Zeiträume über mehrere Tage)
 function todosOn(k) {
@@ -1012,8 +1013,9 @@ function dateText(t) {
 }
 
 function timedTodoItems(k) {
+  // Mit Uhrzeit: am Starttag und am letzten Tag eines Zeitraums
   return state.todos
-    .filter((t) => t.date === k && t.time)
+    .filter((t) => t.time && (t.date === k || (t.endDate && t.endDate > t.date && t.endDate === k)))
     .map((t) => {
       const s = toMin(t.time);
       const dur = Number(t.duration) || DEFAULT_DURATION;
@@ -1043,14 +1045,14 @@ function dayColumn(k, label, wide, today, noNav = false, chips = "") {
     const c = catColor(it.kind);
     if (it.done) {
       const g = catColor("done");
-      return `<div class="ev block-outline is-done${ui.popId === it.id ? " pop" : ""}" data-drag="${it.id}" data-act="tedit" data-id="${it.id}" style="${pos}border:2px solid ${g};background:color-mix(in srgb, ${g} 6%, transparent);opacity:.7">
+      return `<div class="ev block-outline is-done${ui.popId === it.id ? " pop" : ""}" data-drag="${it.id}" data-act="tedit" data-id="${it.id}" style="${pos}border:1px dashed color-mix(in srgb, ${g} 50%, transparent);background:color-mix(in srgb, ${g} 6%, transparent);opacity:.7">
         <b>${esc(it.name)}</b><small>${fmtMin(it.start)} · erledigt</small></div>`;
     }
     if (it.kind === "todo") {
       return `<div class="ev block-todo" data-drag="${it.id}" data-act="tedit" data-id="${it.id}" style="${pos}background:color-mix(in srgb, ${c} 80%, transparent);border-left:4px solid ${c}">
         <b>${esc(it.name)}</b><small>${fmtMin(it.start)} · To-Do</small></div>`;
     }
-    return `<div class="ev block-outline" data-drag="${it.id}" data-act="tedit" data-id="${it.id}" style="${pos}border:2px solid ${c};background:color-mix(in srgb, ${c} 10%, transparent)">
+    return `<div class="ev block-outline" data-drag="${it.id}" data-act="tedit" data-id="${it.id}" style="${pos}border:2px dashed ${c};background:color-mix(in srgb, ${c} 10%, transparent)">
       <b>${esc(it.name)}</b><small>${fmtMin(it.start)} · ${CAT_LABEL[it.kind]}</small></div>`;
   }).join("");
   let now = "";
@@ -1183,6 +1185,23 @@ function parseEventDesc(desc) {
     if (i > 0) info[line.slice(0, i).trim().toLowerCase()] = line.slice(i + 1).trim();
   });
   return info;
+}
+
+// Kurzer Tipp auf einen To-Do/Abgabe/Klausur im Stundenplan: Aktionen anbieten
+function openTodoActions(id) {
+  const t = state.todos.find((x) => x.id === id);
+  if (!t) return;
+  const sub = [CAT_LABEL[t.type] || "Aufgabe", t.date ? fmtD(parseIso(t.date)) : "", t.time ? esc(t.time) : ""].filter(Boolean).join(" · ");
+  openModal(`
+    <h3>${esc(t.title)}</h3>
+    <p class="muted">${sub}</p>
+    <div class="sheet-actions">
+      <button type="button" class="btn ghost danger-text" data-act="tdelm" data-id="${t.id}">Löschen</button>
+      <div class="right">
+        <button type="button" class="btn ghost" data-act="tdone" data-id="${t.id}">${t.done ? "Wieder öffnen" : "Erledigt"}</button>
+        <button type="button" class="btn" data-act="todoedit" data-id="${t.id}">Bearbeiten</button>
+      </div>
+    </div>`);
 }
 
 // Dozent: eigene Eingabe (ev.dozent) hat Vorrang vor dem Wert aus der ICS-Beschreibung
@@ -2384,6 +2403,8 @@ const planAdjacentHTML = (dir) => {
   } finally { Object.assign(ui, save); }
 };
 function resetSwipeTrack(app) {
+  document.body.classList.remove("swiping");
+  if (!app) return;
   app.style.transition = "";
   app.style.transform = "";
   app.style.position = "";
@@ -2408,6 +2429,7 @@ document.addEventListener("touchstart", (e) => {
   // Vorherige und nächste Woche/Tag werden schon JETZT aufgebaut (nicht erst beim Wischen).
   // Beim Wischen wird dann nur noch verschoben – kein Neuzeichnen, kein Zoom-Sprung.
   app.style.position = "relative";
+  document.body.classList.add("swiping");
   const ghosts = [-1, 1].map((dir) => {
     const g = document.createElement("div");
     g.className = "plan-ghost";
@@ -2573,6 +2595,8 @@ document.addEventListener("click", async (e) => {
   const editId = el && el.dataset.act === "tedit" && !el.classList.contains("btn") ? el.dataset.id
     : (editRow && !e.target.closest("button, input, select, textarea, label") ? editRow.dataset.drag : null);
   if (editId && e.target.closest("#modalRoot")) { hapt(8); openTodoModal(editId); return; }  // im Tagesfenster: ein Tipp
+  // Stundenplan: ein kurzer Tipp öffnet die Aktionen (bearbeiten, abhaken, löschen)
+  if (editId && ui.tab === "stundenplan") { hapt(8); openTodoActions(editId); return; }
   if (editId) {
     const now = Date.now();
     const dbl = lastEditTap.id === editId && now - lastEditTap.t < 450;
@@ -2768,6 +2792,7 @@ document.addEventListener("click", async (e) => {
     case "tnewday": openTodoModal(null, el.dataset.d); break;
     case "exportdata": exportData(); break;
     case "tedit": openTodoModal(id); break;
+    case "todoedit": openTodoModal(id); break;
     case "tdelm": {
       if (!(await appConfirm("Eintrag in den Papierkorb verschieben?"))) break;
       const t = state.todos.find((x) => x.id === id);
@@ -2787,6 +2812,7 @@ document.addEventListener("click", async (e) => {
       t.doneAt = t.done ? iso(new Date()) : null;
       ui.popId = id;
       setTimeout(() => { ui.popId = null; }, 900);
+      if (el.closest("#modalRoot")) closeModal();   // aus dem Aktionsfenster heraus: schließen
       commit(); break;
     }
 
@@ -3396,7 +3422,7 @@ document.addEventListener("pointerdown", (e) => {
     sx: e.clientX, sy: e.clientY, x: e.clientX, y: e.clientY,
     touch: e.pointerType !== "mouse", active: false, target: null, timer: null,
   };
-  if (drag.touch) drag.timer = setTimeout(() => startDrag(), 350);
+  if (drag.touch) drag.timer = setTimeout(() => startDrag(), 500);
 });
 
 function startDrag() {

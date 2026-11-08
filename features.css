@@ -603,6 +603,8 @@ textarea.autogrow { resize: none; overflow: hidden; min-height: 96px; line-heigh
 /* ---------- Wischen ohne Zoom-Sprung: alles, was gleitet, bleibt im Bildschirm ---------- */
 /* Begrenzung am festen Elternelement, damit die nächste Woche beim Wischen sichtbar bleibt */
 div:has(> #app) { overflow-x: clip; }
+/* Während eines Wischens: Begrenzung hart, damit iOS die Seite nicht herauszoomt */
+body.swiping div:has(> #app) { overflow: hidden; }
 .week, .allday-row { touch-action: pan-y; }
 #app { touch-action: pan-y; }
 
