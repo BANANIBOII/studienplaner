@@ -974,6 +974,30 @@ function allDayHTML(dates, showDate) {
   }).join("")}</div>`;
 }
 
+// Aufgaben ohne Uhrzeit: stehen unter der Navigation, pro Wochentag in dessen Spalte
+function dayTodoChips(k) {
+  const items = todosOn(k).filter((t) => !t.time)
+    .sort((a, b) => Number(a.done) - Number(b.done) || (PRIO_ORDER[a.priority] ?? 1) - (PRIO_ORDER[b.priority] ?? 1));
+  return items.map((t) => {
+    const c = calColor(t);
+    return `<div class="dchip ${t.done ? "is-done" : ""}" data-act="tedit" data-id="${t.id}" style="--c:${c}">
+      <input type="checkbox" data-act="tdone" data-id="${t.id}" ${t.done ? "checked" : ""} ${canCheck(t) ? "" : "disabled"}>
+      <span>${esc(t.title)}</span></div>`;
+  }).join("");
+}
+// Hintergrund des Wochentag-Kopfes in der Farbe der offenen Aufgaben des Tages
+function dayTintStyle(k) {
+  const ts = todosOn(k).filter((t) => !t.done);
+  if (!ts.length) return "";
+  const bg = ts.reduce((acc, t) => `color-mix(in srgb, ${catColor(t.type)} 24%, ${acc})`, "var(--card, #142025)");
+  return `background:${bg};`;
+}
+function alldayRowHTML(dates, wide) {
+  const cols = dates.map((k) => `<div class="daycol allday-col${wide ? " wide" : ""}">${dayTodoChips(k)}</div>`).join("");
+  if (!dates.some((k) => dayTodoChips(k))) return "";
+  return `<div class="allday-row"><div class="axis allday-spacer"></div>${cols}</div>`;
+}
+
 // Einträge, die an einem Tag liegen (auch Zeiträume über mehrere Tage)
 function todosOn(k) {
   return state.todos.filter((t) => t.date && (t.endDate && t.endDate > t.date
@@ -993,7 +1017,7 @@ function timedTodoItems(k) {
     .map((t) => {
       const s = toMin(t.time);
       const dur = Number(t.duration) || DEFAULT_DURATION;
-      return { id: t.id, kind: t.type, name: t.title, date: k, start: s, end: Math.min(s + dur, END_MIN) };
+      return { id: t.id, kind: t.type, name: t.title, date: k, start: s, end: Math.min(s + dur, END_MIN), done: !!t.done };
     })
     .filter((x) => x.start >= START_MIN && x.start < END_MIN);
 }
@@ -1014,6 +1038,11 @@ function dayColumn(k, label, wide, today, noNav = false) {
         <b>${esc(it.name)}</b><small>${fmtMin(it.start)}–${fmtMin(it.end)}</small><small>${esc(it.room)}</small></div>`;
     }
     const c = catColor(it.kind);
+    if (it.done) {
+      const g = catColor("done");
+      return `<div class="ev block-outline is-done" data-drag="${it.id}" data-act="tedit" data-id="${it.id}" style="${pos}border:2px solid ${g};background:color-mix(in srgb, ${g} 6%, transparent);opacity:.7">
+        <b>${esc(it.name)}</b><small>${fmtMin(it.start)} · erledigt</small></div>`;
+    }
     if (it.kind === "todo") {
       return `<div class="ev block-todo" data-drag="${it.id}" data-act="tedit" data-id="${it.id}" style="${pos}background:color-mix(in srgb, ${c} 80%, transparent);border-left:4px solid ${c}">
         <b>${esc(it.name)}</b><small>${fmtMin(it.start)} · To-Do</small></div>`;
@@ -1032,7 +1061,7 @@ function dayColumn(k, label, wide, today, noNav = false) {
   const gridStyle = ` style="height:${gridHeight()}px;${plan.grid ? `background-color:${plan.grid};` : ""}"`;
   const headAct = noNav ? "" : (wide ? "toweek" : "dayopen");
   return `<div class="daycol${wide ? " wide" : ""}">
-    <div class="dayhead ${isToday ? "today" : ""}" data-act="${headAct}" data-d="${k}">${label}</div>
+    <div class="dayhead ${isToday ? "today" : ""}" data-act="${headAct}" data-d="${k}" style="${dayTintStyle(k)}">${label}</div>
     <div class="grid" data-date="${k}"${gridStyle}>${blocks}${now}</div></div>`;
 }
 
@@ -1044,24 +1073,22 @@ function viewPlan() {
   if (ui.view === "day") {
     const d = parseIso(ui.dayDate);
     const wd = WEEKDAYS_LONG[(d.getDay() + 6) % 7];
-    return `${allDayHTML([ui.dayDate], false)}
-    ${planNavHTML(`KW ${kwOf(d)} · ${fmtD(d)}`, "day")}
-    <div class="${animCls}">${planLaid(`<div class="week"><div class="axis" style="height:${50 + gridHeight()}px">${axisHTML()}</div>${dayColumn(ui.dayDate, `<b class="daytitle">${wd}</b>`, true, today)}</div>`)}</div>${emptyPlanHint()}${planFabHTML()}`;
+    return `${planNavHTML(`KW ${kwOf(d)} · ${fmtD(d)}`, "day")}
+    <div class="${animCls}">${alldayRowHTML([ui.dayDate], true)}${planLaid(`<div class="week"><div class="axis" style="height:${50 + gridHeight()}px">${axisHTML()}</div>${dayColumn(ui.dayDate, `<b class="daytitle">${wd}</b>`, true, today)}</div>`)}</div>${emptyPlanHint()}${planFabHTML()}`;
   }
 
   const mon = addDays(mondayOf(today), ui.weekOffset * 7);
   const sun = addDays(mon, 6);
   const dayCount = state.settings.weekend ? 7 : 5;
   const weekDates = Array.from({ length: 7 }, (_, i) => iso(addDays(mon, i)));
-  let h = allDayHTML(weekDates, true);
-  h += planNavHTML(`KW ${kwOf(mon)} (${parityOf(mon)}) · ${fmtD(mon)} – ${fmtD(sun)}`, "week");
+  let h = planNavHTML(`KW ${kwOf(mon)} (${parityOf(mon)}) · ${fmtD(mon)} – ${fmtD(sun)}`, "week");
 
   let cols = "";
   for (let i = 0; i < dayCount; i++) {
     const d = addDays(mon, i);
     cols += dayColumn(iso(d), `${WEEKDAYS[i]}<br>${pad(d.getDate())}.${pad(d.getMonth() + 1)}.`, false, today);
   }
-  h += `<div class="${animCls}">${planLaid(`<div class="week"><div class="axis" style="height:${50 + gridHeight()}px">${axisHTML()}</div>${cols}</div>`)}</div>${emptyPlanHint()}${planFabHTML()}`;
+  h += `<div class="${animCls}">${alldayRowHTML(weekDates.slice(0, dayCount), false)}${planLaid(`<div class="week"><div class="axis" style="height:${50 + gridHeight()}px">${axisHTML()}</div>${cols}</div>`)}</div>${emptyPlanHint()}${planFabHTML()}`;
   return h;
 }
 
@@ -1266,7 +1293,7 @@ function dayPanelHTML(date) {
   const doneBox = (list) => list.length ? `<details class="donebox"><summary>Erledigt (${list.length})</summary>${list.map(todoRow).join("")}</details>` : "";
   const dayAll = todosOn(date).sort((a, b) => (a.time || "").localeCompare(b.time || ""));
   const dayEvents = layout(state.events.filter((e) => e.date === date).map((e) => ({ ...e })));
-  return `${dayEvents.map((e) => `<div class="listrow"><span class="pdot" style="background:${colorOf(e.name)}"></span><div class="grow"><b>${esc(e.name)}</b><div class="muted">${fmtMin(e.start)}–${fmtMin(e.end)} · ${esc(e.room)}</div></div></div>`).join("")}
+  return `${dayEvents.map((e) => `<div class="listrow" data-act="modgo" data-m="${enc(e.name)}" style="cursor:pointer"><span class="pdot" style="background:${colorOf(e.name)}"></span><div class="grow"><b>${esc(e.name)}</b><div class="muted">${fmtMin(e.start)}–${fmtMin(e.end)} · ${esc(e.room)}</div></div></div>`).join("")}
     ${dayAll.filter((t) => !t.done).map(todoRow).join("")}
     ${!dayAll.length && !dayEvents.length ? `<div class="empty"><div class="ei">✨</div>Nichts an diesem Tag.</div>` : ""}
     ${doneBox(dayAll.filter((t) => t.done))}`;
@@ -1767,7 +1794,7 @@ function rueckData(v) {
 function rueckblickCard() {
   const d = rueckData("woche");
   const rows = d.done.slice(0, 4).map((t) =>
-    `<div class="listrow"><span class="pdot" style="background:${catColor(t.type)}"></span><div class="grow"><b>${esc(t.title)}</b></div></div>`).join("");
+    `<div class="listrow" data-act="tedit" data-id="${t.id}" style="cursor:pointer"><span class="pdot" style="background:${catColor(t.type)}"></span><div class="grow"><b>${esc(t.title)}</b></div></div>`).join("");
   return `<div class="card">
     <div class="row" style="justify-content:space-between"><h3 style="margin:0">Diese Woche</h3>
       <button class="btn ghost" data-act="rueckblick">Ganzer Rückblick</button></div>
@@ -1783,9 +1810,9 @@ function openRueckblick() {
   const sec = (title, rows) => `<h4>${title} <span class="muted">(${rows.length})</span></h4>` + (rows.join("") || `<div class="muted">Keine Einträge.</div>`);
   openModal(`<h3>Rückblick · ${d.r.label}</h3>
     <div class="row" style="gap:6px;flex-wrap:wrap;margin-bottom:10px">${seg}</div>
-    ${sec("Erledigt", d.done.map((t) => `<div class="listrow"><span class="pdot" style="background:${catColor(t.type)}"></span><div class="grow"><b>${esc(t.title)}</b><div class="muted">${CAT_LABEL[t.type] || "Aufgabe"} · ${fmtD(parseIso(t.date))}</div></div></div>`))}
+    ${sec("Erledigt", d.done.map((t) => `<div class="listrow" data-act="tedit" data-id="${t.id}" style="cursor:pointer"><span class="pdot" style="background:${catColor(t.type)}"></span><div class="grow"><b>${esc(t.title)}</b><div class="muted">${CAT_LABEL[t.type] || "Aufgabe"} · ${fmtD(parseIso(t.date))}</div></div></div>`))}
     ${sec("Protokolle", d.notes.map(({ name, n }) => `<div class="note"><div class="muted">${fmtD(parseIso(n.date))} · <b>${esc(name)}</b></div>${esc(n.done)}${n.todo ? `<div class="muted" style="margin-top:6px">Noch zu lernen: ${esc(n.todo)}</div>` : ""}</div>`))}
-    ${sec("Termine", d.termine.map((e) => `<div class="listrow"><span class="bar" style="background:${colorOf(e.name)}"></span><div class="grow"><b>${esc(e.name)}</b><div class="muted">${fmtD(parseIso(e.date))} · ${fmtMin(e.start)}${e.room ? " · " + esc(e.room) : ""}</div></div></div>`))}
+    ${sec("Termine", d.termine.map((e) => `<div class="listrow" data-act="modgo" data-m="${enc(e.name)}" style="cursor:pointer"><span class="bar" style="background:${colorOf(e.name)}"></span><div class="grow"><b>${esc(e.name)}</b><div class="muted">${fmtD(parseIso(e.date))} · ${fmtMin(e.start)}${e.room ? " · " + esc(e.room) : ""}</div></div></div>`))}
     <div class="sheet-actions"><button class="btn ghost" data-act="mclose">Schließen</button></div>`);
 }
 function showToast(html, ms = 5000) {
@@ -2226,7 +2253,7 @@ document.addEventListener("pointerdown", (e) => {
       const name = dec(pressStart.el.dataset.m);
       pressStart = null;
       hapt(15);
-      renameTopicFlow(name, id);
+      topicMenu(name, id);
     }, 500);
     return;
   }
@@ -2575,7 +2602,7 @@ document.addEventListener("click", async (e) => {
       ui.view = "day";
       ui.dayDate = el.dataset.d;
       ui.anim = null;
-      closeModal();
+      clearModalQuiet();
       render();
       break;
     case "tnew": openTodoModal(null, ui.selDate); break;
@@ -2660,15 +2687,12 @@ document.addEventListener("click", async (e) => {
       state.trash = []; commit(); break;
 
     case "gotoprot": {
-      // Fenster leeren, ohne dass die Zurück-Logik den alten Reiter wiederherstellt
-      document.getElementById("modalRoot").innerHTML = "";
-      modalResolve = null;
       ui.dayPop = null; ui.noteFor = null; ui.editNote = null; ui.noteWindow = false;
       ui.tab = "protokolle";
       ui.modOpen = m;
       ui.topicOpen = null;
       ui.modSearch = "";
-      try { history.replaceState({ sp: "nav", nav: navSnap() }, ""); } catch (_) {}
+      clearModalQuiet();
       render();
       window.scrollTo(0, 0);
       break;
@@ -3459,4 +3483,31 @@ function similarTitle(a, b) {
   }
   const dist = prev[m];
   return dist <= Math.max(1, Math.floor(Math.max(n, m) / 4));
+}
+
+// Thema-Menü (langes Drücken): umbenennen oder löschen
+function topicMenu(name, id) {
+  const m = state.modules[name];
+  const t = topicOf(m, id);
+  if (!t) return;
+  const used = m.notes.filter((n) => n.topicId === id).length;
+  openModal(`<h3 style="margin:0 0 4px">${esc(t.title)}</h3>
+    <div class="muted" style="margin-bottom:12px">${used} ${used === 1 ? "Eintrag" : "Einträge"}</div>
+    <div style="display:grid;gap:8px">
+      <button type="button" class="btn" data-act="ttitle" data-id="${esc(id)}" data-m="${enc(name)}">Umbenennen</button>
+      <button type="button" class="btn ghost" data-act="tdel" data-id="${esc(id)}" data-m="${enc(name)}">Löschen</button>
+      <button type="button" class="btn ghost" data-act="mclose">Abbrechen</button>
+    </div>`);
+}
+
+// Fenster schließen, wenn gleich ein anderer Reiter angezeigt wird: ohne Zurück-Schritt,
+// damit die Zurück-Logik die neue Ansicht nicht gleich wieder umstellt
+function clearModalQuiet() {
+  const root = document.getElementById("modalRoot");
+  if (root) root.innerHTML = "";
+  modalResolve = null;
+  ui.dayPop = null;
+  try {
+    if (history.state && history.state.sp === "modal") history.replaceState({ sp: "nav", nav: navSnap() }, "");
+  } catch (_) {}
 }

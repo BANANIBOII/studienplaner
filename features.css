@@ -576,3 +576,25 @@ html { touch-action: manipulation; }
 }
 textarea.autogrow { resize: none; overflow: hidden; min-height: 96px; line-height: 1.45; font-size: 16px; }
 .note-form .btn.wide { width: 100%; padding: 12px; font-size: 16px; }
+
+/* Erledigte Aufgaben im Stundenplan: durchsichtig mit grünem Rahmen, Text nicht durchgestrichen */
+.ev.is-done { text-decoration: none; }
+
+/* ---------- Stundenplan: Aufgaben ohne Uhrzeit unter der Navigation, je Wochentag ---------- */
+.allday-row { display: flex; align-items: flex-start; gap: 0; margin: 6px 0 4px; }
+.allday-row .allday-spacer { width: var(--axis-w, 36px); flex: none; padding: 0; height: 0; }
+.allday-row .allday-col { flex: 1; min-width: 0; display: grid; gap: 4px; align-content: start; padding: 0 2px; }
+.allday-row .allday-col.wide { min-width: 0; }
+@media (max-width: 799px) { .allday-row .allday-spacer { width: 28px; } }
+.dchip {
+  display: flex; align-items: center; gap: 4px; min-width: 0; padding: 4px 6px; border-radius: 8px;
+  font-size: 12px; line-height: 1.2; cursor: pointer;
+  border: 1px solid var(--c); background: color-mix(in srgb, var(--c) 14%, transparent);
+}
+.dchip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
+.dchip input[type="checkbox"] { flex: none; width: 14px; height: 14px; margin: 0; }
+.dchip.is-done { opacity: .55; border-style: dashed; }
+.dchip.is-done span { text-decoration: line-through; }
+
+/* Aufgaben-Chips: Titel bis zu zwei Zeilen statt abgeschnitten */
+.dchip span { white-space: normal; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
