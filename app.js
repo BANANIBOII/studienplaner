@@ -1296,7 +1296,7 @@ function dayPanelHTML(date) {
   return `${dayEvents.map((e) => `<div class="listrow" data-act="modgo" data-m="${enc(e.name)}" style="cursor:pointer"><span class="pdot" style="background:${colorOf(e.name)}"></span><div class="grow"><b>${esc(e.name)}</b><div class="muted">${fmtMin(e.start)}–${fmtMin(e.end)} · ${esc(e.room)}</div></div></div>`).join("")}
     ${dayAll.filter((t) => !t.done).map(todoRow).join("")}
     ${!dayAll.length && !dayEvents.length ? `<div class="empty"><div class="ei">✨</div>Nichts an diesem Tag.</div>` : ""}
-    ${doneBox(dayAll.filter((t) => t.done))}`;
+    ${dayAll.filter((t) => t.done).map(todoRow).join("")}`;
 }
 // Tippen auf einen Tag: kleines Fenster mit den Einträgen dieses Tages
 function openDayModal(date) {
