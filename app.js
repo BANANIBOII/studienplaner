@@ -923,7 +923,7 @@ function countdownBlock() {
       ? items.map((t) => `<div class="listrow" data-lp="${t.id}">
           <span class="pdot" style="background:${catColor(type)}"></span>
           <div class="grow"><b>${esc(t.title)}</b><div class="muted">${t.date ? dateText(t) + (t.time ? " · " + esc(t.time) : "") : "Termin folgt"}</div></div>
-          <div style="font-weight:700;white-space:nowrap;color:${catColor(type)}">${t.date ? countdownText(t.date) : "–"}</div>
+          <div style="font-weight:700;white-space:nowrap;color:${dueColor(t.date, type)}">${t.date ? countdownText(t.date) : "–"}</div>
           <span class="prio ${t.priority || "mittel"}">${t.priority || "mittel"}</span>
           <button class="btn ghost" data-act="tedit" data-id="${t.id}" title="Bearbeiten">✎</button></div>`).join("")
       : `<div class="muted">Keine.</div>`);
@@ -980,7 +980,7 @@ function dayTodoChips(k) {
     .sort((a, b) => Number(a.done) - Number(b.done) || (PRIO_ORDER[a.priority] ?? 1) - (PRIO_ORDER[b.priority] ?? 1));
   return items.map((t) => {
     const c = calColor(t);
-    return `<div class="dchip ${t.done ? "is-done" : ""}" data-act="tedit" data-id="${t.id}" style="--c:${c}">
+    return `<div class="dchip ${t.done ? "is-done" : ""}${ui.popId === t.id ? " pop" : ""}" data-act="tedit" data-id="${t.id}" style="--c:${c}">
       <input type="checkbox" data-act="tdone" data-id="${t.id}" ${t.done ? "checked" : ""} ${canCheck(t) ? "" : "disabled"}>
       <span>${esc(t.title)}</span></div>`;
   }).join("");
@@ -1040,7 +1040,7 @@ function dayColumn(k, label, wide, today, noNav = false) {
     const c = catColor(it.kind);
     if (it.done) {
       const g = catColor("done");
-      return `<div class="ev block-outline is-done" data-drag="${it.id}" data-act="tedit" data-id="${it.id}" style="${pos}border:2px solid ${g};background:color-mix(in srgb, ${g} 6%, transparent);opacity:.7">
+      return `<div class="ev block-outline is-done${ui.popId === it.id ? " pop" : ""}" data-drag="${it.id}" data-act="tedit" data-id="${it.id}" style="${pos}border:2px solid ${g};background:color-mix(in srgb, ${g} 6%, transparent);opacity:.7">
         <b>${esc(it.name)}</b><small>${fmtMin(it.start)} · erledigt</small></div>`;
     }
     if (it.kind === "todo") {
@@ -1293,7 +1293,9 @@ function dayPanelHTML(date) {
   const doneBox = (list) => list.length ? `<details class="donebox"><summary>Erledigt (${list.length})</summary>${list.map(todoRow).join("")}</details>` : "";
   const dayAll = todosOn(date).sort((a, b) => (a.time || "").localeCompare(b.time || ""));
   const dayEvents = layout(state.events.filter((e) => e.date === date).map((e) => ({ ...e })));
-  return `${dayEvents.map((e) => `<div class="listrow" data-act="modgo" data-m="${enc(e.name)}" style="cursor:pointer"><span class="pdot" style="background:${colorOf(e.name)}"></span><div class="grow"><b>${esc(e.name)}</b><div class="muted">${fmtMin(e.start)}–${fmtMin(e.end)} · ${esc(e.room)}</div></div></div>`).join("")}
+  const emptyDay = !dayEvents.length && !dayAll.length
+    ? `<div class="empty-day"><span>Nichts an diesem Tag.</span><button class="btn ghost" data-act="tnewday" data-d="${date}">+ Aufgabe anlegen</button></div>` : "";
+  return `${emptyDay}${dayEvents.map((e) => `<div class="listrow" data-act="modgo" data-m="${enc(e.name)}" style="cursor:pointer"><span class="pdot" style="background:${colorOf(e.name)}"></span><div class="grow"><b>${esc(e.name)}</b><div class="muted">${fmtMin(e.start)}–${fmtMin(e.end)} · ${esc(e.room)}</div></div></div>`).join("")}
     ${dayAll.filter((t) => !t.done).map(todoRow).join("")}
     ${!dayAll.length && !dayEvents.length ? `<div class="empty"><div class="ei">✨</div>Nichts an diesem Tag.</div>` : ""}
     ${dayAll.filter((t) => t.done).map(todoRow).join("")}`;
@@ -1653,6 +1655,9 @@ function viewSettings() {
 
   let h = `<h2 style="margin-bottom:14px">Einstellungen</h2>`;
   h += phoneToolsHTML();
+  h += `<div class="card"><h3 style="margin-top:0">Sicherung</h3>
+    <p class="muted" style="margin:0 0 10px">Speichert alle deine Daten als Datei auf dem Gerät.</p>
+    <button class="btn ghost" data-act="exportdata">Daten exportieren</button></div>`;
   h += `<div class="card"><h3>Darstellung</h3>
     <label class="muted" style="display:block;margin-bottom:6px">Design (nur auf diesem Gerät)</label>
     <div class="row" style="gap:6px;flex-wrap:wrap;margin-bottom:14px">
@@ -2606,6 +2611,8 @@ document.addEventListener("click", async (e) => {
       render();
       break;
     case "tnew": openTodoModal(null, ui.selDate); break;
+    case "tnewday": openTodoModal(null, el.dataset.d); break;
+    case "exportdata": exportData(); break;
     case "tedit": openTodoModal(id); break;
     case "tdelm": {
       if (!(await appConfirm("Eintrag in den Papierkorb verschieben?"))) break;
@@ -3511,3 +3518,34 @@ function clearModalQuiet() {
     if (history.state && history.state.sp === "modal") history.replaceState({ sp: "nav", nav: navSnap() }, "");
   } catch (_) {}
 }
+
+// Countdown: unter 3 Tagen wird die Farbe warnend
+function dueColor(dateStr, type) {
+  if (!dateStr) return catColor(type);
+  const days = Math.round((parseIso(dateStr) - parseIso(iso(new Date()))) / 86400000);
+  return days <= 3 && days >= 0 ? "#f43f5e" : catColor(type);
+}
+
+function exportData() {
+  try {
+    const payload = { app: "studienplaner", exported: new Date().toISOString(), data: syncable(state) };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `studienplaner-${iso(new Date())}.json`;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+    showToast("✓ Export erstellt");
+  } catch (_) { showToast("Export hat nicht geklappt"); }
+}
+
+// 8) Offline-Hinweis
+function updateOnlineBanner(offline) {
+  let el = document.getElementById("offlineBar");
+  if (!el) { el = document.createElement("div"); el.id = "offlineBar"; el.textContent = "Offline – Änderungen werden auf diesem Gerät gespeichert"; document.body.appendChild(el); }
+  el.classList.toggle("show", !!offline);
+}
+window.addEventListener("online", () => updateOnlineBanner(false));
+window.addEventListener("offline", () => updateOnlineBanner(true));
+updateOnlineBanner(!navigator.onLine);
