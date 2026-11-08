@@ -2477,9 +2477,9 @@ document.addEventListener("touchend", () => {
   if (!app) return;
   if (!sw.mode || longFired) { removeGhosts(sw); resetSwipeTrack(app); return; }
   const W = app.offsetWidth;
-  // Nur ein deutlicher Wisch wechselt: halb über die Breite, oder ein schneller Wisch mit mindestens einem Viertel
-  const quick = Date.now() - sw.t < 250 && Math.abs(sw.dx) > W * 0.25;
-  const commit = Math.abs(sw.dx) > W * 0.42 || quick;
+  // Wechsel schon ab einem guten Drittel der Breite, oder bei einem schnellen kurzen Wisch
+  const quick = Date.now() - sw.t < 300 && Math.abs(sw.dx) > W * 0.12;
+  const commit = Math.abs(sw.dx) > W * 0.3 || quick;
   app.style.transition = "transform .32s cubic-bezier(.2,.8,.2,1)";
   app.style.transform = commit ? `translateX(${-sw.dir * W}px)` : "translateX(0)";
   setTimeout(() => {
