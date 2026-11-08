@@ -615,6 +615,10 @@ div:has(> #app) { overflow-x: clip; }
 .day-week .axis { grid-column: 1; grid-row: 3; width: var(--axis-w, 36px); padding-top: 0; height: auto !important; }
 .dchips { display: grid; gap: 4px; margin: 0 0 6px; }
 
+/* Termine: Name und Dozent bleiben in einer Zeile (sonst mit ... abgeschnitten) */
+.ev-name { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ev small { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
 /* ---------- Lebendigere Animationen ---------- */
 @keyframes tabFwd { from { opacity: 0; transform: translateX(34px) scale(.985); } to { opacity: 1; transform: none; } }
 @keyframes tabBack { from { opacity: 0; transform: translateX(-34px) scale(.985); } to { opacity: 1; transform: none; } }

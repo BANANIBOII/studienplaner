@@ -639,6 +639,7 @@ function seriesDates(first, repeat, until) {
 // ---------- Render ----------
 function render() {
   syncHistoryNav();
+  requestAnimationFrame(fitEventNames);
   applyTheme();
   applyDayRange();
   // Mit Cloud-Sync: ohne Anmeldung sieht man nur das Login-Fenster
@@ -1035,9 +1036,9 @@ function dayColumn(k, label, wide, today, noNav = false, chips = "") {
     if (it.kind === "event") {
       // Block zeigt Kürzel (falls gesetzt), Dozent statt Uhrzeit und einen dunkleren Rahmen
       const ec = colorOf(it.name);
-      const who = parseEventDesc(it.desc).dozent;
+      const who = dozentOf(it);
       return `<div class="ev" data-act="note" data-kind="event" data-id="${it.id}" style="${pos}background:${ec};color:${textOn(ec)};border:2px solid color-mix(in srgb, ${ec} 55%, #000)">
-        <b>${esc(it.short || it.name)}</b><small>${esc(who || `${fmtMin(it.start)}–${fmtMin(it.end)}`)}</small><small>${esc(it.room)}</small></div>`;
+        <b class="ev-name" data-long="${esc(it.name)}" data-short="${esc(it.short || "")}">${esc(it.name)}</b><small>${esc(who || `${fmtMin(it.start)}–${fmtMin(it.end)}`)}</small><small>${esc(it.room)}</small></div>`;
     }
     const c = catColor(it.kind);
     if (it.done) {
@@ -1184,6 +1185,17 @@ function parseEventDesc(desc) {
   return info;
 }
 
+// Dozent: eigene Eingabe (ev.dozent) hat Vorrang vor dem Wert aus der ICS-Beschreibung
+const dozentOf = (ev) => (ev.dozent !== undefined ? ev.dozent : parseEventDesc(ev.desc).dozent || "");
+// Termin-Namen: passt der lange Name nicht in eine Zeile, wird das Kürzel angezeigt (falls vorhanden)
+function fitEventNames() {
+  document.querySelectorAll(".ev-name[data-short]").forEach((el) => {
+    el.textContent = el.dataset.long;
+    if (el.dataset.short && el.scrollWidth > el.clientWidth + 1) el.textContent = el.dataset.short;
+  });
+}
+window.addEventListener("resize", () => requestAnimationFrame(fitEventNames));
+
 // Kurzer Tipp auf einen Stundenplan-Termin: Infos anzeigen
 function openEventInfo(id) {
   const ev = state.events.find((x) => x.id === id);
@@ -1197,11 +1209,11 @@ function openEventInfo(id) {
       ${row("Datum", `${d}.${m}.${y}`)}
       ${row("Zeit", `${fmtMin(ev.start)}–${fmtMin(ev.end)}`)}
       ${row("Raum", ev.room || info.raum || "–")}
-      ${row("Dozent", info.dozent || "–")}
+      ${row("Dozent", dozentOf(ev) || "–")}
       ${row("Art", info.art || "–")}
       ${row("Woche", info.woche || "–")}
     </div>
-    ${info.dozent ? "" : `<p class="muted" style="font-size:13px">Kein Dozent hinterlegt? Termine, die vor dieser Version importiert wurden, einmal über die ICS-Datei in den Einstellungen neu importieren.</p>`}
+    ${dozentOf(ev) ? "" : `<p class="muted" style="font-size:13px">Kein Dozent hinterlegt? Termine, die vor dieser Version importiert wurden, einmal über die ICS-Datei in den Einstellungen neu importieren.</p>`}
     <div class="sheet-actions">
       <button type="button" class="btn ghost" data-act="evopen" data-id="${ev.id}">Bearbeiten</button>
       <div class="right">
@@ -1223,6 +1235,8 @@ function openEventEdit(id) {
       <input name="name" required value="${esc(ev.name)}">
       <label class="muted">Kürzel (optional, wird im Stundenplan angezeigt)</label>
       <input name="short" maxlength="16" value="${esc(ev.short || "")}" placeholder="z.B. Mathe I">
+      <label class="muted">Dozent (gilt für alle Termine dieser Vorlesung)</label>
+      <input name="dozent" value="${esc(dozentOf(ev))}" placeholder="z.B. Prof. Müller">
 
       <div class="grid2">
         <div><label class="muted">Datum</label><input type="date" name="date" required value="${ev.date}"></div>
@@ -2422,14 +2436,21 @@ document.addEventListener("touchmove", (e) => {
     swipe.ghosts.forEach((g) => { if (g !== swipe.ghost) g.remove(); });
   }
   swipe.dx = dx;
-  const app = document.getElementById("app");
-  app.style.transition = "none";
-  app.style.transform = `translateX(${dx}px)`;
+  // Verschieben nur einmal pro Bildwiederholung (ruhiger Lauf)
+  if (!swipe.raf) swipe.raf = requestAnimationFrame(() => {
+    if (!swipe) return;
+    swipe.raf = 0;
+    const a = document.getElementById("app");
+    if (!a) return;
+    a.style.transition = "none";
+    a.style.transform = `translateX(${swipe.dx}px)`;
+  });
 }, { passive: false });
 document.addEventListener("touchend", () => {
   const sw = swipe;
   swipe = null;
   if (!sw) return;
+  if (sw.raf) cancelAnimationFrame(sw.raf);
   const app = document.getElementById("app");
   if (!app) return;
   if (!sw.mode || longFired) { removeGhosts(sw); resetSwipeTrack(app); return; }
@@ -3125,7 +3146,8 @@ document.addEventListener("submit", async (e) => {
       ev.room = (data.room || "").trim();
       // Kürzel gilt für alle Termine dieser Vorlesung (wie der Titel)
       const short = (data.short || "").trim();
-      state.events.forEach((x) => { if (x.name === nw) x.short = short; });
+      const doz = (data.dozent || "").trim();
+      state.events.forEach((x) => { if (x.name === nw) { x.short = short; x.dozent = doz; } });
       if (state.modules[nw] || data.protokoll) ensureModule(nw).color = data.color;
       closeModal(); commit(); break;
     }
