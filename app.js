@@ -943,12 +943,12 @@ function todoItem(t) {
 }
 
 // ---------- Stundenplan ----------
-function axisHTML() {
+function axisHTML(offset = 50) {
   let out = "";
   for (let m = Math.ceil(START_MIN / 30) * 30; m <= END_MIN; m += 30) {
     const h = Math.floor(m / 60);
     const half = m % 60 === 30;
-    const top = 50 + (m - START_MIN) * PX_PER_MIN - (half ? 4 : 8);
+    const top = offset + (m - START_MIN) * PX_PER_MIN - (half ? 4 : 8);
     out += `<div class="axis-h${half ? " half" : ""}" style="top:${top}px">${pad(h)}:${half ? "30" : "00"}</div>`;
   }
   return out;
@@ -990,14 +990,9 @@ function dayTintStyle(k) {
   const ts = todosOn(k).filter((t) => !t.done);
   if (!ts.length) return "";
   const bg = ts.reduce((acc, t) => `color-mix(in srgb, ${catColor(t.type)} 24%, ${acc})`, "var(--card, #142025)");
-  return `background:${bg};`;
+  // Umrandung in der Farbe der ersten offenen Aufgabe – immer sichtbar (inset, verändert die Größe nicht)
+  return `background:${bg};box-shadow:inset 0 0 0 2px ${catColor(ts[0].type)};`;
 }
-function alldayRowHTML(dates, wide) {
-  const cols = dates.map((k) => `<div class="daycol allday-col${wide ? " wide" : ""}">${dayTodoChips(k)}</div>`).join("");
-  if (!dates.some((k) => dayTodoChips(k))) return "";
-  return `<div class="allday-row"><div class="axis allday-spacer"></div>${cols}</div>`;
-}
-
 // Einträge, die an einem Tag liegen (auch Zeiträume über mehrere Tage)
 function todosOn(k) {
   return state.todos.filter((t) => t.date && (t.endDate && t.endDate > t.date
@@ -1022,7 +1017,7 @@ function timedTodoItems(k) {
     .filter((x) => x.start >= START_MIN && x.start < END_MIN);
 }
 
-function dayColumn(k, label, wide, today, noNav = false) {
+function dayColumn(k, label, wide, today, noNav = false, chips = "") {
   const isToday = k === iso(today);
   const evs = state.events.filter((e) => e.date === k).map((e) => ({ ...e, kind: "event" }));
   const clipped = [...evs, ...timedTodoItems(k)]
@@ -1062,6 +1057,7 @@ function dayColumn(k, label, wide, today, noNav = false) {
   const headAct = noNav ? "" : (wide ? "toweek" : "dayopen");
   return `<div class="daycol${wide ? " wide" : ""}">
     <div class="dayhead ${isToday ? "today" : ""}" data-act="${headAct}" data-d="${k}" style="${dayTintStyle(k)}">${label}</div>
+    ${chips}
     <div class="grid" data-date="${k}"${gridStyle}>${blocks}${now}</div></div>`;
 }
 
@@ -1073,8 +1069,11 @@ function viewPlan() {
   if (ui.view === "day") {
     const d = parseIso(ui.dayDate);
     const wd = WEEKDAYS_LONG[(d.getDay() + 6) % 7];
+    // Tagesansicht: Aufgaben ohne Uhrzeit stehen direkt unter dem Wochentag
+    const dayChips = dayTodoChips(ui.dayDate);
+    const chipsHtml = dayChips ? `<div class="dchips">${dayChips}</div>` : "";
     return `${planNavHTML(`KW ${kwOf(d)} · ${fmtD(d)}`, "day")}
-    <div class="${animCls}">${alldayRowHTML([ui.dayDate], true)}${planLaid(`<div class="week"><div class="axis" style="height:${50 + gridHeight()}px">${axisHTML()}</div>${dayColumn(ui.dayDate, `<b class="daytitle">${wd}</b>`, true, today)}</div>`)}</div>${emptyPlanHint()}${planFabHTML()}`;
+    <div class="${animCls}">${planLaid(`<div class="week day-week"><div class="axis" style="height:${gridHeight()}px">${axisHTML(0)}</div>${dayColumn(ui.dayDate, `<b class="daytitle">${wd}</b>`, true, today, false, chipsHtml)}</div>`)}</div>${emptyPlanHint()}${planFabHTML()}`;
   }
 
   const mon = addDays(mondayOf(today), ui.weekOffset * 7);
@@ -1088,7 +1087,7 @@ function viewPlan() {
     const d = addDays(mon, i);
     cols += dayColumn(iso(d), `${WEEKDAYS[i]}<br>${pad(d.getDate())}.${pad(d.getMonth() + 1)}.`, false, today);
   }
-  h += `<div class="${animCls}">${alldayRowHTML(weekDates.slice(0, dayCount), false)}${planLaid(`<div class="week"><div class="axis" style="height:${50 + gridHeight()}px">${axisHTML()}</div>${cols}</div>`)}</div>${emptyPlanHint()}${planFabHTML()}`;
+  h += `<div class="${animCls}">${planLaid(`<div class="week"><div class="axis" style="height:${50 + gridHeight()}px">${axisHTML()}</div>${cols}</div>`)}</div>${emptyPlanHint()}${planFabHTML()}`;
   return h;
 }
 
@@ -2365,14 +2364,24 @@ function resetSwipeTrack(app) {
   app.style.transform = "";
   app.style.position = "";
 }
+// Wisch sauber abbrechen (z.B. wenn ein zweiter Finger dazukommt): Geist entfernen, Ansicht zurücksetzen
+function abortSwipe() {
+  if (!swipe) return;
+  if (swipe.ghost) swipe.ghost.remove();
+  if (swipe.mode) resetSwipeTrack(document.getElementById("app"));
+  swipe = null;
+}
 document.addEventListener("touchstart", (e) => {
+  if (swipe && swipe.mode) { abortSwipe(); return; }
   if (ui.tab !== "stundenplan" || ui.layEdit || document.querySelector(".modal") || e.touches.length !== 1) { swipe = null; return; }
   if (!e.target.closest || !e.target.closest(".week")) { swipe = null; return; }
   const t = e.touches[0];
   swipe = { x: t.clientX, y: t.clientY, t: Date.now(), dx: 0, mode: null, dir: 0, ghost: null };
 }, { passive: true });
 document.addEventListener("touchmove", (e) => {
-  if (!swipe || e.touches.length !== 1) return;
+  if (!swipe) return;
+  if (e.touches.length !== 1) { abortSwipe(); return; }
+  if (swipe.mode === "h" && e.cancelable) e.preventDefault();   // Browser-Zoom/Scrollen beim Wischen verhindern
   const t = e.touches[0];
   const dx = t.clientX - swipe.x;
   const dy = t.clientY - swipe.y;
@@ -2396,7 +2405,7 @@ document.addEventListener("touchmove", (e) => {
   const app = document.getElementById("app");
   app.style.transition = "none";
   app.style.transform = `translateX(${dx}px)`;
-}, { passive: true });
+}, { passive: false });
 document.addEventListener("touchend", () => {
   const sw = swipe;
   swipe = null;
