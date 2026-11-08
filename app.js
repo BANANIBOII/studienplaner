@@ -1963,9 +1963,14 @@ document.addEventListener("touchcancel", () => { mensaTouch = null; }, { passive
 function mensaCardHTML() {
   const target = mensaTarget();
   const today = iso(new Date());
-  const fresh = mensaCache()[target] || null;
+  const cached = mensaCache()[target] || null;
+  // Liefert der Speiseplan für diesen Tag nichts, wird kein anderer Tag angezeigt
+  const offDay = !!(cached && cached.datum && cached.datum !== target);
+  const fresh = offDay ? null : cached;
   let body;
-  if (fresh && fresh.gerichte && fresh.gerichte.length) {
+  if (offDay) {
+    body = `<div class="muted">Keine Daten verfügbar.</div>`;
+  } else if (fresh && fresh.gerichte && fresh.gerichte.length) {
     body = fresh.gerichte.map((g) =>
       `<div class="mensa-row"><span class="muted">${esc(g.label)}</span><span><b>${esc(g.name)}</b></span><span class="mensa-price">${esc(g.preis.stud)}</span></div>`
     ).join("") + `<div class="muted" style="font-size:12px;margin-top:8px">Preise für Studierende</div>`;
@@ -1976,7 +1981,7 @@ function mensaCardHTML() {
   } else {
     body = `<div class="muted">Speiseplan wird geladen …</div>`;
   }
-  const hinweisDatum = fresh && fresh.datum && fresh.datum !== target
+  const hinweisDatum = false
     ? `<div class="muted" style="font-size:12px;margin-bottom:6px">Angezeigt wird ${parseIso(fresh.datum).toLocaleDateString("de-DE", { weekday: "long" })}</div>` : "";
   const wochentag = parseIso(target).toLocaleDateString("de-DE", { weekday: "long" });
   const title = target === today ? "Mensa heute" : `Mensa · ${wochentag}`;
