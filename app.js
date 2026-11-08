@@ -987,11 +987,15 @@ function dayTodoChips(k) {
 }
 // Hintergrund des Wochentag-Kopfes in der Farbe der offenen Aufgaben des Tages
 function dayTintStyle(k) {
-  const ts = todosOn(k).filter((t) => !t.done);
-  if (!ts.length) return "";
-  const bg = ts.reduce((acc, t) => `color-mix(in srgb, ${catColor(t.type)} 24%, ${acc})`, "var(--card, #142025)");
-  // Umrandung in der Farbe der ersten offenen Aufgabe – immer sichtbar (inset, verändert die Größe nicht)
-  return `background:${bg};box-shadow:inset 0 0 0 2px ${catColor(ts[0].type)};`;
+  const all = todosOn(k);
+  if (!all.length) return "";
+  const open = all.filter((t) => !t.done);
+  // Offene Aufgaben: ihre Farben; sind alle fertig, zeigt der Kopf die Farbe "erledigt" (grün)
+  const src = open.length ? open : all;
+  const colorFor = (t) => (open.length ? catColor(t.type) : catColor("done"));
+  const bg = src.reduce((acc, t) => `color-mix(in srgb, ${colorFor(t)} 24%, ${acc})`, "var(--card, #142025)");
+  // Umrandung in der Farbe – immer sichtbar (inset, verändert die Größe nicht)
+  return `background:${bg};box-shadow:inset 0 0 0 2px ${colorFor(src[0])};`;
 }
 // Einträge, die an einem Tag liegen (auch Zeiträume über mehrere Tage)
 function todosOn(k) {
@@ -1416,11 +1420,11 @@ function viewCal() {
       const T = !same(iso(addDays(d, -7)));
       const B = !same(iso(addDays(d, 7)));
       const rr = Math.max(4, 14 - i * 4);
-      overlays += `<span class="sp" style="inset:${i * 4}px;border-color:${catColor(sp.type)};border-width:${T ? 2 : 0}px ${R ? 2 : 0}px ${B ? 2 : 0}px ${L ? 2 : 0}px;border-radius:${T && L ? rr : 0}px ${T && R ? rr : 0}px ${B && R ? rr : 0}px ${B && L ? rr : 0}px"></span>`;
+      overlays += `<span class="sp" style="inset:${i * 4}px;border-color:${calColor(sp)};border-width:${T ? 2 : 0}px ${R ? 2 : 0}px ${B ? 2 : 0}px ${L ? 2 : 0}px;border-radius:${T && L ? rr : 0}px ${T && R ? rr : 0}px ${B && R ? rr : 0}px ${B && L ? rr : 0}px"></span>`;
     });
     if (spans.length && k !== ui.selDate) {
       // Überlappende Zeiträume: Farben werden ineinander gemischt
-      const tint = spans.reduce((acc, sp) => `color-mix(in srgb, ${catColor(sp.type)} 14%, ${acc})`, "var(--bg)");
+      const tint = spans.reduce((acc, sp) => `color-mix(in srgb, ${calColor(sp)} 14%, ${acc})`, "var(--bg)");
       border += `background-color:${tint};`;
     }
     const cls = ["mday", `style-${cal.style}`, d.getMonth() !== m.getMonth() ? "other" : "", k === today ? "today" : "", k === ui.selDate ? "sel" : "", spans0.length ? "has-span" : ""].join(" ");
@@ -2371,18 +2375,35 @@ function resetSwipeTrack(app) {
   app.style.position = "";
 }
 // Wisch sauber abbrechen (z.B. wenn ein zweiter Finger dazukommt): Geist entfernen, Ansicht zurücksetzen
+function removeGhosts(sw) {
+  if (sw && sw.ghosts) sw.ghosts.forEach((g) => g.remove());
+}
 function abortSwipe() {
   if (!swipe) return;
-  if (swipe.ghost) swipe.ghost.remove();
-  if (swipe.mode) resetSwipeTrack(document.getElementById("app"));
+  removeGhosts(swipe);
+  resetSwipeTrack(document.getElementById("app"));
   swipe = null;
 }
 document.addEventListener("touchstart", (e) => {
-  if (swipe && swipe.mode) { abortSwipe(); return; }
+  if (swipe) { abortSwipe(); if (e.touches.length !== 1) return; }
   if (ui.tab !== "stundenplan" || ui.layEdit || document.querySelector(".modal") || e.touches.length !== 1) { swipe = null; return; }
   if (!e.target.closest || !e.target.closest(".week")) { swipe = null; return; }
+  const app = document.getElementById("app");
+  if (!app) { swipe = null; return; }
   const t = e.touches[0];
-  swipe = { x: t.clientX, y: t.clientY, t: Date.now(), dx: 0, mode: null, dir: 0, ghost: null };
+  // Vorherige und nächste Woche/Tag werden schon JETZT aufgebaut (nicht erst beim Wischen).
+  // Beim Wischen wird dann nur noch verschoben – kein Neuzeichnen, kein Zoom-Sprung.
+  app.style.position = "relative";
+  const ghosts = [-1, 1].map((dir) => {
+    const g = document.createElement("div");
+    g.className = "plan-ghost";
+    g.innerHTML = planAdjacentHTML(dir);
+    g.querySelectorAll(".plan-fab").forEach((n) => n.remove());
+    g.style.transform = `translateX(${dir * 100}%)`;
+    app.appendChild(g);
+    return g;
+  });
+  swipe = { x: t.clientX, y: t.clientY, t: Date.now(), dx: 0, mode: null, dir: 0, ghosts, ghost: null };
 }, { passive: true });
 document.addEventListener("touchmove", (e) => {
   if (!swipe) return;
@@ -2393,19 +2414,12 @@ document.addEventListener("touchmove", (e) => {
   const dy = t.clientY - swipe.y;
   if (!swipe.mode) {
     if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return;
-    if (Math.abs(dx) < 1.3 * Math.abs(dy)) { swipe = null; return; }   // senkrecht: normal scrollen
-    const app = document.getElementById("app");
-    if (!app) { swipe = null; return; }
+    if (Math.abs(dx) < 1.3 * Math.abs(dy)) { abortSwipe(); return; }   // senkrecht: normal scrollen
     swipe.mode = "h";
     swipe.dir = dx < 0 ? 1 : -1;      // 1 = nächste Woche/Tag, -1 = vorherige
-    app.style.position = "relative";
-    const ghost = document.createElement("div");
-    ghost.className = "plan-ghost";
-    ghost.innerHTML = planAdjacentHTML(swipe.dir);
-    ghost.querySelectorAll(".plan-fab").forEach((n) => n.remove());
-    ghost.style.transform = `translateX(${swipe.dir * 100}%)`;
-    app.appendChild(ghost);
-    swipe.ghost = ghost;
+    // Nur die Seite behalten, in die gewischt wird
+    swipe.ghost = swipe.ghosts[swipe.dir < 0 ? 0 : 1];
+    swipe.ghosts.forEach((g) => { if (g !== swipe.ghost) g.remove(); });
   }
   swipe.dx = dx;
   const app = document.getElementById("app");
@@ -2415,9 +2429,10 @@ document.addEventListener("touchmove", (e) => {
 document.addEventListener("touchend", () => {
   const sw = swipe;
   swipe = null;
-  if (!sw || !sw.mode || longFired) return;
+  if (!sw) return;
   const app = document.getElementById("app");
   if (!app) return;
+  if (!sw.mode || longFired) { removeGhosts(sw); resetSwipeTrack(app); return; }
   const W = app.offsetWidth;
   // Nur ein deutlicher Wisch wechselt: halb über die Breite, oder ein schneller Wisch mit mindestens einem Viertel
   const quick = Date.now() - sw.t < 250 && Math.abs(sw.dx) > W * 0.25;
@@ -2432,16 +2447,12 @@ document.addEventListener("touchend", () => {
       render();
       resetSwipeTrack(document.getElementById("app") || app);
     } else {
-      if (sw.ghost) sw.ghost.remove();
+      removeGhosts(sw);
       resetSwipeTrack(app);
     }
   }, 330);
 }, { passive: true });
-document.addEventListener("touchcancel", () => {
-  if (swipe && swipe.ghost) swipe.ghost.remove();
-  if (swipe && swipe.mode) resetSwipeTrack(document.getElementById("app"));
-  swipe = null;
-}, { passive: true });
+document.addEventListener("touchcancel", () => abortSwipe(), { passive: true });
 
 // Streckung in Y-Richtung: zwei Finger auf dem Stundenplan (am PC: Strg + Mausrad)
 let pinch = null;
@@ -2747,6 +2758,10 @@ document.addEventListener("click", async (e) => {
       const t = state.todos.find((x) => x.id === id);
       if (!t) break;
       if (!canCheck(t)) { appAlert("Klausuren kannst du erst am Prüfungstag abhaken."); render(); break; }
+      // Abgaben werden erst nach einer Bestätigung als erledigt markiert
+      if (!t.done && t.type === "abgabe") {
+        if (!(await appConfirm(`Abgabe „${t.title}“ als erledigt markieren?`, "Ja, erledigt"))) { render(); break; }
+      }
       t.done = !t.done;
       t.doneAt = t.done ? iso(new Date()) : null;
       ui.popId = id;
