@@ -1168,6 +1168,43 @@ function toWeekView() {
   render();
 }
 
+// Zerlegt die ICS-Beschreibung ("Art: Vorlesung\nDozent: ...") in Schlüssel/Wert
+function parseEventDesc(desc) {
+  const info = {};
+  String(desc || "").split(/\r?\n|\\n/).forEach((line) => {
+    const i = line.indexOf(":");
+    if (i > 0) info[line.slice(0, i).trim().toLowerCase()] = line.slice(i + 1).trim();
+  });
+  return info;
+}
+
+// Kurzer Tipp auf einen Stundenplan-Termin: Infos anzeigen
+function openEventInfo(id) {
+  const ev = state.events.find((x) => x.id === id);
+  if (!ev) return;
+  const info = parseEventDesc(ev.desc);
+  const [y, m, d] = ev.date.split("-");
+  const row = (label, val) => `<div class="row" style="justify-content:space-between;padding:8px 0;border-bottom:1px solid rgba(128,128,128,.25)"><span class="muted">${label}</span><b>${esc(val)}</b></div>`;
+  openModal(`
+    <h3>${esc(ev.name)}</h3>
+    <div>
+      ${row("Datum", `${d}.${m}.${y}`)}
+      ${row("Zeit", `${fmtMin(ev.start)}–${fmtMin(ev.end)}`)}
+      ${row("Raum", ev.room || info.raum || "–")}
+      ${row("Dozent", info.dozent || "–")}
+      ${row("Art", info.art || "–")}
+      ${row("Woche", info.woche || "–")}
+    </div>
+    ${info.dozent ? "" : `<p class="muted" style="font-size:13px">Kein Dozent hinterlegt? Termine, die vor dieser Version importiert wurden, einmal über die ICS-Datei in den Einstellungen neu importieren.</p>`}
+    <div class="sheet-actions">
+      <button type="button" class="btn ghost" data-act="evopen" data-id="${ev.id}">Bearbeiten</button>
+      <div class="right">
+        <button type="button" class="btn ghost" data-act="evnote" data-id="${ev.id}">Notizen</button>
+        <button type="button" class="btn" data-act="mclose">Schließen</button>
+      </div>
+    </div>`);
+}
+
 function openEventEdit(id) {
   const ev = state.events.find((x) => x.id === id);
   if (!ev) return;
@@ -2291,7 +2328,9 @@ document.addEventListener("pointerdown", (e) => {
     pressStart = null;
     if (navigator.vibrate) navigator.vibrate(15);
     if (el.classList.contains("ev")) {
-      openEventEdit(el.dataset.id);
+      // Langes Drücken auf einen Termin = Notiz-Popup
+      const ev = state.events.find((x) => x.id === el.dataset.id);
+      if (ev) openNoteModal(ev.name, ev.date);
     } else {
       const rect = el.getBoundingClientRect();
       let min = START_MIN + (y - rect.top) / PX_PER_MIN;
@@ -2542,9 +2581,18 @@ document.addEventListener("click", async (e) => {
       const ev = state.events.find((x) => x.id === id);
       if (!ev) break;
       hapt(8);
+      // Stundenplan: kurz tippen = Infos. Dashboard: Notiz-Popup.
+      if (ui.tab === "stundenplan") { openEventInfo(ev.id); break; }
       openNoteModal(ev.name, ev.date);
       break;
     }
+    case "evnote": {
+      const ev = state.events.find((x) => x.id === id);
+      if (!ev) break;
+      openNoteModal(ev.name, ev.date);
+      break;
+    }
+    case "evopen": openEventEdit(id); break;
     case "npclose":
       closeModal();
       ui.noteFor = null;
