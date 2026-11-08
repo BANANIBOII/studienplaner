@@ -1029,8 +1029,11 @@ function dayColumn(k, label, wide, today, noNav = false, chips = "") {
     const w = 100 / it._cols;
     const pos = `top:${(it.start - START_MIN) * PX_PER_MIN}px;height:${Math.max(26, (it.end - it.start) * PX_PER_MIN) - 2}px;left:calc(${it._col * w}% + 2px);width:calc(${w}% - 4px);`;
     if (it.kind === "event") {
-      return `<div class="ev" data-act="note" data-kind="event" data-id="${it.id}" style="${pos}background:${colorOf(it.name)};color:${textOn(colorOf(it.name))}">
-        <b>${esc(it.name)}</b><small>${fmtMin(it.start)}–${fmtMin(it.end)}</small><small>${esc(it.room)}</small></div>`;
+      // Block zeigt Kürzel (falls gesetzt), Dozent statt Uhrzeit und einen dunkleren Rahmen
+      const ec = colorOf(it.name);
+      const who = parseEventDesc(it.desc).dozent;
+      return `<div class="ev" data-act="note" data-kind="event" data-id="${it.id}" style="${pos}background:${ec};color:${textOn(ec)};border:2px solid color-mix(in srgb, ${ec} 55%, #000)">
+        <b>${esc(it.short || it.name)}</b><small>${esc(who || `${fmtMin(it.start)}–${fmtMin(it.end)}`)}</small><small>${esc(it.room)}</small></div>`;
     }
     const c = catColor(it.kind);
     if (it.done) {
@@ -1214,6 +1217,9 @@ function openEventEdit(id) {
     <form data-form="evedit" data-id="${ev.id}">
       <label class="muted">Titel (gilt für alle Termine dieser Vorlesung)</label>
       <input name="name" required value="${esc(ev.name)}">
+      <label class="muted">Kürzel (optional, wird im Stundenplan angezeigt)</label>
+      <input name="short" maxlength="16" value="${esc(ev.short || "")}" placeholder="z.B. Mathe I">
+
       <div class="grid2">
         <div><label class="muted">Datum</label><input type="date" name="date" required value="${ev.date}"></div>
         <div><label class="muted">Raum</label><input name="room" value="${esc(ev.room)}"></div>
@@ -3102,6 +3108,9 @@ document.addEventListener("submit", async (e) => {
       ev.start = start;
       ev.end = end;
       ev.room = (data.room || "").trim();
+      // Kürzel gilt für alle Termine dieser Vorlesung (wie der Titel)
+      const short = (data.short || "").trim();
+      state.events.forEach((x) => { if (x.name === nw) x.short = short; });
       if (state.modules[nw] || data.protokoll) ensureModule(nw).color = data.color;
       closeModal(); commit(); break;
     }
