@@ -2310,26 +2310,83 @@ document.addEventListener("pointermove", (e) => {
 ["pointerup", "pointercancel"].forEach((ev) =>
   document.addEventListener(ev, () => { clearTimeout(pressTimer); pressStart = null; }));
 
+// Wischen im Stundenplan: die Ansicht gleitet mit dem Finger, die nächste Woche bzw. der nächste Tag kommt von der Seite
 let swipe = null;
+const planAdjacentHTML = (dir) => {
+  const save = { view: ui.view, dayDate: ui.dayDate, weekOffset: ui.weekOffset, anim: ui.anim };
+  try {
+    if (ui.view === "day") ui.dayDate = iso(addDays(parseIso(ui.dayDate), dir));
+    else ui.weekOffset += dir;
+    ui.anim = null;
+    return viewPlan();
+  } finally { Object.assign(ui, save); }
+};
+function resetSwipeTrack(app) {
+  app.style.transition = "";
+  app.style.transform = "";
+  app.style.position = "";
+}
 document.addEventListener("touchstart", (e) => {
   if (ui.tab !== "stundenplan" || ui.layEdit || document.querySelector(".modal") || e.touches.length !== 1) { swipe = null; return; }
   if (!e.target.closest || !e.target.closest(".week")) { swipe = null; return; }
   const t = e.touches[0];
-  swipe = { x: t.clientX, y: t.clientY, t: Date.now() };
+  swipe = { x: t.clientX, y: t.clientY, t: Date.now(), dx: 0, mode: null, dir: 0, ghost: null };
 }, { passive: true });
-document.addEventListener("touchend", (e) => {
-  if (!swipe) return;
-  const t = e.changedTouches[0];
+document.addEventListener("touchmove", (e) => {
+  if (!swipe || e.touches.length !== 1) return;
+  const t = e.touches[0];
   const dx = t.clientX - swipe.x;
   const dy = t.clientY - swipe.y;
-  const dt = Date.now() - swipe.t;
-  swipe = null;
-  if (longFired) return;
-  if (dt < 700 && Math.abs(dx) >= SWIPE_MIN_PX && Math.abs(dx) > 1.6 * Math.abs(dy)) {
-    navigate(dx < 0 ? 1 : -1);
+  if (!swipe.mode) {
+    if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return;
+    if (Math.abs(dx) < 1.3 * Math.abs(dy)) { swipe = null; return; }   // senkrecht: normal scrollen
+    const app = document.getElementById("app");
+    if (!app) { swipe = null; return; }
+    swipe.mode = "h";
+    swipe.dir = dx < 0 ? 1 : -1;      // 1 = nächste Woche/Tag, -1 = vorherige
+    app.style.position = "relative";
+    const ghost = document.createElement("div");
+    ghost.className = "plan-ghost";
+    ghost.innerHTML = planAdjacentHTML(swipe.dir);
+    ghost.querySelectorAll(".plan-fab").forEach((n) => n.remove());
+    ghost.style.transform = `translateX(${swipe.dir * 100}%)`;
+    app.appendChild(ghost);
+    swipe.ghost = ghost;
   }
+  swipe.dx = dx;
+  const app = document.getElementById("app");
+  app.style.transition = "none";
+  app.style.transform = `translateX(${dx}px)`;
 }, { passive: true });
-document.addEventListener("touchcancel", () => { swipe = null; }, { passive: true });
+document.addEventListener("touchend", () => {
+  const sw = swipe;
+  swipe = null;
+  if (!sw || !sw.mode || longFired) return;
+  const app = document.getElementById("app");
+  if (!app) return;
+  const W = app.offsetWidth;
+  const quick = Date.now() - sw.t < 350 && Math.abs(sw.dx) > 40;
+  const commit = Math.abs(sw.dx) > W * 0.28 || quick;
+  app.style.transition = "transform .32s cubic-bezier(.2,.8,.2,1)";
+  app.style.transform = commit ? `translateX(${-sw.dir * W}px)` : "translateX(0)";
+  setTimeout(() => {
+    if (commit) {
+      if (ui.view === "day") ui.dayDate = iso(addDays(parseIso(ui.dayDate), sw.dir));
+      else ui.weekOffset += sw.dir;
+      ui.anim = null;
+      render();
+      resetSwipeTrack(document.getElementById("app") || app);
+    } else {
+      if (sw.ghost) sw.ghost.remove();
+      resetSwipeTrack(app);
+    }
+  }, 330);
+}, { passive: true });
+document.addEventListener("touchcancel", () => {
+  if (swipe && swipe.ghost) swipe.ghost.remove();
+  if (swipe && swipe.mode) resetSwipeTrack(document.getElementById("app"));
+  swipe = null;
+}, { passive: true });
 
 // Streckung in Y-Richtung: zwei Finger auf dem Stundenplan (am PC: Strg + Mausrad)
 let pinch = null;
@@ -2427,7 +2484,8 @@ document.addEventListener("click", async (e) => {
   // Bearbeiten nur per Doppeltippen: To-Dos, Abgaben, Klausuren (✎-Button bleibt direkt)
   const editRow = e.target.closest(".listrow[data-drag]");
   const editId = el && el.dataset.act === "tedit" && !el.classList.contains("btn") ? el.dataset.id
-    : (editRow && !e.target.closest("button, input, select, textarea, label, [data-act]") ? editRow.dataset.drag : null);
+    : (editRow && !e.target.closest("button, input, select, textarea, label") ? editRow.dataset.drag : null);
+  if (editId && e.target.closest("#modalRoot")) { hapt(8); openTodoModal(editId); return; }  // im Tagesfenster: ein Tipp
   if (editId) {
     const now = Date.now();
     const dbl = lastEditTap.id === editId && now - lastEditTap.t < 450;
