@@ -488,6 +488,16 @@ const trashLabel = (it) => {
   return "Eintrag";
 };
 
+// Kategorie eines Protokolls: vom Nutzer gewählt (module.kind), sonst aus Namen bzw. ICS-Art erkannt
+const KIND_LABEL = { vl: "Vorlesung", ueb: "Übung", tut: "Tutorium" };
+function modKindOf(n) {
+  const k = state.modules[n] && state.modules[n].kind;
+  if (k) return k;
+  const ev = state.events.find((x) => x.name === n && x.desc);
+  const s = `${n} ${ev ? parseEventDesc(ev.desc).art || "" : ""}`;
+  return /tutorium/i.test(s) ? "tut" : /übung/i.test(s) ? "ueb" : "vl";
+}
+
 function ensureModule(name) {
   if (!state.modules[name]) {
     state.modules[name] = {
@@ -528,6 +538,7 @@ const ui = {
   calShowDone: false,
   dashNext: null,
   layEdit: false,
+  planEdit: false,
   showHidden: false,
   noteFor: null,
   editNote: null,
@@ -670,7 +681,7 @@ function render() {
   const prevTab = appEl.dataset.shownTab;
   const tabChanged = prevTab !== ui.tab;
   const dir = tabOrder.indexOf(ui.tab) >= tabOrder.indexOf(prevTab) ? "dir-fwd" : "dir-back";
-  appEl.innerHTML = (ui.layEdit ? layBarHTML() : "") + views[ui.tab]();
+  appEl.innerHTML = (ui.layEdit ? layBarHTML() : "") + (ui.planEdit && ui.tab === "stundenplan" ? planEditBarHTML() : "") + views[ui.tab]();
   appEl.dataset.shownTab = ui.tab;
   // Einblenden nur beim Wechsel des Reiters, nicht bei jedem Haken oder Klick
   if (tabChanged) {
@@ -1048,7 +1059,7 @@ function dayColumn(k, label, wide, today, noNav = false, chips = "") {
       // Block zeigt Kürzel (falls gesetzt), Dozent statt Uhrzeit und einen dunkleren Rahmen
       const ec = colorOf(it.name);
       const who = dozentOf(it);
-      return `<div class="ev" data-act="note" data-kind="event" data-id="${it.id}" style="${pos}background:${ec};color:${textOn(ec)};border:2px solid color-mix(in srgb, ${ec} 55%, #000)">
+      return `<div class="ev" data-act="note" data-kind="event" data-id="${it.id}"${ui.planEdit ? ` data-drag="${it.id}"` : ""} style="${pos}background:${ec};color:${textOn(ec)};border:2px solid color-mix(in srgb, ${ec} 55%, #000)">
         <b class="ev-name" data-long="${esc(it.name)}" data-short="${esc(it.short || "")}">${esc(it.name)}</b><small>${esc(who || `${fmtMin(it.start)}–${fmtMin(it.end)}`)}</small><small>${esc(it.room)}</small></div>`;
     }
     const c = catColor(it.kind);
@@ -1153,6 +1164,7 @@ function openPlanMenu() {
   };
   openModal(`
     <h3>Stundenplan-Einstellungen</h3>
+    <button class="btn" data-act="planedit" style="margin-bottom:12px">Termine bearbeiten (verschieben, kopieren)</button>
     <label class="row" style="margin-bottom:12px"><input type="checkbox" data-change="weekend" ${s.weekend ? "checked" : ""}> Samstag und Sonntag anzeigen</label>
     <label class="row" style="margin-bottom:12px"><input type="checkbox" data-change="autorange" ${s.autoRange ? "checked" : ""}> Zeitachse automatisch an Vorlesungen anpassen (30 Min davor und danach)</label>
     <label class="muted">Beginn</label>
@@ -1194,6 +1206,22 @@ function parseEventDesc(desc) {
     if (i > 0) info[line.slice(0, i).trim().toLowerCase()] = line.slice(i + 1).trim();
   });
   return info;
+}
+
+// Termin auf einen anderen Tag gezogen: fragen, ob verschoben oder kopiert werden soll
+function openEventDrop(id, date, min) {
+  const ev = state.events.find((x) => x.id === id);
+  if (!ev) return;
+  const [y, m, d] = date.split("-");
+  const btn = (mode, label, cls) => `<button class="btn ${cls}" data-act="evdrop" data-mode="${mode}" data-id="${id}" data-d="${date}" data-min="${min}">${label}</button>`;
+  openModal(`
+    <h3>${esc(ev.name)}</h3>
+    <p class="muted">Auf ${d}.${m}.${y} · ${fmtMin(min)} Uhr</p>
+    <div class="menu-list">
+      ${btn("move", "Verschieben", "")}
+      ${btn("copy", "Kopieren", "ghost")}
+    </div>
+    <div class="row"><button class="btn ghost" data-act="mclose">Abbrechen</button></div>`);
 }
 
 // Kurzer Tipp auf einen To-Do/Abgabe/Klausur im Stundenplan: Aktionen anbieten
@@ -1464,7 +1492,7 @@ function viewCal() {
       const rr = Math.max(4, 14 - i * 4);
       overlays += `<span class="sp" style="inset:${i * 4}px;border-color:${calColor(sp)};border-width:${T ? 2 : 0}px ${R ? 2 : 0}px ${B ? 2 : 0}px ${L ? 2 : 0}px;border-radius:${T && L ? rr : 0}px ${T && R ? rr : 0}px ${B && R ? rr : 0}px ${B && L ? rr : 0}px"></span>`;
     });
-    if (spans.length && k !== ui.selDate) {
+    if (spans.length && k !== ui.selDate && k !== today) {
       // Überlappende Zeiträume: Farben werden ineinander gemischt
       const tint = spans.reduce((acc, sp) => `color-mix(in srgb, ${calColor(sp)} 14%, ${acc})`, "var(--bg)");
       border += `background-color:${tint};`;
@@ -1573,14 +1601,14 @@ function viewModules() {
 
   // Art einer Veranstaltung aus dem Namen: Tutorium, Übung oder Vorlesung
   const kf = ui.modKind || "alle";
-  const kindOf = (n) => (/tutorium/i.test(n) ? "tut" : /übung/i.test(n) ? "ueb" : "vl");
+  const kindOf = modKindOf;
   const kindLabel = { vl: "Vorlesungen", ueb: "Übungen", tut: "Tutorien" };
   const kindChip = (v, label) => `<button class="btn ${kf === v ? "" : "ghost"}" data-act="modkind" data-v="${v}">${label}</button>`;
   h += `<div class="row" style="gap:6px;flex-wrap:wrap;margin-bottom:10px">${kindChip("alle", "Alle")}${kindChip("vl", "Vorlesungen")}${kindChip("ueb", "Übungen")}${kindChip("tut", "Tutorien")}</div>`;
   h += `<div class="row" style="justify-content:flex-end;margin-bottom:10px"><label class="row" style="font-size:14px"><input type="checkbox" data-act="showhidden" ${ui.showHidden ? "checked" : ""}> Ausgeblendete anzeigen</label></div>`;
 
   if (!visible.length && !(ui.showHidden && hidden.length)) {
-    return h + `<div class="card muted">Noch keine Protokolle. Ein Protokoll erscheint, sobald ein Termin mit diesem Namen im Stundenplan steht.</div>`;
+    return h + `<div class="card muted">Noch keine Protokolle. Ein Protokoll entsteht, sobald du dazu eine Notiz oder ein Thema anlegst.</div>`;
   }
 
   const groups = ["vl", "ueb", "tut"].filter((k) => kf === "alle" || kf === k);
@@ -1617,11 +1645,24 @@ function openModuleMenu(name) {
   openModal(`
     <h3>${esc(name)}</h3>
     <div class="menu-list">
+      <button class="btn" data-act="mkind" data-m="${n}">Kategorie: ${KIND_LABEL[modKindOf(name)]} ändern</button>
       <button class="btn" data-act="medit" data-m="${n}">Bearbeiten (Farbe)</button>
       <button class="btn danger" data-act="mtrash" data-m="${n}">In den Papierkorb</button>
     </div>
     <div class="row"><button class="btn ghost" data-act="mclose">Schließen</button></div>
     <p class="muted">Die Termine im Stundenplan bleiben erhalten.</p>`);
+}
+
+function openKindPicker(name) {
+  const n = enc(name);
+  openModal(`
+    <h3>Kategorie von „${esc(name)}“</h3>
+    <div class="menu-list">
+      <button class="btn ${modKindOf(name) === "vl" ? "" : "ghost"}" data-act="mkindset" data-m="${n}" data-v="vl">Vorlesung</button>
+      <button class="btn ${modKindOf(name) === "ueb" ? "" : "ghost"}" data-act="mkindset" data-m="${n}" data-v="ueb">Übung</button>
+      <button class="btn ${modKindOf(name) === "tut" ? "" : "ghost"}" data-act="mkindset" data-m="${n}" data-v="tut">Tutorium</button>
+    </div>
+    <div class="row"><button class="btn ghost" data-act="mclose">Abbrechen</button></div>`);
 }
 
 function openModuleEdit(name) {
@@ -2127,6 +2168,14 @@ function fitPlan() {
   }
 }
 // Leiste oben im Bearbeitungsmodus
+// Bearbeiten im Stundenplan: Termine per Gedrückthalten auf einen Tag ziehen (verschieben oder kopieren)
+function planEditBarHTML() {
+  return `<div class="card laybar">
+    <div class="grow"><b>Termine bearbeiten</b>
+      <div class="muted" style="font-size:13px">Termin gedrückt halten und auf einen Tag ziehen. Danach fragt die App: verschieben oder kopieren.</div></div>
+    <button class="btn" data-act="planeditdone">Fertig</button>
+  </div>`;
+}
 function layBarHTML() {
   return `<div class="card laybar">
     <div class="grow"><b>Layout bearbeiten</b>
@@ -2411,9 +2460,9 @@ document.addEventListener("pointerdown", (e) => {
     pressStart = null;
     if (navigator.vibrate) navigator.vibrate(15);
     if (el.classList.contains("ev")) {
-      // Langes Drücken auf einen Termin = Notiz-Popup
+      // Langes Drücken auf einen Termin = Notiz-Popup (im Bearbeitungsmodus stattdessen zum Verschieben)
       const ev = state.events.find((x) => x.id === el.dataset.id);
-      if (ev) openNoteModal(ev.name, ev.date);
+      if (ev && !ui.planEdit) openNoteModal(ev.name, ev.date);
     } else {
       const rect = el.getBoundingClientRect();
       let min = START_MIN + (y - rect.top) / PX_PER_MIN;
@@ -2463,7 +2512,7 @@ function abortSwipe() {
 }
 document.addEventListener("touchstart", (e) => {
   if (swipe) { abortSwipe(); if (e.touches.length !== 1) return; }
-  if (ui.tab !== "stundenplan" || ui.layEdit || document.querySelector(".modal") || e.touches.length !== 1) { swipe = null; return; }
+  if (ui.tab !== "stundenplan" || ui.layEdit || ui.planEdit || document.querySelector(".modal") || e.touches.length !== 1) { swipe = null; return; }
   if (!e.target.closest || !e.target.closest(".week")) { swipe = null; return; }
   const app = document.getElementById("app");
   if (!app) { swipe = null; return; }
@@ -2689,6 +2738,18 @@ document.addEventListener("click", async (e) => {
     case "dprev": navigate(-1); break;
     case "dnext": navigate(1); break;
     case "planmenu": openPlanMenu(); break;
+    case "planedit": clearModalQuiet(); ui.planEdit = true; render(); break;
+    case "planeditdone": ui.planEdit = false; render(); break;
+    case "evdrop": {
+      const ev = state.events.find((x) => x.id === id);
+      if (!ev) break;
+      const start = Number(el.dataset.min), dur = ev.end - ev.start, date = el.dataset.d;
+      if (el.dataset.mode === "copy") state.events.push({ ...ev, id: uid(), date, start, end: start + dur });
+      else Object.assign(ev, { date, start, end: start + dur });
+      ui.selDate = date;
+      clearModalQuiet();
+      commit(); break;
+    }
     case "planreset":
       // Nur Hintergrund und Linie zurücksetzen; die Kategorie-Farben gelten überall und bleiben
       state.settings.plan = { ...state.settings.plan, grid: "", now: "" };
@@ -2858,9 +2919,16 @@ document.addEventListener("click", async (e) => {
       if (inp) { inp.value = dec(el.dataset.t); inp.dispatchEvent(new Event("input", { bubbles: true })); }
       break;
     }
-    case "modgo": ensureModule(m); ui.tab = "protokolle"; ui.modOpen = m; ui.topicOpen = null; render(); window.scrollTo(0, 0); break;
+    case "modgo": ui.tab = "protokolle"; ui.modOpen = state.modules[m] ? m : null; ui.topicOpen = null; render(); window.scrollTo(0, 0); break;
     case "mback": ui.modOpen = null; ui.topicOpen = null; render(); break;
     case "mmenu": openModuleMenu(m); break;
+    case "mkind": openKindPicker(m); break;
+    case "mkindset": {
+      const mod = state.modules[m];
+      if (mod) mod.kind = el.dataset.v;
+      clearModalQuiet();
+      commit(); break;
+    }
     case "mcolor": state.modules[ui.modOpen].color = el.dataset.c; commit(); break;
     case "mcolorm": state.modules[m].color = el.dataset.c; commit(); openModuleEdit(m); break;
     case "medit": openModuleEdit(m); break;
@@ -3084,9 +3152,8 @@ document.addEventListener("change", async (e) => {
     if (!file) return;
     const events = parseICS(await file.text());
     if (!events.length) { appAlert("In dieser Datei wurden keine Termine gefunden."); return; }
+    // Protokolle entstehen nicht mehr automatisch beim Import, nur wenn du eine Notiz oder ein Thema anlegst
     state.events = events;
-    const removed = trashedModuleNames();
-    events.forEach((ev) => { if (!removed.has(ev.name)) ensureModule(ev.name); });
     commit();
     appAlert(`${events.length} Termine wurden geladen.`);
   }
@@ -3523,11 +3590,13 @@ function endDrag(cancelled, x, y) {
     const under = x != null ? document.elementFromPoint(x, y) : null;
     const grid = under && under.closest(".grid[data-date]");
     const t = state.todos.find((q) => q.id === d.id);
-    if (grid && t) {
+    const ev = state.events.find((q) => q.id === d.id);
+    if (grid && (t || ev)) {
       const r = grid.getBoundingClientRect();
       let min = START_MIN + (y - r.top) / PX_PER_MIN;
       min = Math.round(min / 15) * 15;
       min = Math.max(START_MIN, Math.min(min, END_MIN - 15));
+      if (ev && !t) { openEventDrop(ev.id, grid.dataset.date, min); return; }
       t.date = grid.dataset.date;
       t.time = fmtMin(min);
       ui.selDate = t.date;

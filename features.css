@@ -199,6 +199,8 @@
   box-shadow: 0 8px 24px rgba(0, 0, 0, .3);
 }
 .mday.drop { outline: 2px dashed var(--accent); outline-offset: -2px; background: var(--accent-soft); }
+/* Heute: immer ein Ring außen, egal ob To-do-Rahmen oder Zeitraum-Farbe im Feld liegen */
+.mday.today { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent); }
 .dropzone {
   display: none; margin-top: 12px; padding: 12px; border: 2px dashed var(--line);
   border-radius: 12px; text-align: center; color: var(--muted); font-size: 13px;
