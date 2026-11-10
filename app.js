@@ -3813,6 +3813,14 @@ function handleLaunch() {
   const p = new URLSearchParams(location.search);
   const name = p.get("m");
   const date = p.get("d");
+  const tab = p.get("tab");
+  const tabs = ["dashboard", "stundenplan", "kalender", "protokolle", "einstellungen"];
+  if (tab && tabs.includes(tab)) {
+    ui.tab = tab;
+    ui.modOpen = null;
+    history.replaceState(null, "", location.pathname);
+    render();
+  }
   if (p.get("note") && name && date) {
     history.replaceState(null, "", location.pathname);
     setTimeout(() => openNoteModal(name, date), 300);
