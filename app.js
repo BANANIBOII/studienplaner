@@ -140,12 +140,12 @@ function viewDesignCard() {
       <div class="grow"><b>${esc(activeDesignName())}</b><div class="muted">Gilt nur für dieses Gerät</div></div>
       <div class="dprev-mini" style="background:${c.bg}"><span style="background:${c.card}"></span><i style="background:${c.accent}"></i></div>
     </div>
-    <div class="row" style="margin-top:12px"><button class="btn" data-act="designopen">Design anpassen</button></div>
+    <div style="margin-top:12px">${designListHTML()}</div>
   </div>`;
 }
 
-// Fenster mit allen Designs zum genauen Ansehen und Anwenden
-function openDesignModal() {
+// Alle Designs direkt auf der Seite (kein eigenes Fenster mehr)
+function designListHTML() {
   const mine = state.settings.presets || [];
   const row = (pid, name, colors, deletable) => `<div class="dcard ${designIsActive(colors) ? "on" : ""}">
     <div class="row" style="justify-content:space-between">
@@ -158,16 +158,18 @@ function openDesignModal() {
       <button class="btn" data-act="preset" data-pid="${pid}">Anwenden</button>
     </div>
   </div>`;
-  openModal(`<h3>Design wählen</h3>
-    <p class="muted" style="margin-top:0">Jedes Design hat eine helle und eine dunkle Variante. Die Auswahl gilt nur für dieses Gerät.</p>
+  return `<p class="muted" style="margin-top:0">Jedes Design hat eine helle und eine dunkle Variante. Die Auswahl gilt nur für dieses Gerät.</p>
     <div class="dgrid">
       ${BUILTIN_PRESETS.map((p, i) => row("b:" + i, p.name, p.colors, false)).join("")}
       ${mine.map((p) => row("u:" + p.id, p.name, p.colors, true)).join("")}
     </div>
-    <div class="row" style="margin-top:14px;justify-content:space-between">
-      <button class="btn ghost" data-act="presetsave">Aktuelles Design speichern</button>
-      <button class="btn ghost" data-act="mclose">Schließen</button>
-    </div>`);
+    <div class="row" style="margin-top:14px"><button class="btn ghost" data-act="presetsave">Aktuelles Design speichern</button></div>`;
+}
+
+// Früher das Design-Fenster; wird nicht mehr genutzt, bleibt zur Sicherheit erhalten
+function openDesignModal() {
+  openModal(`<h3>Design wählen</h3>${designListHTML()}
+    <div class="row" style="margin-top:14px"><button class="btn ghost" data-act="mclose">Schließen</button></div>`);
 }
 
 // Eigene Karten im Dashboard (Verknüpfungen, Notizen)
@@ -1945,6 +1947,45 @@ function settingsPages() {
   return pages;
 }
 
+// Unterseiten der Benachrichtigungen
+const NF_SUBS = [
+  { k: "push", t: "Gerät & Aktivierung", d: "Aktivieren, deaktivieren" },
+  { k: "test", t: "Testnachrichten", d: "Beispiel für jede Art senden" },
+  { k: "mod", t: "Modul-Erinnerungen", d: "Vorwarnzeit, Module ein- und ausschalten" },
+  { k: "mensa", t: "Mensa", d: "An/aus und Uhrzeit" },
+  { k: "fristen", t: "Fristen am Morgen", d: "An/aus und Uhrzeit" },
+  { k: "vorschau", t: "Vorschau nächste Woche", d: "Freitag, Samstag, Sonntag" },
+  { k: "quiet", t: "Ruhezeit", d: "Keine Nachrichten in dieser Zeit" },
+  { k: "log", t: "Verlauf", d: "Alle gesendeten Nachrichten" },
+];
+const SET_ROW = "display:flex;align-items:center;gap:10px;width:100%;padding:14px;border:0;border-bottom:1px solid var(--line);background:none;text-align:left;color:inherit;min-height:56px;font:inherit";
+
+// Verlauf: alle gesendeten Nachrichten aus der Cloud
+async function loadNotifyLog() {
+  if (!sb || !session || ui.nfLogBusy) return;
+  ui.nfLogBusy = true;
+  const { data, error } = await sb.from("sent_notifications")
+    .select("title, body, created_at")
+    .not("title", "is", null)
+    .order("created_at", { ascending: false })
+    .limit(100);
+  ui.nfLogBusy = false;
+  ui.nfLog = error ? [] : (data || []);
+  render();
+}
+
+function notifyLogHTML() {
+  if (!sb || !session) return `<p class="muted">Zum Anzeigen bitte anmelden.</p>`;
+  if (!ui.nfLog) {
+    loadNotifyLog();
+    return `<p class="muted">Lade …</p>`;
+  }
+  if (!ui.nfLog.length) return `<p class="muted">Noch keine Nachrichten verschickt.</p>`;
+  const when = (t) => new Date(t).toLocaleString("de-DE", { timeZone: "Europe/Berlin", weekday: "short", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+  return `<div class="card" style="padding:0;overflow:hidden">${ui.nfLog.map((r) =>
+    `<div class="listrow" style="align-items:flex-start"><div class="grow"><b>${esc(r.title)}</b><div class="muted" style="white-space:pre-line;font-size:13px">${esc(r.body || "")}</div></div><span class="muted" style="font-size:12px;white-space:nowrap">${when(r.created_at)}</span></div>`).join("")}</div>`;
+}
+
 // Einstellungen: Hauptliste mit Suche, jeder Punkt öffnet eine Unterseite
 const SETTINGS_LIST = [
   { k: "allg", t: "Allgemein", d: "Werkzeuge, Sicherung", w: "sicherung export werkzeuge" },
@@ -1958,6 +1999,17 @@ const SETTINGS_LIST = [
 
 function viewSettings() {
   const pages = settingsPages();
+  // Benachrichtigungen: eigene Liste mit Unterseiten
+  if (ui.setPage === "benach") {
+    const back = (title, act) => `<div class="row" style="gap:10px;margin-bottom:12px"><button class="btn ghost" data-act="${act}">‹ Zurück</button><h2 style="margin:0">${title}</h2></div>`;
+    if (!ui.nfOnly) {
+      const rows = NF_SUBS.map((x) => `<button data-act="nfopen" data-k="${x.k}" style="${SET_ROW}"><div class="grow"><b>${x.t}</b><div class="muted" style="font-size:13px">${x.d}</div></div><span class="muted">›</span></button>`).join("");
+      return back("Benachrichtigungen", "setback") + `<div class="card" style="padding:0;overflow:hidden">${rows}</div>`;
+    }
+    const info = NF_SUBS.find((x) => x.k === ui.nfOnly);
+    const body = ui.nfOnly === "push" ? pushCardHTML() : ui.nfOnly === "log" ? notifyLogHTML() : notifyDetailsHTML();
+    return back(info ? info.t : "", "nfback") + body;
+  }
   if (ui.setPage && pages[ui.setPage] !== undefined) {
     const info = SETTINGS_LIST.find((x) => x.k === ui.setPage);
     return `<div class="row" style="gap:10px;margin-bottom:12px"><button class="btn ghost" data-act="setback">‹ Zurück</button><h2 style="margin:0">${info ? info.t : ""}</h2></div>${pages[ui.setPage]}`;
@@ -3020,8 +3072,14 @@ document.addEventListener("click", async (e) => {
     case "pushon": enablePush(); break;
     case "pushoff": disablePush(); break;
     case "pushtest": pushTest(el.dataset.kind); break;
-    case "setopen": ui.setPage = el.dataset.k; render(); break;
-    case "setback": ui.setPage = null; render(); break;
+    case "setopen": ui.setPage = el.dataset.k; ui.nfOnly = null; render(); break;
+    case "setback": ui.setPage = null; ui.nfOnly = null; render(); break;
+    case "nfopen":
+      ui.nfOnly = el.dataset.k;
+      if (ui.nfOnly === "log") ui.nfLog = undefined;
+      render();
+      break;
+    case "nfback": ui.nfOnly = null; render(); break;
     case "tedit": openTodoModal(id); break;
     case "todoedit": openTodoModal(id); break;
     case "todoopen": openTodoActions(id); break;
@@ -3684,7 +3742,7 @@ function pushCardHTML() {
     return `<div class="card"><h3>Benachrichtigungen</h3><p class="muted" style="margin:0">Auf dem iPhone geht das nur, wenn du die App zuerst über „Teilen → Zum Home-Bildschirm“ hinzufügst und von dort aus öffnest.</p></div>`;
   }
   return `<div class="card"><h3>Benachrichtigungen</h3>
-    <p class="muted" style="margin:0 0 10px">Erinnerungen für Termine, Mensa und Fristen. Die Einstellungen dazu stehen unten.</p>
+    <p class="muted" style="margin:0 0 10px">Erinnerungen für Termine, Mensa und Fristen. Weitere Einstellungen findest du in den Unterseiten.</p>
     <div class="row" style="gap:6px;flex-wrap:wrap">
       <button class="btn" data-act="pushon">Aktivieren</button>
       <button class="btn ghost" data-act="pushoff">Deaktivieren</button>
@@ -3723,7 +3781,8 @@ function notifyDetailsHTML() {
   const open = (k) => (ui.nfOpen && ui.nfOpen[k] ? " open" : "");
   const chk = (k, v) => `<input type="checkbox" data-change="notify" data-k="${k}" ${v ? "checked" : ""}>`;
   const tm = (k, v) => `<input type="time" data-change="notify" data-k="${k}" value="${v}" style="width:auto">`;
-  const sec = (key, title, body) => `<details class="card" data-nf="${key}"${open(key)}><summary style="cursor:pointer;font-weight:600">${title}</summary><div style="margin-top:10px">${body}</div></details>`;
+  // Auf einer Unterseite wird nur dieser eine Bereich gezeigt
+  const sec = (key, title, body) => (ui.nfOnly && ui.nfOnly !== key) ? "" : `<details class="card" data-nf="${key}"${ui.nfOnly ? " open" : open(key)}><summary style="cursor:pointer;font-weight:600">${title}</summary><div style="margin-top:10px">${body}</div></details>`;
 
   const names = [...new Set(state.events.map((e) => e.name))].sort((a, b) => a.localeCompare(b, "de"));
   const groups = { vl: [], ueb: [], tut: [] };
