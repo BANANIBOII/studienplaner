@@ -3703,7 +3703,12 @@ function endDrag(cancelled, x, y) {
   if (!cancelled && ui.tab === "stundenplan") {
     // Im Stundenplan: Uhrzeit aus der Höhe, auf 15 Minuten gerundet
     const under = x != null ? document.elementFromPoint(x, y) : null;
-    const grid = under && under.closest(".grid[data-date]");
+    let grid = under && under.closest(".grid[data-date]");
+    // Am linken oder rechten Rand losgelassen: auf den nächstliegenden sichtbaren Tag ablegen
+    if (!grid && x != null && (x < 40 || x > innerWidth - 40)) {
+      const grids = [...document.querySelectorAll(".week .grid[data-date]")];
+      if (grids.length) grid = x < 40 ? grids[0] : grids[grids.length - 1];
+    }
     const t = state.todos.find((q) => q.id === d.id);
     const ev = state.events.find((q) => q.id === d.id);
     if (grid && (t || ev)) {
