@@ -1899,7 +1899,7 @@ function viewSettings() {
         `<button class="btn ${(s.checkSide || "left") === v ? "" : "ghost"}" data-act="checkset" data-v="${v}">${l}</button>`).join("")}
     </div>
   </div>`;
-  h += pushCardHTML();
+  h += pushCardHTML() + notifyDetailsHTML();
   h += viewDesignCard();
   h += `<div class="card"><h3>Farben (${mode === "dark" ? "Dunkel" : "Hell"}-Modus)</h3>
     <p class="muted" style="margin-top:0">Jeder Modus hat eigene Farben.</p>
@@ -3256,6 +3256,7 @@ document.addEventListener("change", async (e) => {
     return;
   }
   const kind = t.dataset.change;
+  if (kind === "notify") { notifySet(t); return; }
   if (kind === "dark") { state.settings.dark = t.checked; commit(); }
   if (kind === "weekend") { state.settings.weekend = t.checked; commit(); }
   if (kind === "ics") {
@@ -3609,6 +3610,7 @@ window.addEventListener("popstate", (e) => {
 });
 initCloud();
 render();
+handleLaunch();
 // Systemfarbe folgen: beim Wechsel des Geräte-Designs neu zeichnen
 window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
   if (state.settings.themeMode === "system") render();
@@ -3642,11 +3644,119 @@ function pushCardHTML() {
     return `<div class="card"><h3>Benachrichtigungen</h3><p class="muted" style="margin:0">Auf dem iPhone geht das nur, wenn du die App zuerst über „Teilen → Zum Home-Bildschirm“ hinzufügst und von dort aus öffnest.</p></div>`;
   }
   return `<div class="card"><h3>Benachrichtigungen</h3>
-    <p class="muted" style="margin:0 0 10px">Morgens eine Erinnerung für Fristen von heute und morgen.</p>
+    <p class="muted" style="margin:0 0 10px">Erinnerungen für Termine, Mensa und Fristen. Die Einstellungen dazu stehen unten.</p>
     <div class="row" style="gap:6px;flex-wrap:wrap">
       <button class="btn" data-act="pushon">Aktivieren</button>
       <button class="btn ghost" data-act="pushoff">Deaktivieren</button>
     </div></div>`;
+}
+
+// ---------- Benachrichtigungs-Einstellungen (werden mit der Cloud synchronisiert) ----------
+const NOTIFY_DEFAULTS = {
+  lead: 15,
+  quiet: { on: false, from: "22:00", to: "07:00" },
+  mensa: { on: true, time: "07:30" },
+  fristen: { on: true, time: "08:00" },
+  vorschau: { on: true, time: "17:00" },
+  mods: {},
+};
+
+function notifyCfg() {
+  if (!state.settings.notify) state.settings.notify = {};
+  const n = state.settings.notify;
+  for (const [k, v] of Object.entries(NOTIFY_DEFAULTS)) {
+    if (n[k] === undefined) n[k] = JSON.parse(JSON.stringify(v));
+    else if (typeof v === "object" && !Array.isArray(v)) n[k] = { ...v, ...n[k] };
+  }
+  return n;
+}
+
+// Vorlesungen sind standardmäßig an, Übungen und Tutorien aus (sofern nicht anders eingestellt)
+function modNotifyOn(name, n) {
+  const m = n.mods[name];
+  return m && m.on !== undefined ? m.on : modKindOf(name) === "vl";
+}
+
+function notifyDetailsHTML() {
+  const n = notifyCfg();
+  const open = (k) => (ui.nfOpen && ui.nfOpen[k] ? " open" : "");
+  const chk = (k, v) => `<input type="checkbox" data-change="notify" data-k="${k}" ${v ? "checked" : ""}>`;
+  const tm = (k, v) => `<input type="time" data-change="notify" data-k="${k}" value="${v}" style="width:auto">`;
+  const sec = (key, title, body) => `<details class="card" data-nf="${key}"${open(key)}><summary style="cursor:pointer;font-weight:600">${title}</summary><div style="margin-top:10px">${body}</div></details>`;
+
+  const names = [...new Set(state.events.map((e) => e.name))].sort((a, b) => a.localeCompare(b, "de"));
+  const groups = { vl: [], ueb: [], tut: [] };
+  names.forEach((name) => { groups[modKindOf(name)] ? groups[modKindOf(name)].push(name) : groups.vl.push(name); });
+  const modRow = (name) => {
+    const m = n.mods[name] || {};
+    const on = modNotifyOn(name, n);
+    return `<div class="listrow" style="align-items:center;gap:8px">
+      <div class="grow"><b>${esc(name)}</b></div>
+      <label class="row" style="gap:4px">${chk("mod", on).replace("data-k=\"mod\"", `data-k="mod" data-m="${enc(name)}"`)} an</label>
+      <input type="number" min="0" max="180" placeholder="${n.lead}" value="${m.lead != null ? m.lead : ""}" data-change="notify" data-k="modlead" data-m="${enc(name)}" style="width:70px"> <span class="muted">min</span>
+    </div>`;
+  };
+  const modGroup = (title, arr) => arr.length ? `<h4 style="margin:12px 0 4px">${title}</h4>${arr.map(modRow).join("")}` : "";
+
+  let h = "";
+  h += sec("mod", "Modul-Erinnerungen",
+    `<p class="muted" style="margin:0 0 10px">Vor jedem Termin kommt eine Nachricht mit Name, Uhrzeit, Raum und Dozent. Der Knopf „Notiz schreiben“ öffnet direkt das Notizfenster.</p>
+     <label class="row" style="gap:8px">Vorwarnzeit für alle <input type="number" min="0" max="180" value="${n.lead}" data-change="notify" data-k="lead" style="width:80px"> min</label>
+     <p class="muted" style="margin:12px 0 0">Pro Modul: an/aus und eigene Vorwarnzeit (leer = die allgemeine Zeit).</p>
+     ${modGroup("Vorlesungen", groups.vl)}${modGroup("Übungen", groups.ueb)}${modGroup("Tutorien", groups.tut)}
+     ${names.length ? "" : `<p class="muted">Noch keine Termine geladen.</p>`}`);
+  h += sec("mensa", "Mensa",
+    `<label class="row" style="gap:8px">${chk("mensa.on", n.mensa.on)} Mensa-Nachricht an (Mo–Fr)</label>
+     <label class="row" style="gap:8px;margin-top:8px">Uhrzeit ${tm("mensa.time", n.mensa.time)}</label>`);
+  h += sec("fristen", "Fristen am Morgen",
+    `<label class="row" style="gap:8px">${chk("fristen.on", n.fristen.on)} an (jeden Tag, alle offenen Fristen der Woche)</label>
+     <label class="row" style="gap:8px;margin-top:8px">Uhrzeit ${tm("fristen.time", n.fristen.time)}</label>`);
+  h += sec("vorschau", "Vorschau nächste Woche",
+    `<label class="row" style="gap:8px">${chk("vorschau.on", n.vorschau.on)} an (Fr, Sa, So)</label>
+     <label class="row" style="gap:8px;margin-top:8px">Frühestens um ${tm("vorschau.time", n.vorschau.time)}</label>
+     <p class="muted" style="margin:8px 0 0">Endet am Freitag eine Veranstaltung nach der Uhrzeit, kommt die Nachricht 30 Minuten nach ihrem Ende.</p>`);
+  h += sec("quiet", "Ruhezeit",
+    `<label class="row" style="gap:8px">${chk("quiet.on", n.quiet.on)} Keine Nachrichten in dieser Zeit</label>
+     <label class="row" style="gap:8px;margin-top:8px">Von ${tm("quiet.from", n.quiet.from)} bis ${tm("quiet.to", n.quiet.to)}</label>`);
+  return h;
+}
+
+// Wird bei jeder Eingabe in den Benachrichtigungs-Einstellungen aufgerufen
+function notifySet(t) {
+  const n = notifyCfg();
+  const k = t.dataset.k;
+  const v = t.type === "checkbox" ? t.checked : t.value;
+  if (k === "mod" || k === "modlead") {
+    const name = dec(t.dataset.m);
+    n.mods[name] = n.mods[name] || {};
+    if (k === "mod") n.mods[name].on = v;
+    else n.mods[name].lead = t.value === "" ? null : Math.min(180, Math.max(0, Math.round(Number(t.value)) || 0));
+  } else if (k === "lead") {
+    n.lead = Math.min(180, Math.max(0, Math.round(Number(t.value)) || 0));
+  } else {
+    const [a, b] = k.split(".");
+    if (b && t.type === "time" && !t.value) return;
+    n[a][b] = v;
+  }
+  commit();
+}
+
+// Offene Abschnitte in den Einstellungen bleiben beim Neuzeichnen offen
+document.addEventListener("toggle", (e) => {
+  const key = e.target && e.target.dataset && e.target.dataset.nf;
+  if (!key) return;
+  ui.nfOpen = { ...(ui.nfOpen || {}), [key]: e.target.open };
+}, true);
+
+// Öffnet die Notiz, wenn die App über den „Notiz schreiben“-Knopf der Benachrichtigung gestartet wurde
+function handleLaunch() {
+  const p = new URLSearchParams(location.search);
+  const name = p.get("m");
+  const date = p.get("d");
+  if (p.get("note") && name && date) {
+    history.replaceState(null, "", location.pathname);
+    setTimeout(() => openNoteModal(name, date), 300);
+  }
 }
 
 async function enablePush() {

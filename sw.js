@@ -1,5 +1,5 @@
 // Offline-Unterstützung: lädt immer aus dem Netz, nutzt den Cache nur wenn offline.
-const CACHE = "studienplaner-v2";
+const CACHE = "studienplaner-v3";
 const FILES = ["./", "index.html", "styles.css", "app.js", "config.js", "manifest.json", "icon.svg"];
 
 self.addEventListener("install", (e) => {
@@ -12,23 +12,33 @@ self.addEventListener("activate", (e) => {
 
 // Push vom Server: zeigt die Erinnerung an
 self.addEventListener("push", (e) => {
-  let data = { title: "Studienplaner", body: "Du hast Fristen anstehend." };
+  let data = { title: "Studienplaner", body: "" };
   try { data = { ...data, ...e.data.json() }; } catch (_) {}
+  // „Notiz schreiben“ nur bei Modul-Erinnerungen
+  const actions = data.noteUrl ? [{ action: "note", title: "Notiz schreiben" }] : [];
   e.waitUntil(self.registration.showNotification(data.title, {
     body: data.body,
     icon: "icon.svg",
     badge: "icon.svg",
-    tag: "studienplaner-fristen",
+    tag: data.tag || "studienplaner",
+    actions,
+    data: { url: data.url || "./", noteUrl: data.noteUrl || null },
   }));
 });
 
-// Tippen auf die Erinnerung öffnet die App
+// Tippen auf die Nachricht öffnet die App, „Notiz schreiben“ öffnet das Notizfenster des Moduls
 self.addEventListener("notificationclick", (e) => {
   e.notification.close();
+  const d = e.notification.data || {};
+  const target = e.action === "note" && d.noteUrl ? d.noteUrl : (d.url || "./");
   e.waitUntil((async () => {
     const all = await clients.matchAll({ type: "window", includeUncontrolled: true });
-    if (all.length) return all[0].focus();
-    return clients.openWindow("./");
+    const win = all[0];
+    if (win) {
+      try { await win.navigate(target); } catch (_) {}
+      return win.focus();
+    }
+    return clients.openWindow(target);
   })());
 });
 
