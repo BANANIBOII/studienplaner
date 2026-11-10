@@ -1899,6 +1899,7 @@ function viewSettings() {
         `<button class="btn ${(s.checkSide || "left") === v ? "" : "ghost"}" data-act="checkset" data-v="${v}">${l}</button>`).join("")}
     </div>
   </div>`;
+  h += pushCardHTML();
   h += viewDesignCard();
   h += `<div class="card"><h3>Farben (${mode === "dark" ? "Dunkel" : "Hell"}-Modus)</h3>
     <p class="muted" style="margin-top:0">Jeder Modus hat eigene Farben.</p>
@@ -2979,6 +2980,8 @@ document.addEventListener("click", async (e) => {
     case "tnew": openTodoModal(null, ui.selDate); break;
     case "tnewday": openTodoModal(null, el.dataset.d); break;
     case "exportdata": exportData(); break;
+    case "pushon": enablePush(); break;
+    case "pushoff": disablePush(); break;
     case "tedit": openTodoModal(id); break;
     case "todoedit": openTodoModal(id); break;
     case "todoopen": openTodoActions(id); break;
@@ -3611,6 +3614,73 @@ window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () 
   if (state.settings.themeMode === "system") render();
 });
 setInterval(() => { if (ui.tab === "stundenplan" && !document.querySelector(".modal")) render(); }, 60000);
+
+// ---------- Push-Benachrichtigungen ----------
+const VAPID_PUBLIC_KEY = "BET0TZ9SGPPKXHs2r3t3WPyzHyE7QNsyOGEk4uipfwjV6-HbB1G5nrNjYZjtLkhTL6X_-iBxAFMI9uvTfE_kbjA";
+
+function pushSupported() {
+  return "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+}
+
+function b64ToBytes(b64) {
+  const pad = "=".repeat((4 - (b64.length % 4)) % 4);
+  const raw = atob((b64 + pad).replace(/-/g, "+").replace(/_/g, "/"));
+  return Uint8Array.from(raw, (c) => c.charCodeAt(0));
+}
+
+function pushNeedsHomeScreen() {
+  const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
+  const standalone = window.navigator.standalone === true || matchMedia("(display-mode: standalone)").matches;
+  return isIOS && !standalone;
+}
+
+function pushCardHTML() {
+  if (!pushSupported()) {
+    return `<div class="card"><h3>Benachrichtigungen</h3><p class="muted" style="margin:0">Dieser Browser unterstützt keine Benachrichtigungen.</p></div>`;
+  }
+  if (pushNeedsHomeScreen()) {
+    return `<div class="card"><h3>Benachrichtigungen</h3><p class="muted" style="margin:0">Auf dem iPhone geht das nur, wenn du die App zuerst über „Teilen → Zum Home-Bildschirm“ hinzufügst und von dort aus öffnest.</p></div>`;
+  }
+  return `<div class="card"><h3>Benachrichtigungen</h3>
+    <p class="muted" style="margin:0 0 10px">Morgens eine Erinnerung für Fristen von heute und morgen.</p>
+    <div class="row" style="gap:6px;flex-wrap:wrap">
+      <button class="btn" data-act="pushon">Aktivieren</button>
+      <button class="btn ghost" data-act="pushoff">Deaktivieren</button>
+    </div></div>`;
+}
+
+async function enablePush() {
+  if (!pushSupported()) return appAlert("Benachrichtigungen werden auf diesem Gerät nicht unterstützt.");
+  if (!sb || !session) return appAlert("Bitte zuerst anmelden.");
+  try {
+    const perm = await Notification.requestPermission();
+    if (perm !== "granted") return appAlert("Ohne Erlaubnis kann ich keine Benachrichtigungen schicken. Du kannst sie in den Geräteeinstellungen erlauben.");
+    const reg = await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(VAPID_PUBLIC_KEY) });
+    const { error } = await sb.from("push_subscriptions").upsert(
+      { user_id: session.user.id, endpoint: sub.endpoint, subscription: sub.toJSON() },
+      { onConflict: "endpoint" });
+    if (error) throw error;
+    appAlert("Benachrichtigungen sind aktiv. Du bekommst morgens eine Erinnerung für Fristen von heute und morgen.");
+  } catch (err) {
+    appAlert("Das hat nicht geklappt: " + (err.message || err));
+  }
+}
+
+async function disablePush() {
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    if (sub) {
+      if (sb && session) await sb.from("push_subscriptions").delete().eq("endpoint", sub.endpoint);
+      await sub.unsubscribe();
+    }
+    appAlert("Benachrichtigungen sind auf diesem Gerät aus.");
+  } catch (err) {
+    appAlert("Das hat nicht geklappt: " + (err.message || err));
+  }
+}
 
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("sw.js").catch(() => {});
