@@ -1,5 +1,5 @@
 // Offline-Unterstützung: lädt immer aus dem Netz, nutzt den Cache nur wenn offline.
-const CACHE = "studienplaner-v3";
+const CACHE = "studienplaner-v4";
 const FILES = ["./", "index.html", "styles.css", "app.js", "config.js", "manifest.json", "icon.svg"];
 
 self.addEventListener("install", (e) => {
@@ -31,15 +31,8 @@ self.addEventListener("notificationclick", (e) => {
   e.notification.close();
   const d = e.notification.data || {};
   const target = e.action === "note" && d.noteUrl ? d.noteUrl : (d.url || "./");
-  e.waitUntil((async () => {
-    const all = await clients.matchAll({ type: "window", includeUncontrolled: true });
-    const win = all[0];
-    if (win) {
-      try { await win.navigate(target); } catch (_) {}
-      return win.focus();
-    }
-    return clients.openWindow(target);
-  })());
+  // Immer ein Fenster mit dem Ziel öffnen (Android holt es so zuverlässig in den Vordergrund)
+  e.waitUntil(clients.openWindow(target));
 });
 
 self.addEventListener("fetch", (e) => {
