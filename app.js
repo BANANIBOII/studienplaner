@@ -760,6 +760,90 @@ function dashDayButton(now) {
   return `<div class="row" style="margin-top:10px"><button class="btn ghost" data-act="dashnext">Nächster Tag: ${WEEKDAYS_LONG[(nextWorkday(now).getDay() + 6) % 7]} ▸</button></div>`;
 }
 
+// ---------- Suche ----------
+function searchBtnHTML() {
+  return `<button class="btn ghost search-btn" data-act="search">🔍 Suchen in To-Dos, Terminen und Protokollen</button>`;
+}
+function openSearch() {
+  openModal(`
+    <h3>Suche</h3>
+    <input id="searchQ" type="search" placeholder="Suchen …" autocomplete="off" style="width:100%">
+    <div id="searchRes" style="margin-top:10px;max-height:55vh;overflow:auto">${searchResultsHTML("")}</div>
+    <div class="row"><button class="btn ghost" data-act="mclose">Schließen</button></div>`);
+}
+function searchResultsHTML(raw) {
+  const q = raw.trim().toLowerCase();
+  if (q.length < 2) return `<div class="muted">Mindestens zwei Buchstaben eingeben.</div>`;
+  const hit = (s) => String(s || "").toLowerCase().includes(q);
+  const todos = state.todos.filter((t) => hit(t.title)).slice(0, 15).map((t) =>
+    `<button class="listrow-btn" data-act="todoopen" data-id="${t.id}">${esc(t.title)} <span class="muted">· ${CAT_LABEL[t.type] || "To-Do"}${t.date ? " · " + dateText(t) : ""}</span></button>`);
+  const evs = state.events.filter((e) => hit(e.name) || hit(dozentOf(e)) || hit(e.room)).slice(0, 15).map((e) =>
+    `<button class="listrow-btn" data-act="evinfo" data-id="${e.id}">${esc(e.name)} <span class="muted">· ${esc(e.date)} · ${esc(dozentOf(e) || e.room || "")}</span></button>`);
+  const prot = [];
+  for (const [name, m] of Object.entries(state.modules)) {
+    for (const n of m.notes || []) {
+      if (hit(n.done) || hit(n.todo)) prot.push(`<button class="listrow-btn" data-act="gotoprot" data-m="${enc(name)}">${esc(name)} <span class="muted">· ${esc(n.date)} · ${esc((n.done || n.todo || "").slice(0, 60))}</span></button>`);
+    }
+    for (const tp of m.topics || []) {
+      if (hit(tp.title)) prot.push(`<button class="listrow-btn" data-act="gotoprot" data-m="${enc(name)}">${esc(name)} · Thema <span class="muted">${esc(tp.title)}</span></button>`);
+    }
+  }
+  const all = [...todos, ...evs, ...prot.slice(0, 15)];
+  return all.length ? all.join("") : `<div class="muted">Nichts gefunden.</div>`;
+}
+
+// Suche: Ergebnisse direkt beim Tippen aktualisieren
+document.addEventListener("input", (e) => {
+  if (e.target.id === "searchQ") document.getElementById("searchRes").innerHTML = searchResultsHTML(e.target.value);
+});
+
+// ---------- Rückgängig nach dem Löschen ----------
+function showUndo(text) {
+  document.getElementById("undoBar")?.remove();
+  const bar = document.createElement("div");
+  bar.id = "undoBar";
+  bar.className = "undo-bar";
+  bar.innerHTML = `<span>${esc(text)}</span><button type="button" id="undoBtn">Rückgängig</button>`;
+  document.body.appendChild(bar);
+  bar.querySelector("#undoBtn").onclick = () => { bar.remove(); undo(); };
+  setTimeout(() => bar.remove(), 6000);
+}
+
+// ---------- Protokoll als Textdatei ----------
+function exportModuleText(name) {
+  const m = state.modules[name];
+  if (!m) return;
+  const byDate = (a, b) => (a.date || "").localeCompare(b.date || "");
+  const noteLine = (n) => `- ${n.date || ""}: ${(n.done || "").trim()}${n.todo ? `\n  To-Do: ${n.todo}` : ""}`;
+  const lines = [name, `Kategorie: ${KIND_LABEL[modKindOf(name)]}`, ""];
+  for (const tp of m.topics || []) {
+    lines.push(`## ${tp.title}`);
+    (m.notes || []).filter((n) => n.topicId === tp.id).sort(byDate).forEach((n) => lines.push(noteLine(n)));
+    lines.push("");
+  }
+  const loose = (m.notes || []).filter((n) => !n.topicId).sort(byDate);
+  if (loose.length) { lines.push("## Ohne Thema"); loose.forEach((n) => lines.push(noteLine(n))); }
+  const blob = new Blob([lines.join("\n")], { type: "text/plain;charset=utf-8" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `${name.replace(/[^\w.-]+/g, "_")}.txt`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+
+// Beim Ziehen eines Termins an den linken oder rechten Rand: nach kurzem Halten Woche bzw. Tag weiterschalten
+function shiftForDrag(dir) {
+  if (!drag || !drag.active || ui.tab !== "stundenplan") return;
+  if (ui.view === "day") ui.dayDate = iso(addDays(parseIso(ui.dayDate), dir));
+  else ui.weekOffset += dir;
+  ui.anim = null;
+  drag.edge = 0;
+  render();
+  moveDrag(drag.x, drag.y);
+}
+
 function viewDashboard() {
   const now = new Date();
   const today = iso(now);
@@ -800,7 +884,7 @@ function viewDashboard() {
   const nextCard = nextDeadlineCard();
   const rueckCard = rueckblickCard();
   const flow = `<div style="margin-bottom:18px">${nextCard}</div><div class="dash-main">${planCard}<div class="dash-side">${todoCard}${countCard}</div></div><div style="margin-top:18px">${mensaCard}</div><div style="margin-top:18px">${rueckCard}</div><div style="margin-top:18px">${linksCard}</div>`;
-  h += laid("dash", [
+  h += searchBtnHTML() + laid("dash", [
     { id: "plan", w: 7, h: 20, html: planCard },
     { id: "todo", w: 5, h: 12, html: todoCard },
     { id: "count", w: 5, h: 8, html: countCard },
@@ -941,7 +1025,7 @@ function countdownBlock() {
       .filter((t) => t.type === type && !t.done && (!t.date || t.date >= today))
       .sort(sortFn).slice(0, 3);
     return `<h4 style="color:${catColor(type)}">${label}</h4>` + (items.length
-      ? items.map((t) => `<div class="listrow" data-lp="${t.id}">
+      ? items.map((t) => `<div class="listrow" data-lp="${t.id}" data-act="todoopen" data-id="${t.id}">
           <span class="pdot" style="background:${catColor(type)}"></span>
           <div class="grow"><b>${esc(t.title)}</b><div class="muted">${t.date ? dateText(t) + (t.time ? " · " + esc(t.time) : "") : "Termin folgt"}</div></div>
           <div style="font-weight:700;white-space:nowrap;color:${dueColor(t.date, type)}">${t.date ? countdownText(t.date) : "–"}</div>
@@ -955,7 +1039,7 @@ function todoItem(t) {
   const sub = CAT_LABEL[t.type] || "To-Do";
   const due = t.date ? ` · fällig ${dateText(t)}` : " · Termin folgt";
   const prio = t.priority || "mittel";
-  return `<div class="item" data-lp="${t.id}">
+  return `<div class="item" data-lp="${t.id}" data-act="todoopen" data-id="${t.id}">
     <input type="checkbox" data-act="tdone" data-id="${t.id}" ${canCheck(t) ? "" : "disabled"}>
     <div class="grow"><b>${esc(t.title)}</b><div class="muted">${sub}${due}${t.time ? " · " + esc(t.time) : ""}</div></div>
     <span class="prio ${prio}">${prio}</span>
@@ -1232,6 +1316,7 @@ function openTodoActions(id) {
   openModal(`
     <h3>${esc(t.title)}</h3>
     <p class="muted">${sub}</p>
+    ${t.date ? `<button type="button" class="btn ghost" data-act="todocal" data-d="${t.date}" style="margin-bottom:10px">Im Kalender zeigen</button>` : ""}
     <div class="sheet-actions">
       <button type="button" class="btn ghost danger-text" data-act="tdelm" data-id="${t.id}">Löschen</button>
       <div class="right">
@@ -1646,6 +1731,7 @@ function openModuleMenu(name) {
     <h3>${esc(name)}</h3>
     <div class="menu-list">
       <button class="btn" data-act="mkind" data-m="${n}">Kategorie: ${KIND_LABEL[modKindOf(name)]} ändern</button>
+      <button class="btn" data-act="mexport" data-m="${n}">Als Textdatei speichern</button>
       <button class="btn" data-act="medit" data-m="${n}">Bearbeiten (Farbe)</button>
       <button class="btn danger" data-act="mtrash" data-m="${n}">In den Papierkorb</button>
     </div>
@@ -1900,7 +1986,7 @@ function nextDeadlineCard() {
   const big = days === 0 ? "Heute" : days === 1 ? "Morgen" : String(days);
   const unit = days > 1 ? "Tage" : "";
   const col = catColor(next.type);
-  return `<div class="card deadline" style="border-left:6px solid ${col}">
+  return `<div class="card deadline" data-act="todoopen" data-id="${next.id}" style="border-left:6px solid ${col};cursor:pointer">
     <div class="dl-num" style="color:${col}">${big}</div>
     <div class="dl-unit muted">${unit}</div>
     <div class="dl-info"><span class="muted">${CAT_LABEL[next.type] || "Frist"}</span><b>${esc(next.title)}</b><span class="muted">${fmtD(parseIso(next.date))}${next.time ? " · " + esc(next.time) : ""}</span></div>
@@ -2402,16 +2488,22 @@ document.addEventListener("pointerdown", (e) => {
 
   // Dashboard: langes Drücken auf To-Do oder Countdown-Eintrag öffnet die Bearbeitung
   if (ui.tab === "dashboard") {
-    const item = e.target.closest("[data-lp]");
+    const item = e.target.closest("[data-lp], .ev[data-kind='event']");
     if (!item || e.target.closest("button, input")) return;
     pressStart = { x: e.clientX, y: e.clientY, el: item };
     clearTimeout(pressTimer);
     pressTimer = setTimeout(() => {
       longFired = true;
-      const id = pressStart.el.dataset.lp;
+      const el0 = pressStart.el;
       pressStart = null;
       if (navigator.vibrate) navigator.vibrate(15);
-      openTodoModal(id);
+      // Langes Drücken: Termin = Notiz-Popup, To-Do/Countdown = Bearbeiten (wie im Stundenplan)
+      if (el0.classList.contains("ev")) {
+        const ev = state.events.find((x) => x.id === el0.dataset.id);
+        if (ev) openNoteModal(ev.name, ev.date);
+        return;
+      }
+      openTodoModal(el0.dataset.lp);
     }, 500);
     return;
   }
@@ -2690,7 +2782,7 @@ document.addEventListener("click", async (e) => {
     : (editRow && !e.target.closest("button, input, select, textarea, label") ? editRow.dataset.drag : null);
   if (editId && e.target.closest("#modalRoot")) { hapt(8); openTodoModal(editId); return; }  // im Tagesfenster: ein Tipp
   // Stundenplan: ein kurzer Tipp öffnet die Aktionen (bearbeiten, abhaken, löschen)
-  if (editId && ui.tab === "stundenplan") { hapt(8); openTodoActions(editId); return; }
+  if (editId && (ui.tab === "stundenplan" || ui.tab === "dashboard")) { hapt(8); openTodoActions(editId); return; }
   if (editId) {
     const now = Date.now();
     const dbl = lastEditTap.id === editId && now - lastEditTap.t < 450;
@@ -2759,7 +2851,7 @@ document.addEventListener("click", async (e) => {
       if (!ev) break;
       hapt(8);
       // Stundenplan: kurz tippen = Infos. Dashboard: Notiz-Popup.
-      if (ui.tab === "stundenplan") { openEventInfo(ev.id); break; }
+      if (ui.tab === "stundenplan" || ui.tab === "dashboard") { openEventInfo(ev.id); break; }
       openNoteModal(ev.name, ev.date);
       break;
     }
@@ -2817,6 +2909,7 @@ document.addEventListener("click", async (e) => {
       const ev = state.events.find((x) => x.id === id);
       if (ev) trashAdd("event", ev);
       state.events = state.events.filter((x) => x.id !== id);
+      showUndo("Termin gelöscht");
       closeModal(); commit(); break;
     }
 
@@ -2888,11 +2981,23 @@ document.addEventListener("click", async (e) => {
     case "exportdata": exportData(); break;
     case "tedit": openTodoModal(id); break;
     case "todoedit": openTodoModal(id); break;
+    case "todoopen": openTodoActions(id); break;
+    case "evinfo": openEventInfo(id); break;
+    case "todocal": {
+      clearModalQuiet();
+      ui.tab = "kalender";
+      ui.selDate = el.dataset.d;
+      ui.dayPop = el.dataset.d;
+      render();
+      break;
+    }
+    case "search": openSearch(); break;
     case "tdelm": {
       if (!(await appConfirm("Eintrag in den Papierkorb verschieben?"))) break;
       const t = state.todos.find((x) => x.id === id);
       if (t) trashAdd("todo", t);
       state.todos = state.todos.filter((x) => x.id !== id);
+      showUndo("Aufgabe gelöscht");
       closeModal(); commit(); break;
     }
     case "tdone": {
@@ -2923,6 +3028,7 @@ document.addEventListener("click", async (e) => {
     case "mback": ui.modOpen = null; ui.topicOpen = null; render(); break;
     case "mmenu": openModuleMenu(m); break;
     case "mkind": openKindPicker(m); break;
+    case "mexport": exportModuleText(m); break;
     case "mkindset": {
       const mod = state.modules[m];
       if (mod) mod.kind = el.dataset.v;
@@ -2938,6 +3044,7 @@ document.addEventListener("click", async (e) => {
       if (mod) trashAdd("module", { color: mod.color, topics: mod.topics, notes: mod.notes }, { name: m });
       delete state.modules[m];
       ui.modOpen = null;
+      showUndo("Protokoll gelöscht");
       closeModal(); commit(); break;
     }
     case "topen": ui.topicOpen = id; render(); break;
@@ -2967,6 +3074,7 @@ document.addEventListener("click", async (e) => {
       const n = state.modules[m].notes.find((x) => x.id === id);
       if (n) trashAdd("note", n, { module: m });
       state.modules[m].notes = state.modules[m].notes.filter((x) => x.id !== id);
+      showUndo("Eintrag gelöscht");
       commit(); break;
     }
 
@@ -3551,6 +3659,13 @@ function moveDrag(x, y) {
   else if (cell) { cell.classList.add("drop"); drag.target = cell.dataset.d; }
   else if (zone) { zone.classList.add("drop"); drag.target = ""; }
   else drag.target = null;
+  // Am linken oder rechten Rand: nach kurzem Halten weiterschalten
+  const edge = ui.tab === "stundenplan" && x != null ? (x < 40 ? -1 : x > innerWidth - 40 ? 1 : 0) : 0;
+  if (edge !== drag.edge) {
+    clearTimeout(drag.edgeT);
+    drag.edge = edge;
+    if (edge) drag.edgeT = setTimeout(() => shiftForDrag(edge), 600);
+  }
 }
 
 document.addEventListener("pointermove", (e) => {
