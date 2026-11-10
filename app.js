@@ -1863,16 +1863,20 @@ function phoneToolsHTML() {
     <p class="muted" style="margin:10px 0 0">Sync: <span class="syncStatus sync">lokal</span></p>
   </div>`;
 }
-function viewSettings() {
+// Liefert alle Unterseiten der Einstellungen als Abschnitte (Schlüssel = Seitenname)
+function settingsPages() {
   const s = state.settings;
   const mode = currentMode();
   const c = themeColors();
+  const pages = {};
+  let h = "";
+  const take = (k) => { pages[k] = h; h = ""; };
 
-  let h = `<h2 style="margin-bottom:14px">Einstellungen</h2>`;
   h += phoneToolsHTML();
   h += `<div class="card"><h3 style="margin-top:0">Sicherung</h3>
     <p class="muted" style="margin:0 0 10px">Speichert alle deine Daten als Datei auf dem Gerät.</p>
     <button class="btn ghost" data-act="exportdata">Daten exportieren</button></div>`;
+  take("allg");
   h += `<div class="card"><h3>Darstellung</h3>
     <label class="muted" style="display:block;margin-bottom:6px">Design (nur auf diesem Gerät)</label>
     <div class="row" style="gap:6px;flex-wrap:wrap;margin-bottom:14px">
@@ -1899,8 +1903,11 @@ function viewSettings() {
         `<button class="btn ${(s.checkSide || "left") === v ? "" : "ghost"}" data-act="checkset" data-v="${v}">${l}</button>`).join("")}
     </div>
   </div>`;
+  take("darst");
   h += pushCardHTML() + notifyDetailsHTML();
+  take("benach");
   h += viewDesignCard();
+  take("design");
   h += `<div class="card"><h3>Farben (${mode === "dark" ? "Dunkel" : "Hell"}-Modus)</h3>
     <p class="muted" style="margin-top:0">Jeder Modus hat eigene Farben.</p>
     ${Object.keys(THEME_LABELS).map((key) => `<label class="muted" style="display:block;margin-top:10px">${THEME_LABELS[key]}</label>
@@ -1913,6 +1920,7 @@ function viewSettings() {
       `<label class="muted" style="display:block;margin-top:10px">${label}</label>
       <input type="color" value="${s.plan[key] || PLAN_DEFAULTS[key]}" data-change="catcolor" data-key="${key}">`).join("")}
   </div>`;
+  take("farben");
   h += `<div class="card"><h3>Semester & Stundenplan</h3>
     <form data-form="semester"><label class="muted">Semester-Bezeichnung</label>
       <input name="semester" value="${esc(s.semester)}"><button class="btn">Speichern</button></form>
@@ -1920,6 +1928,7 @@ function viewSettings() {
     <input type="file" accept=".ics,text/calendar" data-change="ics">
     <p class="muted">Ersetzt den bisherigen Stundenplan. Module werden automatisch angelegt, vorhandene Einträge bleiben erhalten. Aktuell: ${state.events.length} Termine.</p>
   </div>`;
+  take("stunden");
   h += trashSection();
   h += `<div class="card"><h3>Alles zurücksetzen</h3>
     <p class="muted">Löscht Stundenplan, Protokolle, To-Dos, Karten und den Papierkorb. Mit „Rückgängig“ lässt sich das wieder zurücknehmen. Die Änderung wird auch in der Cloud gespeichert.</p>
@@ -1932,7 +1941,35 @@ function viewSettings() {
     <p class="muted">Achtung: Das Wiederherstellen ersetzt alle aktuellen Daten.</p>
   </div>`;
   h += `<div class="card"><h3>Cloud-Sync (Supabase)</h3>${cloudSection()}</div>`;
-  return h;
+  take("daten");
+  return pages;
+}
+
+// Einstellungen: Hauptliste mit Suche, jeder Punkt öffnet eine Unterseite
+const SETTINGS_LIST = [
+  { k: "allg", t: "Allgemein", d: "Werkzeuge, Sicherung", w: "sicherung export werkzeuge" },
+  { k: "darst", t: "Darstellung", d: "Hell/Dunkel, Schrift, Startseite, Reiterleiste", w: "hell dunkel schrift startseite reiterleiste scrollbalken haken" },
+  { k: "benach", t: "Benachrichtigungen", d: "Module, Mensa, Fristen, Ruhezeit, Tests", w: "benachrichtigung mensa fristen modul ruhezeit test vorwarnzeit push" },
+  { k: "design", t: "Designs", d: "Fertige Farbschemas", w: "design vorlage preset" },
+  { k: "farben", t: "Farben", d: "Hintergrund, Akzent, Kategorien", w: "farben kategorie akzent" },
+  { k: "stunden", t: "Semester & Stundenplan", d: "Semester, Stundenplan importieren", w: "semester stundenplan ics termine" },
+  { k: "daten", t: "Daten & Cloud", d: "Papierkorb, Backup, Zurücksetzen, Sync", w: "papierkorb backup zurücksetzen cloud sync anmelden" },
+];
+
+function viewSettings() {
+  const pages = settingsPages();
+  if (ui.setPage && pages[ui.setPage] !== undefined) {
+    const info = SETTINGS_LIST.find((x) => x.k === ui.setPage);
+    return `<div class="row" style="gap:10px;margin-bottom:12px"><button class="btn ghost" data-act="setback">‹ Zurück</button><h2 style="margin:0">${info ? info.t : ""}</h2></div>${pages[ui.setPage]}`;
+  }
+  const q = (ui.setQuery || "").trim().toLowerCase();
+  const rows = SETTINGS_LIST.filter((x) => !q || `${x.t} ${x.d} ${x.w}`.toLowerCase().includes(q));
+  const rowStyle = "display:flex;align-items:center;gap:10px;width:100%;padding:14px;border:0;border-bottom:1px solid var(--line);background:none;text-align:left;color:inherit;min-height:56px;font:inherit";
+  return `<h2 style="margin-bottom:10px">Einstellungen</h2>
+    <input type="search" data-setq="1" placeholder="Einstellungen suchen" value="${esc(ui.setQuery || "")}" style="width:100%;margin-bottom:12px">
+    <div class="card" style="padding:0;overflow:hidden">
+      ${rows.map((x) => `<button data-act="setopen" data-k="${x.k}" style="${rowStyle}"><div class="grow"><b>${x.t}</b><div class="muted" style="font-size:13px">${x.d}</div></div><span class="muted">›</span></button>`).join("") || `<div class="muted" style="padding:14px">Nichts gefunden.</div>`}
+    </div>`;
 }
 
 function trashSection() {
@@ -2982,7 +3019,9 @@ document.addEventListener("click", async (e) => {
     case "exportdata": exportData(); break;
     case "pushon": enablePush(); break;
     case "pushoff": disablePush(); break;
-    case "pushtest": pushTest(); break;
+    case "pushtest": pushTest(el.dataset.kind); break;
+    case "setopen": ui.setPage = el.dataset.k; render(); break;
+    case "setback": ui.setPage = null; render(); break;
     case "tedit": openTodoModal(id); break;
     case "todoedit": openTodoModal(id); break;
     case "todoopen": openTodoActions(id); break;
@@ -3701,6 +3740,14 @@ function notifyDetailsHTML() {
   const modGroup = (title, arr) => arr.length ? `<h4 style="margin:12px 0 4px">${title}</h4>${arr.map(modRow).join("")}` : "";
 
   let h = "";
+  h += sec("test", "Testnachrichten",
+    `<p class="muted" style="margin:0 0 10px">Schickt sofort eine Beispielnachricht an dieses Gerät, damit du Knöpfe und Aktionen prüfen kannst.</p>
+     <div class="row" style="gap:6px;flex-wrap:wrap">
+       <button class="btn" data-act="pushtest" data-kind="mod">Modul</button>
+       <button class="btn ghost" data-act="pushtest" data-kind="mensa">Mensa</button>
+       <button class="btn ghost" data-act="pushtest" data-kind="fristen">Fristen morgens</button>
+       <button class="btn ghost" data-act="pushtest" data-kind="vorschau">Vorschau</button>
+     </div>`);
   h += sec("mod", "Modul-Erinnerungen",
     `<p class="muted" style="margin:0 0 10px">Vor jedem Termin kommt eine Nachricht mit Name, Uhrzeit, Raum und Dozent. Der Knopf „Notiz schreiben“ öffnet direkt das Notizfenster.</p>
      <label class="row" style="gap:8px">Vorwarnzeit für alle <input type="number" min="0" max="180" value="${n.lead}" data-change="notify" data-k="lead" style="width:80px"> min</label>
@@ -3750,6 +3797,17 @@ document.addEventListener("toggle", (e) => {
   ui.nfOpen = { ...(ui.nfOpen || {}), [key]: e.target.open };
 }, true);
 
+// Suchfeld in den Einstellungen: Liste sofort filtern, Cursor bleibt im Feld
+document.addEventListener("input", (e) => {
+  if (!e.target.dataset || e.target.dataset.setq === undefined) return;
+  ui.setQuery = e.target.value;
+  render();
+  requestAnimationFrame(() => {
+    const el = document.querySelector("[data-setq]");
+    if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); }
+  });
+});
+
 // Öffnet die Notiz, wenn die App über den „Notiz schreiben“-Knopf der Benachrichtigung gestartet wurde
 function handleLaunch() {
   const p = new URLSearchParams(location.search);
@@ -3781,13 +3839,13 @@ async function enablePush() {
 }
 
 // Sofortige Testnachricht an dieses Gerät (kommt in wenigen Sekunden)
-async function pushTest() {
+async function pushTest(kind) {
   if (!sb || !session) return appAlert("Bitte zuerst anmelden.");
   try {
     const r = await fetch(SUPABASE_URL + "/functions/v1/notify", {
       method: "POST",
       headers: { "content-type": "application/json", Authorization: "Bearer " + session.access_token, apikey: SUPABASE_ANON_KEY },
-      body: JSON.stringify({ test: true }),
+      body: JSON.stringify({ test: true, kind: kind || "mod" }),
     });
     if (!r.ok) throw new Error("HTTP " + r.status);
     const j = await r.json();
