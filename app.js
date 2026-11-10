@@ -2151,7 +2151,7 @@ function mensaCardHTML() {
   const wochentag = parseIso(target).toLocaleDateString("de-DE", { weekday: "long" });
   const title = target === today ? "Mensa heute" : `Mensa · ${wochentag}`;
   const datumKlein = `<div class="muted" style="font-size:12px;margin-top:2px">${fmtD(parseIso(target))}</div>`;
-  return `<div class="card mensa-card">
+  return `<div class="card mensa-card" id="focus-mensa">
     <div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:6px">
       <div><h3 style="margin:0">${title}</h3>${datumKlein}</div>
       <span class="row" style="gap:6px">
@@ -3814,12 +3814,20 @@ function handleLaunch() {
   const name = p.get("m");
   const date = p.get("d");
   const tab = p.get("tab");
+  const focus = p.get("focus");
   const tabs = ["dashboard", "stundenplan", "kalender", "protokolle", "einstellungen"];
   if (tab && tabs.includes(tab)) {
     ui.tab = tab;
     ui.modOpen = null;
     history.replaceState(null, "", location.pathname);
     render();
+  }
+  // Zu einem bestimmten Bereich scrollen (z. B. die Mensa-Karte)
+  if (focus) {
+    setTimeout(() => {
+      const el = document.getElementById("focus-" + focus);
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 400);
   }
   if (p.get("note") && name && date) {
     history.replaceState(null, "", location.pathname);
