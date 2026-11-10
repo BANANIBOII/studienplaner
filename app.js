@@ -1094,16 +1094,42 @@ function dayTodoChips(k) {
 }
 // Hintergrund des Wochentag-Kopfes in der Farbe der offenen Aufgaben des Tages
 function dayTintStyle(k) {
-  const all = todosOn(k);
+  // Mehrtägige Zeiträume stehen in der Leiste oben, hier nur einzelne Tage
+  const all = todosOn(k).filter((t) => !(t.endDate && t.endDate > t.date));
   if (!all.length) return "";
   const open = all.filter((t) => !t.done);
   // Offene Aufgaben: ihre Farben; sind alle fertig, zeigt der Kopf die Farbe "erledigt" (grün)
   const src = open.length ? open : all;
   const colorFor = (t) => (open.length ? catColor(t.type) : catColor("done"));
-  const bg = src.reduce((acc, t) => `color-mix(in srgb, ${colorFor(t)} 24%, ${acc})`, "var(--card, #142025)");
-  // Gestrichelte Umrandung in der Farbe; erledigte nur ganz leicht (transparent)
-  const ring = open.length ? `2px dashed ${catColor(open[0].type)}` : `1px dashed color-mix(in srgb, ${catColor("done")} 50%, transparent)`;
-  return `background:${bg};outline:${ring};outline-offset:-3px;`;
+  const bg = src.reduce((acc, t) => `color-mix(in srgb, ${colorFor(t)} 12%, ${acc})`, "var(--card, #142025)");
+  // Nur ein farbiger Strich am unteren Rand, kein Rahmen mehr
+  const bar = open.length ? catColor(open[0].type) : `color-mix(in srgb, ${catColor("done")} 50%, transparent)`;
+  return `background:${bg};box-shadow:inset 0 -4px 0 ${bar};`;
+}
+
+// Mehrtägige To-Dos (Zeiträume) als Balken über den Tagen, statt im Tageskopf
+function alldayStripHTML(mon, dayCount) {
+  const monK = iso(mon);
+  const sunK = iso(addDays(mon, 6));
+  const idx = (k) => Math.round((parseIso(k) - mon) / 86400000);
+  const items = state.todos
+    .filter((t) => t.date && t.endDate && t.endDate > t.date && t.date <= sunK && t.endDate >= monK)
+    .map((t) => ({ t, s: Math.max(0, idx(t.date)), e: Math.min(dayCount - 1, idx(t.endDate)) }))
+    .filter((x) => x.s <= x.e)
+    .sort((a, b) => a.s - b.s || b.e - a.e);
+  if (!items.length) return "";
+  // Überlappende Balken untereinander in eigene Zeilen legen
+  const rowEnds = [];
+  items.forEach((x) => {
+    let r = rowEnds.findIndex((end) => end < x.s);
+    if (r < 0) { r = rowEnds.length; rowEnds.push(x.e); } else rowEnds[r] = x.e;
+    x.row = r;
+  });
+  const bars = items.map((x) => {
+    const c = catColor(x.t.done ? "done" : x.t.type);
+    return `<div class="allday-bar${x.t.done ? " is-done" : ""}" data-act="tedit" data-id="${x.t.id}" style="grid-column:${x.s + 2} / ${x.e + 3};grid-row:${x.row + 1};--c:${c}"><span>${esc(x.t.title)}</span><small>${esc(dateText(x.t))}</small></div>`;
+  }).join("");
+  return `<div class="allday-strip" style="grid-template-columns:var(--axis-w, 28px) repeat(${dayCount}, minmax(0, 1fr));"><div></div>${bars}</div>`;
 }
 // Einträge, die an einem Tag liegen (auch Zeiträume über mehrere Tage)
 function todosOn(k) {
@@ -1201,9 +1227,13 @@ function viewPlan() {
   let cols = "";
   for (let i = 0; i < dayCount; i++) {
     const d = addDays(mon, i);
-    cols += dayColumn(iso(d), `${WEEKDAYS[i]}<br>${pad(d.getDate())}.${pad(d.getMonth() + 1)}.`, false, today);
+    // Wochentag ausgeschrieben, wenn die Spalte breit genug ist (sonst Kürzel), darunter das Datum
+    cols += dayColumn(iso(d), `<span class="wd"><span class="wd-l">${WEEKDAYS_LONG[i]}</span><span class="wd-s">${WEEKDAYS[i]}</span></span><span class="dd">${pad(d.getDate())}.${pad(d.getMonth() + 1)}.</span>`, false, today);
   }
-  h += `<div class="${animCls}">${planLaid(`<div class="week"><div class="axis" style="height:${50 + gridHeight()}px">${axisHTML()}</div>${cols}</div>`)}</div>${emptyPlanHint()}${planFabHTML()}`;
+  // Mehrtägige Zeiträume oben als Balken, die Tagesspalten bleiben frei
+  const strip = alldayStripHTML(mon, dayCount);
+  const compact = state.settings.planHead === "kompakt" ? " compact" : "";
+  h += `<div class="${animCls}">${planLaid(`${strip}<div class="week${compact}"><div class="axis" style="height:${50 + gridHeight()}px">${axisHTML()}</div>${cols}</div>`)}</div>${emptyPlanHint()}${planFabHTML()}`;
   return h;
 }
 
@@ -1865,6 +1895,17 @@ function phoneToolsHTML() {
     <p class="muted" style="margin:10px 0 0">Sync: <span class="syncStatus sync">lokal</span></p>
   </div>`;
 }
+// Kopfzeile im Stundenplan: normal (ausgeschriebener Tag + Datum) oder kompakt (nur Tag)
+function headCardHTML() {
+  const v = state.settings.planHead === "kompakt" ? "kompakt" : "normal";
+  return `<div class="card"><h3>Kopfzeile im Stundenplan</h3>
+    <p class="muted" style="margin:0 0 10px">Normal: Wochentag ausgeschrieben, wenn Platz ist, und das Datum. Kompakt: nur der Wochentag.</p>
+    <div class="row" style="gap:6px">
+      <button class="btn ${v === "normal" ? "" : "ghost"}" data-act="headset" data-v="normal">Normal</button>
+      <button class="btn ${v === "kompakt" ? "" : "ghost"}" data-act="headset" data-v="kompakt">Kompakt</button>
+    </div></div>`;
+}
+
 // Liefert alle Unterseiten der Einstellungen als Abschnitte (Schlüssel = Seitenname)
 function settingsPages() {
   const s = state.settings;
@@ -1879,7 +1920,7 @@ function settingsPages() {
     <p class="muted" style="margin:0 0 10px">Speichert alle deine Daten als Datei auf dem Gerät.</p>
     <button class="btn ghost" data-act="exportdata">Daten exportieren</button></div>`;
   take("allg");
-  h += `<div class="card"><h3>Darstellung</h3>
+  h += `<div class="card"><h3>Erscheinungsbild</h3>
     <label class="muted" style="display:block;margin-bottom:6px">Design (nur auf diesem Gerät)</label>
     <div class="row" style="gap:6px;flex-wrap:wrap;margin-bottom:14px">
       ${[["light", "Hell"], ["dark", "Dunkel"], ["system", "Wie Gerät"]].map(([v, l]) =>
@@ -1905,11 +1946,11 @@ function settingsPages() {
         `<button class="btn ${(s.checkSide || "left") === v ? "" : "ghost"}" data-act="checkset" data-v="${v}">${l}</button>`).join("")}
     </div>
   </div>`;
+  h += viewDesignCard();
+  h += headCardHTML();
   take("darst");
   h += pushCardHTML() + notifyDetailsHTML();
   take("benach");
-  h += viewDesignCard();
-  take("design");
   h += `<div class="card"><h3>Farben (${mode === "dark" ? "Dunkel" : "Hell"}-Modus)</h3>
     <p class="muted" style="margin-top:0">Jeder Modus hat eigene Farben.</p>
     ${Object.keys(THEME_LABELS).map((key) => `<label class="muted" style="display:block;margin-top:10px">${THEME_LABELS[key]}</label>
@@ -1989,9 +2030,8 @@ function notifyLogHTML() {
 // Einstellungen: Hauptliste mit Suche, jeder Punkt öffnet eine Unterseite
 const SETTINGS_LIST = [
   { k: "allg", t: "Allgemein", d: "Werkzeuge, Sicherung", w: "sicherung export werkzeuge" },
-  { k: "darst", t: "Darstellung", d: "Hell/Dunkel, Schrift, Startseite, Reiterleiste", w: "hell dunkel schrift startseite reiterleiste scrollbalken haken" },
+  { k: "darst", t: "Erscheinungsbild", d: "Designs, Hell/Dunkel, Schrift, Startseite, Reiterleiste", w: "design vorlage preset hell dunkel schrift startseite reiterleiste scrollbalken haken" },
   { k: "benach", t: "Benachrichtigungen", d: "Module, Mensa, Fristen, Ruhezeit, Tests", w: "benachrichtigung mensa fristen modul ruhezeit test vorwarnzeit push" },
-  { k: "design", t: "Designs", d: "Fertige Farbschemas", w: "design vorlage preset" },
   { k: "farben", t: "Farben", d: "Hintergrund, Akzent, Kategorien", w: "farben kategorie akzent" },
   { k: "stunden", t: "Semester & Stundenplan", d: "Semester, Stundenplan importieren", w: "semester stundenplan ics termine" },
   { k: "daten", t: "Daten & Cloud", d: "Papierkorb, Backup, Zurücksetzen, Sync", w: "papierkorb backup zurücksetzen cloud sync anmelden" },
@@ -2012,7 +2052,9 @@ function viewSettings() {
   }
   if (ui.setPage && pages[ui.setPage] !== undefined) {
     const info = SETTINGS_LIST.find((x) => x.k === ui.setPage);
-    return `<div class="row" style="gap:10px;margin-bottom:12px"><button class="btn ghost" data-act="setback">‹ Zurück</button><h2 style="margin:0">${info ? info.t : ""}</h2></div>${pages[ui.setPage]}`;
+    // Designs gehören zum Erscheinungsbild
+    const extra = ui.setPage === "darst" ? pages.design || "" : "";
+    return `<div class="row" style="gap:10px;margin-bottom:12px"><button class="btn ghost" data-act="setback">‹ Zurück</button><h2 style="margin:0">${info ? info.t : ""}</h2></div>${pages[ui.setPage]}${extra}`;
   }
   const q = (ui.setQuery || "").trim().toLowerCase();
   const rows = SETTINGS_LIST.filter((x) => !q || `${x.t} ${x.d} ${x.w}`.toLowerCase().includes(q));
@@ -3073,6 +3115,7 @@ document.addEventListener("click", async (e) => {
     case "pushoff": disablePush(); break;
     case "pushtest": pushTest(el.dataset.kind); break;
     case "setopen": ui.setPage = el.dataset.k; ui.nfOnly = null; render(); break;
+    case "headset": state.settings.planHead = el.dataset.v; commit(); break;
     case "setback": ui.setPage = null; ui.nfOnly = null; render(); break;
     case "nfopen":
       ui.nfOnly = el.dataset.k;
