@@ -693,3 +693,7 @@ button, .btn { min-height: 40px; }
   padding: 10px 6px; min-height: 44px;
 }
 .listrow-btn .muted { font-size: 13px; }
+
+/* Ziehen von Terminen und Aufgaben im Stundenplan: der Finger darf die Seite nicht wegscrollen,
+   sonst bricht der Browser das Ziehen ab (pointercancel) */
+.week [data-drag] { touch-action: none; }
