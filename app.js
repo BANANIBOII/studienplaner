@@ -2982,6 +2982,7 @@ document.addEventListener("click", async (e) => {
     case "exportdata": exportData(); break;
     case "pushon": enablePush(); break;
     case "pushoff": disablePush(); break;
+    case "pushtest": pushTest(); break;
     case "tedit": openTodoModal(id); break;
     case "todoedit": openTodoModal(id); break;
     case "todoopen": openTodoActions(id); break;
@@ -3648,6 +3649,7 @@ function pushCardHTML() {
     <div class="row" style="gap:6px;flex-wrap:wrap">
       <button class="btn" data-act="pushon">Aktivieren</button>
       <button class="btn ghost" data-act="pushoff">Deaktivieren</button>
+      <button class="btn ghost" data-act="pushtest">Testnachricht senden</button>
     </div></div>`;
 }
 
@@ -3775,6 +3777,23 @@ async function enablePush() {
     appAlert("Benachrichtigungen sind aktiv. Du bekommst morgens eine Erinnerung für Fristen von heute und morgen.");
   } catch (err) {
     appAlert("Das hat nicht geklappt: " + (err.message || err));
+  }
+}
+
+// Sofortige Testnachricht an dieses Gerät (kommt in wenigen Sekunden)
+async function pushTest() {
+  if (!sb || !session) return appAlert("Bitte zuerst anmelden.");
+  try {
+    const r = await fetch(SUPABASE_URL + "/functions/v1/notify", {
+      method: "POST",
+      headers: { "content-type": "application/json", Authorization: "Bearer " + session.access_token, apikey: SUPABASE_ANON_KEY },
+      body: JSON.stringify({ test: true }),
+    });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const j = await r.json();
+    appAlert(j.sent ? "Testnachricht ist unterwegs. Sie sollte in wenigen Sekunden kommen." : "Kein Gerät gefunden. Bitte zuerst „Aktivieren“ tippen.");
+  } catch (err) {
+    appAlert("Der Test hat nicht geklappt: " + (err.message || err));
   }
 }
 
