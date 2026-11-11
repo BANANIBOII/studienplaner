@@ -3798,6 +3798,7 @@ const NOTIFY_DEFAULTS = {
   lead: 15,
   quiet: { on: false, from: "22:00", to: "07:00" },
   mensa: { on: true, time: "07:30" },
+  mensa2: { on: false, time: "12:30" },
   fristen: { on: true, time: "08:00" },
   vorschau: { on: true, time: "17:00" },
   mods: {},
@@ -3858,7 +3859,9 @@ function notifyDetailsHTML() {
      ${names.length ? "" : `<p class="muted">Noch keine Termine geladen.</p>`}`);
   h += sec("mensa", "Mensa",
     `<label class="row" style="gap:8px">${chk("mensa.on", n.mensa.on)} Mensa-Nachricht an (Mo–Fr)</label>
-     <label class="row" style="gap:8px;margin-top:8px">Uhrzeit ${tm("mensa.time", n.mensa.time)}</label>`);
+     <label class="row" style="gap:8px;margin-top:8px">Uhrzeit ${tm("mensa.time", n.mensa.time)}</label>
+     <label class="row" style="gap:8px;margin-top:14px">${chk("mensa2.on", n.mensa2.on)} Zweite Mensa-Nachricht (z. B. vor der Mittagspause)</label>
+     <label class="row" style="gap:8px;margin-top:8px">Uhrzeit ${tm("mensa2.time", n.mensa2.time)}</label>`);
   h += sec("fristen", "Fristen am Morgen",
     `<label class="row" style="gap:8px">${chk("fristen.on", n.fristen.on)} an (jeden Tag, alle offenen Fristen der Woche)</label>
      <label class="row" style="gap:8px;margin-top:8px">Uhrzeit ${tm("fristen.time", n.fristen.time)}</label>`);
