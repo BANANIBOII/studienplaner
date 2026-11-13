@@ -1982,7 +1982,7 @@ function settingsPages() {
     <div class="row"><button class="btn" data-act="export">Backup speichern (JSON)</button></div>
     <label class="muted" style="display:block;margin-top:14px">Backup wiederherstellen</label>
     <input type="file" accept=".json,application/json" data-change="import">
-    <p class="muted">Achtung: Das Wiederherstellen ersetzt alle aktuellen Daten.</p>
+    <p class="muted">Du wählst beim Einspielen, welche Teile ersetzt werden. Nicht gewählte Teile bleiben unverändert.</p>
   </div>`;
   h += `<div class="card"><h3>Cloud-Sync (Supabase)</h3>${cloudSection()}</div>`;
   take("daten");
@@ -2373,7 +2373,9 @@ function fitPlan() {
   const tb = document.querySelector(".tabbar");
   const tbH = tb && getComputedStyle(tb).display !== "none" ? tb.offsetHeight : 0;
   const top = wk.getBoundingClientRect().top;
-  const hours = (END_MIN - START_MIN) / 60;
+  // Stundenhöhe immer aus der eingestellten Zeitspanne berechnen, nicht aus der automatischen Zeitachse:
+  // so bleibt die Höhe je Stunde in jeder Woche gleich und nur die Anzahl der Stunden ändert sich
+  const hours = (state.settings.dayEnd ?? 20) - (state.settings.dayStart ?? 7);
   const avail = window.innerHeight - top - tbH - 8 - 50;
   const zoom = state.settings.zoomY || 1;
   const px = Math.max(30, Math.floor(avail / hours)) * zoom;
@@ -3285,6 +3287,7 @@ document.addEventListener("click", async (e) => {
     // Einstellungen
     case "colorreset": state.settings.colors[currentMode()] = {}; commit(); break;
     case "export": exportBackup(); break;
+    case "impgo": applyPendingImport(); break;
     case "syncnow": cloudPull(); break;
     case "logout": cloudSignOut(); break;
   }
@@ -3415,11 +3418,8 @@ document.addEventListener("change", async (e) => {
     const file = t.files[0];
     if (!file) return;
     try {
-      const obj = JSON.parse(await file.text());
-      if (!obj.events || !obj.modules) throw new Error("falsches Format");
-      if (!(await appConfirm("Alle aktuellen Daten durch das Backup ersetzen?"))) return;
-      state = normalize(obj);
-      commit();
+      pendingImport = readBackup(JSON.parse(await file.text()));
+      openImportChoice();
     } catch {
       appAlert("Die Datei konnte nicht gelesen werden.");
     }
@@ -3607,13 +3607,69 @@ document.addEventListener("submit", async (e) => {
   }
 });
 
+// ---------- Backup: Teile einzeln wählen ----------
+// Design-Einstellungen; alle übrigen Einstellungen gehören zu „Einstellungen“
+const DESIGN_KEYS = ["dark", "colors", "plan", "zoomY", "dash", "presets"];
+let pendingImport = null;
+const pickDesign = (s) => Object.fromEntries(DESIGN_KEYS.filter((k) => k in s).map((k) => [k, s[k]]));
+const pickRest = (s) => Object.fromEntries(Object.entries(s).filter(([k]) => !DESIGN_KEYS.includes(k)));
+
 function exportBackup() {
-  const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
+  const s = state.settings;
+  const out = {
+    format: "studienplaner-backup",
+    version: 2,
+    plan: { events: state.events, modules: state.modules, todos: state.todos, cards: state.cards || [] },
+    design: pickDesign(s),
+    einstellungen: pickRest(s),
+  };
+  const blob = new Blob([JSON.stringify(out, null, 2)], { type: "application/json" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
   a.download = `studienplaner-backup-${iso(new Date())}.json`;
   a.click();
   URL.revokeObjectURL(a.href);
+}
+// Liest eine Backup-Datei: neues Format mit Teilen oder das alte Format (alles in einer Datei)
+function readBackup(obj) {
+  if (obj && obj.format === "studienplaner-backup") {
+    return { plan: obj.plan || null, design: obj.design || null, einstellungen: obj.einstellungen || null };
+  }
+  if (!obj || !obj.events || !obj.modules) throw new Error("falsches Format");
+  const s = obj.settings || {};
+  return {
+    plan: { events: obj.events, modules: obj.modules, todos: obj.todos || [], cards: obj.cards || [] },
+    design: pickDesign(s),
+    einstellungen: pickRest(s),
+  };
+}
+function openImportChoice() {
+  const labels = [
+    ["plan", "Stundenplan, Module, Aufgaben & Karten"],
+    ["design", "Design & Darstellung"],
+    ["einstellungen", "Einstellungen"],
+  ].filter(([k]) => pendingImport[k]);
+  if (!labels.length) { pendingImport = null; appAlert("Im Backup wurde nichts gefunden, was sich einspielen lässt."); return; }
+  openModal(`<h3>Backup einspielen</h3>
+    <p class="muted">Wähle, was aus dem Backup übernommen werden soll. Das Gewählte ersetzt die aktuellen Daten, Nicht-Gewähltes bleibt unverändert.</p>
+    ${labels.map(([k, l]) => `<label class="row" style="margin:10px 0"><input type="checkbox" data-imp="${k}" checked> ${l}</label>`).join("")}
+    <div class="row" style="justify-content:flex-end;gap:8px;margin-top:16px">
+      <button type="button" class="btn ghost" data-act="mclose">Abbrechen</button>
+      <button type="button" class="btn danger" data-act="impgo">Einspielen</button>
+    </div>`);
+}
+function applyPendingImport() {
+  if (!pendingImport) return;
+  const chosen = [...document.querySelectorAll("[data-imp]:checked")].map((x) => x.dataset.imp);
+  if (!chosen.length) { appAlert("Bitte wähle mindestens einen Teil aus."); return; }
+  const next = { ...state, settings: { ...state.settings } };
+  if (chosen.includes("plan") && pendingImport.plan) Object.assign(next, pendingImport.plan);
+  if (chosen.includes("design") && pendingImport.design) Object.assign(next.settings, pendingImport.design);
+  if (chosen.includes("einstellungen") && pendingImport.einstellungen) Object.assign(next.settings, pendingImport.einstellungen);
+  pendingImport = null;
+  state = normalize(next);
+  commit();
+  closeModal();
 }
 
 // ---------- Cloud (Supabase) ----------
