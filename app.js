@@ -8,7 +8,7 @@ const LS_KEY = "studienplaner-v1";
 let START_MIN = 7 * 60;
 let END_MIN = 20 * 60;
 let HOUR_PX = 42;
-const PLAN_HOUR_PX = 52;   // Basishöhe einer Stunde im Stundenplan (Zoom und Einstellung wirken darauf)
+let planGridAvail = 480;  // verfügbare Höhe für das Raster im Stundenplan (wird in fitPlan gemessen)
 let PX_PER_MIN = HOUR_PX / 60;
 function visibleDates() {
   if (ui.view === "day") return [ui.dayDate];
@@ -36,7 +36,10 @@ function applyDayRange() {
   START_MIN = start;
   END_MIN = end;
   // Stundenplan: feste Höhe pro Stunde (nur durch Zoom oder Einstellung verändert), nicht nach Bildschirm berechnet
-  HOUR_PX = ui.tab === "stundenplan" ? PLAN_HOUR_PX * (s.zoomY || 1) : 42 * (s.zoomY || 1);
+  // Wochenansicht: das Raster hat immer dieselbe Höhe, der sichtbare Zeitbereich wird darauf verteilt
+  HOUR_PX = ui.tab === "stundenplan"
+    ? Math.max(20, Math.floor(planGridAvail / Math.max(1, (END_MIN - START_MIN) / 60))) * (s.zoomY || 1)
+    : 42 * (s.zoomY || 1);
   PX_PER_MIN = HOUR_PX / 60;
   document.documentElement.style.setProperty("--hour-px", HOUR_PX + "px");
 }
@@ -1264,7 +1267,7 @@ function viewPlan() {
   const compact = state.settings.planHead === "kompakt" ? " compact" : "";
   // Oben fest: Wochentage, dann Aufgaben-Streifen. Nur das Raster darunter scrollt.
   const head = weekHeadHTML(mon, dayCount, today, compact);
-  h += `<div class="${animCls}">${planLaid(`<div class="plan-screen">${head}${strip}<div class="week${compact}"><div class="axis" style="height:${gridHeight()}px">${axisHTML(0)}</div>${cols}</div></div>`)}</div>${emptyPlanHint()}`;
+  h += `<div class="${animCls}">${planLaid(`<div class="plan-screen">${strip}${head}<div class="week${compact}"><div class="axis" style="height:${gridHeight()}px">${axisHTML(0)}</div>${cols}</div></div>`)}</div>${emptyPlanHint()}`;
   return h;
 }
 
@@ -1936,7 +1939,7 @@ function headCardHTML() {
       <button class="btn ${v === "kompakt" ? "" : "ghost"}" data-act="headset" data-v="kompakt">Kompakt</button>
     </div></div>
   <div class="card"><h3>Stundenhöhe</h3>
-    <p class="muted" style="margin:0 0 10px">Wie hoch eine Stunde im Stundenplan ist. Zwei Finger auf dem Stundenplan zoomen geht genauso. Die Höhe bleibt beim Wechsel der Woche gleich, nur die Zeitachse passt sich an.</p>
+    <p class="muted" style="margin:0 0 10px">Wie hoch eine Stunde im Stundenplan ist. Zwei Finger auf dem Stundenplan zoomen geht genauso. Das Raster hat in jeder Woche dieselbe Höhe, die Stunden passen sich an. Bei 100 % passt das Raster genau auf den Bildschirm.</p>
     <div class="row" style="gap:6px;align-items:center">
       <button class="btn ghost" data-act="zoomstep" data-v="-0.1">−</button>
       <b>${Math.round((state.settings.zoomY || 1) * 100)} %</b>
@@ -2414,8 +2417,16 @@ function fitPlan() {
   const top = (screen || wk).getBoundingClientRect().top;
   // Die Stundenhöhe bleibt fest (Zoom/Einstellung). Der Bereich füllt nur den Bildschirm,
   // oben bleiben Wochentage und Aufgaben stehen, das Raster scrollt bei Bedarf.
-  if (screen) {
-    screen.style.height = Math.max(160, window.innerHeight - top - tbH - 8) + "px";
+  if (!screen) return;
+  const screenH = Math.max(160, window.innerHeight - top - tbH - 8);
+  screen.style.height = screenH + "px";
+  // Platz, den das Raster hat (ohne Wochentage und Aufgaben oben)
+  const avail = Math.max(120, Math.floor(screenH - (wk.getBoundingClientRect().top - top) - 8));
+  if (Math.abs(avail - planGridAvail) >= 2) {
+    planGridAvail = avail;
+    fitting = true;
+    render();
+    fitting = false;
   }
 }
 // Leiste oben im Bearbeitungsmodus
