@@ -286,7 +286,13 @@ input[type="color"]::-moz-color-swatch { border: 0; border-radius: 7px; }
   background: color-mix(in srgb, var(--pc) 20%, transparent); color: var(--text);
 }
 .mpill span { overflow: hidden; text-overflow: ellipsis; }
-.mpill.is-done { opacity: .45; text-decoration: line-through; }
+/* Erledigt: dünn und gestrichelt wie im Stundenplan, nicht so auffällig */
+.mpill.is-done {
+  opacity: .7; text-decoration: none;
+  background: color-mix(in srgb, var(--pc) 6%, transparent) !important;
+  color: var(--muted) !important;
+  border: 1px dashed color-mix(in srgb, var(--pc) 50%, transparent) !important;
+}
 .mmore { font-size: 10px; color: var(--muted); }
 .mday.today .mpill { background: rgba(0, 0, 0, .18); color: var(--bg); }
 .micons { display: flex; gap: 4px; margin-top: 5px; align-items: center; flex-wrap: wrap; }

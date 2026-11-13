@@ -2804,6 +2804,10 @@ document.addEventListener("touchstart", (e) => {
       const gw = gs.querySelector(":scope > .week");
       const cw = cur.querySelector(":scope > .week");
       if (gw && cw) gw.scrollTop = cw.scrollTop;
+      // Gleiche Höhe der Kopfzeilen: die Nachbarwoche wird so verschoben, dass ihr Plan genau dort steht wie der aktuelle
+      const off = cur.getBoundingClientRect().top - app.getBoundingClientRect().top;
+      const goff = gs.getBoundingClientRect().top - g.getBoundingClientRect().top;
+      g.style.top = `${off - goff}px`;
     }
     return g;
   });
@@ -3344,6 +3348,7 @@ document.addEventListener("click", async (e) => {
     case "colorreset": state.settings.colors[currentMode()] = {}; commit(); break;
     case "export": exportBackup(); break;
     case "impgo": applyPendingImport(); break;
+    case "expgo": doExport(); break;
     case "syncnow": cloudPull(); break;
     case "logout": cloudSignOut(); break;
   }
@@ -3670,21 +3675,32 @@ let pendingImport = null;
 const pickDesign = (s) => Object.fromEntries(DESIGN_KEYS.filter((k) => k in s).map((k) => [k, s[k]]));
 const pickRest = (s) => Object.fromEntries(Object.entries(s).filter(([k]) => !DESIGN_KEYS.includes(k)));
 
+// Vor dem Speichern wählen, was ins Backup soll
 function exportBackup() {
+  openModal(`<h3>Backup speichern</h3>
+    <p class="muted">Wähle, was ins Backup soll. Nicht gewählte Teile fehlen in der Datei.</p>
+    ${[["plan", "Stundenplan, Module, Aufgaben & Karten"], ["design", "Design & Darstellung"], ["einstellungen", "Einstellungen"]]
+      .map(([k, l]) => `<label class="row" style="margin:10px 0"><input type="checkbox" data-exp="${k}" checked> ${l}</label>`).join("")}
+    <div class="row" style="justify-content:flex-end;gap:8px;margin-top:16px">
+      <button type="button" class="btn ghost" data-act="mclose">Abbrechen</button>
+      <button type="button" class="btn" data-act="expgo">Speichern</button>
+    </div>`);
+}
+function doExport() {
+  const chosen = [...document.querySelectorAll("[data-exp]:checked")].map((x) => x.dataset.exp);
+  if (!chosen.length) { appAlert("Bitte wähle mindestens einen Teil aus."); return; }
   const s = state.settings;
-  const out = {
-    format: "studienplaner-backup",
-    version: 2,
-    plan: { events: state.events, modules: state.modules, todos: state.todos, cards: state.cards || [] },
-    design: pickDesign(s),
-    einstellungen: pickRest(s),
-  };
+  const out = { format: "studienplaner-backup", version: 2 };
+  if (chosen.includes("plan")) out.plan = { events: state.events, modules: state.modules, todos: state.todos, cards: state.cards || [] };
+  if (chosen.includes("design")) out.design = pickDesign(s);
+  if (chosen.includes("einstellungen")) out.einstellungen = pickRest(s);
   const blob = new Blob([JSON.stringify(out, null, 2)], { type: "application/json" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
   a.download = `studienplaner-backup-${iso(new Date())}.json`;
   a.click();
   URL.revokeObjectURL(a.href);
+  closeModal();
 }
 // Liest eine Backup-Datei: neues Format mit Teilen oder das alte Format (alles in einer Datei)
 function readBackup(obj) {
