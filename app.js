@@ -685,7 +685,14 @@ function render() {
   const prevTab = appEl.dataset.shownTab;
   const tabChanged = prevTab !== ui.tab;
   const dir = tabOrder.indexOf(ui.tab) >= tabOrder.indexOf(prevTab) ? "dir-fwd" : "dir-back";
+  // Scroll-Position des Rasters merken, damit es nach dem Wischen nicht nach oben springt
+  const oldWeek = appEl.querySelector(".plan-screen > .week");
+  const keepScroll = !tabChanged && oldWeek ? oldWeek.scrollTop : null;
   appEl.innerHTML = (ui.layEdit ? layBarHTML() : "") + (ui.planEdit && ui.tab === "stundenplan" ? planEditBarHTML() : "") + views[ui.tab]();
+  if (keepScroll != null) {
+    const newWeek = appEl.querySelector(".plan-screen > .week");
+    if (newWeek) newWeek.scrollTop = keepScroll;
+  }
   appEl.dataset.shownTab = ui.tab;
   syncPlanFab();
   // Einblenden nur beim Wechsel des Reiters, nicht bei jedem Haken oder Klick
@@ -2778,6 +2785,15 @@ document.addEventListener("touchstart", (e) => {
     g.querySelectorAll(".plan-fab").forEach((n) => n.remove());
     g.style.transform = `translateX(${dir * 100}%)`;
     app.appendChild(g);
+    // Nachbarwoche: gleiche Höhe und gleiche Scroll-Position wie die aktuelle Woche, damit nichts springt
+    const cur = document.querySelector(".plan-screen");
+    const gs = g.querySelector(".plan-screen");
+    if (cur && gs) {
+      gs.style.height = cur.style.height;
+      const gw = gs.querySelector(":scope > .week");
+      const cw = cur.querySelector(":scope > .week");
+      if (gw && cw) gw.scrollTop = cw.scrollTop;
+    }
     return g;
   });
   swipe = { x: t.clientX, y: t.clientY, t: Date.now(), dx: 0, mode: null, dir: 0, ghosts, ghost: null };
