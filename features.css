@@ -747,7 +747,10 @@ button, .btn { min-height: 40px; }
 
 /* Stundenplan (Woche): Wochentage und Aufgaben oben fest, nur das Raster scrollt */
 .plan-screen { display: flex; flex-direction: column; min-height: 0; }
-.plan-screen > .week { flex: 1 1 auto; min-height: 0; overflow-y: auto; scrollbar-gutter: stable; }
+.plan-screen > .week { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+/* Scrollbalken ausgeblendet: die Breite bleibt beim Wischen immer gleich (Scrollen geht mit dem Finger) */
+.plan-screen > .week { scrollbar-width: none; }
+.plan-screen > .week::-webkit-scrollbar { display: none; width: 0; height: 0; }
 .plan-screen .week .dayhead { display: none; }
 .plan-days {
   --axis-w: 28px;

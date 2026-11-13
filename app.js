@@ -2757,8 +2757,10 @@ const planAdjacentHTML = (dir) => {
     if (ui.view === "day") ui.dayDate = iso(addDays(parseIso(ui.dayDate), dir));
     else ui.weekOffset += dir;
     ui.anim = null;
+    // Die Nachbarwoche bekommt ihre eigene Zeitachse (Stundenhöhe bleibt gleich, nur die Stunden passen sich an)
+    applyDayRange();
     return viewPlan();
-  } finally { Object.assign(ui, save); }
+  } finally { Object.assign(ui, save); applyDayRange(); }
 };
 function resetSwipeTrack(app) {
   document.body.classList.remove("swiping");
