@@ -737,3 +737,16 @@ button, .btn { min-height: 40px; }
 .allday-bar span { display: block; font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
 .allday-bar small { display: block; opacity: .75; font-size: 10px; overflow: hidden; text-overflow: ellipsis; }
 .allday-bar.is-done { opacity: .6; text-decoration: line-through; }
+
+/* Stundenplan (Woche): Wochentage und Aufgaben oben fest, nur das Raster scrollt */
+.plan-screen { display: flex; flex-direction: column; min-height: 0; }
+.plan-screen > .week { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+.plan-screen .week .dayhead { display: none; }
+.plan-days {
+  --axis-w: 28px;
+  display: grid; gap: 4px; flex: none; margin: 0 0 4px; align-items: stretch;
+}
+@media (min-width: 800px) { .plan-days { --axis-w: 36px; } }
+.plan-days .dayhead { container-type: inline-size; cursor: pointer; border-radius: 10px; min-width: 0; }
+.plan-days.compact .dd { display: none; }
+.plan-days.compact .dayhead.today .dd { display: none; }

@@ -685,6 +685,7 @@ function render() {
   const dir = tabOrder.indexOf(ui.tab) >= tabOrder.indexOf(prevTab) ? "dir-fwd" : "dir-back";
   appEl.innerHTML = (ui.layEdit ? layBarHTML() : "") + (ui.planEdit && ui.tab === "stundenplan" ? planEditBarHTML() : "") + views[ui.tab]();
   appEl.dataset.shownTab = ui.tab;
+  syncPlanFab();
   // Einblenden nur beim Wechsel des Reiters, nicht bei jedem Haken oder Klick
   if (tabChanged) {
     appEl.classList.remove("dir-fwd", "dir-back");
@@ -1132,6 +1133,24 @@ function alldayStripHTML(mon, dayCount) {
   }).join("");
   return `<div class="allday-strip" style="grid-template-columns:var(--axis-w, 28px) repeat(${dayCount}, minmax(0, 1fr));"><div></div>${bars}</div>`;
 }
+// Wochentage als fester Kopf über dem Aufgaben-Streifen (gleiche Spalten wie der Streifen)
+function weekHeadHTML(mon, dayCount, today, compact = "") {
+  const todayK = iso(today);
+  let cells = "";
+  for (let i = 0; i < dayCount; i++) {
+    const d = addDays(mon, i);
+    const k = iso(d);
+    cells += `<div class="dayhead${k === todayK ? " today" : ""}" data-act="dayopen" data-d="${k}" style="${dayTintStyle(k)}"><span class="wd"><span class="wd-l">${WEEKDAYS_LONG[i]}</span><span class="wd-s">${WEEKDAYS[i]}</span></span><span class="dd">${pad(d.getDate())}.${pad(d.getMonth() + 1)}.</span></div>`;
+  }
+  return `<div class="plan-days${compact}" style="grid-template-columns:var(--axis-w, 28px) repeat(${dayCount}, minmax(0, 1fr));"><div></div>${cells}</div>`;
+}
+// Ein Knopf für die Stundenplan-Einstellungen, außerhalb des Bereichs, der beim Wischen verschoben wird
+function syncPlanFab() {
+  const old = document.getElementById("planFab");
+  const want = ui.tab === "stundenplan" && !ui.layEdit;
+  if (!want) { if (old) old.remove(); return; }
+  if (!old) document.body.insertAdjacentHTML("beforeend", `<button id="planFab" class="plan-fab" data-act="planmenu" title="Einstellungen">⋮</button>`);
+}
 // Einträge, die an einem Tag liegen (auch Zeiträume über mehrere Tage)
 function todosOn(k) {
   return state.todos.filter((t) => t.date && (t.endDate && t.endDate > t.date
@@ -1234,7 +1253,9 @@ function viewPlan() {
   // Mehrtägige Zeiträume oben als Balken, die Tagesspalten bleiben frei
   const strip = alldayStripHTML(mon, dayCount);
   const compact = state.settings.planHead === "kompakt" ? " compact" : "";
-  h += `<div class="${animCls}">${planLaid(`${strip}<div class="week${compact}"><div class="axis" style="height:${50 + gridHeight()}px">${axisHTML()}</div>${cols}</div>`)}</div>${emptyPlanHint()}${planFabHTML()}`;
+  // Oben fest: Wochentage, dann Aufgaben-Streifen. Nur das Raster darunter scrollt.
+  const head = weekHeadHTML(mon, dayCount, today, compact);
+  h += `<div class="${animCls}">${planLaid(`<div class="plan-screen">${head}${strip}<div class="week${compact}"><div class="axis" style="height:${gridHeight()}px">${axisHTML(0)}</div>${cols}</div></div>`)}</div>${emptyPlanHint()}`;
   return h;
 }
 
@@ -1254,7 +1275,7 @@ function planNavHTML(label, view) {
   </div>`;
 }
 function planFabHTML() {
-  return `<button class="plan-fab" data-act="planmenu" title="Einstellungen">⋮</button>`;
+  return ""; // der Knopf wird in syncPlanFab() außerhalb der Ansicht eingefügt
 }
 // Wochen- und Tagesansicht umschalten (einmal antippen auf den Reiter oder den Knopf)
 function planToggle() {
@@ -2370,13 +2391,22 @@ function fitPlan() {
   if (fitting) return;
   const wk = document.querySelector(".week");
   if (!wk) return;
+  const screen = document.querySelector(".plan-screen");
   const tb = document.querySelector(".tabbar");
   const tbH = tb && getComputedStyle(tb).display !== "none" ? tb.offsetHeight : 0;
-  const top = wk.getBoundingClientRect().top;
+  const top = (screen || wk).getBoundingClientRect().top;
   // Stundenhöhe immer aus der eingestellten Zeitspanne berechnen, nicht aus der automatischen Zeitachse:
   // so bleibt die Höhe je Stunde in jeder Woche gleich und nur die Anzahl der Stunden ändert sich
   const hours = (state.settings.dayEnd ?? 20) - (state.settings.dayStart ?? 7);
-  const avail = window.innerHeight - top - tbH - 8 - 50;
+  let avail;
+  if (screen) {
+    // Wochenansicht: der Bereich füllt den Bildschirm, oben bleiben Wochentage und Aufgaben stehen
+    const screenH = Math.max(160, window.innerHeight - top - tbH - 8);
+    screen.style.height = screenH + "px";
+    avail = screenH - (wk.getBoundingClientRect().top - top) - 8;
+  } else {
+    avail = window.innerHeight - top - tbH - 8 - 50;
+  }
   const zoom = state.settings.zoomY || 1;
   const px = Math.max(30, Math.floor(avail / hours)) * zoom;
   if (Math.abs(px - HOUR_PX) >= 1) {
@@ -2740,7 +2770,7 @@ function abortSwipe() {
 document.addEventListener("touchstart", (e) => {
   if (swipe) { abortSwipe(); if (e.touches.length !== 1) return; }
   if (ui.tab !== "stundenplan" || ui.layEdit || ui.planEdit || document.querySelector(".modal") || e.touches.length !== 1) { swipe = null; return; }
-  if (!e.target.closest || !e.target.closest(".week")) { swipe = null; return; }
+  if (!e.target.closest || !e.target.closest(".plan-screen, .day-week")) { swipe = null; return; }
   const app = document.getElementById("app");
   if (!app) { swipe = null; return; }
   const t = e.touches[0];
