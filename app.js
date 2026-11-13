@@ -1117,7 +1117,8 @@ function alldayStripHTML(mon, dayCount) {
     .map((t) => ({ t, s: Math.max(0, idx(t.date)), e: Math.min(dayCount - 1, idx(t.endDate)) }))
     .filter((x) => x.s <= x.e)
     .sort((a, b) => a.s - b.s || b.e - a.e);
-  if (!items.length) return "";
+  // Leerer Streifen behält seine feste Höhe, damit die Stunden in jeder Woche gleich hoch bleiben
+  if (!items.length) return `<div class="allday-strip" aria-hidden="true"></div>`;
   // Überlappende Balken untereinander in eigene Zeilen legen
   const rowEnds = [];
   items.forEach((x) => {

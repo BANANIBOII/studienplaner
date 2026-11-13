@@ -724,6 +724,8 @@ button, .btn { min-height: 40px; }
 .allday-strip {
   --axis-w: 28px;
   display: grid; gap: 4px; margin: 0 0 6px; align-items: stretch;
+  /* feste Höhe: sonst verschiebt sich das Raster je nach Woche und die Stunden werden größer oder kleiner */
+  height: 52px; overflow-y: auto; align-content: start;
 }
 @media (min-width: 800px) { .allday-strip { --axis-w: 36px; } }
 .allday-bar {
