@@ -1641,7 +1641,7 @@ function viewCal() {
       const T = !same(iso(addDays(d, -7)));
       const B = !same(iso(addDays(d, 7)));
       const rr = Math.max(4, 14 - i * 4);
-      overlays += `<span class="sp" style="inset:${i * 4}px;border-color:${calColor(sp)};border-width:${T ? 2 : 0}px ${R ? 2 : 0}px ${B ? 2 : 0}px ${L ? 2 : 0}px;border-radius:${T && L ? rr : 0}px ${T && R ? rr : 0}px ${B && R ? rr : 0}px ${B && L ? rr : 0}px"></span>`;
+      overlays += `<span class="sp${sp.done ? " is-done" : ""}" style="inset:${i * 4}px;border-color:${calColor(sp)};border-width:${T ? 1 : 0}px ${R ? 1 : 0}px ${B ? 1 : 0}px ${L ? 1 : 0}px;border-radius:${T && L ? rr : 0}px ${T && R ? rr : 0}px ${B && R ? rr : 0}px ${B && L ? rr : 0}px"></span>`;
     });
     if (spans.length && k !== ui.selDate && k !== today) {
       // Überlappende Zeiträume: Farben werden ineinander gemischt
@@ -2805,9 +2805,14 @@ document.addEventListener("touchstart", (e) => {
       const cw = cur.querySelector(":scope > .week");
       if (gw && cw) gw.scrollTop = cw.scrollTop;
       // Gleiche Höhe der Kopfzeilen: die Nachbarwoche wird so verschoben, dass ihr Plan genau dort steht wie der aktuelle
-      const off = cur.getBoundingClientRect().top - app.getBoundingClientRect().top;
+      // Gleiche Breite und Position wie die aktuelle Woche (sonst wirkt die Nachbarwoche etwas breiter)
+      const ar = app.getBoundingClientRect();
+      const cr = cur.getBoundingClientRect();
+      g.style.left = `${cr.left - ar.left}px`;
+      g.style.right = "auto";
+      g.style.width = `${cr.width}px`;
       const goff = gs.getBoundingClientRect().top - g.getBoundingClientRect().top;
-      g.style.top = `${off - goff}px`;
+      g.style.top = `${cr.top - ar.top - goff}px`;
     }
     return g;
   });

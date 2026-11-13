@@ -539,7 +539,8 @@ html { touch-action: manipulation; }
 .card b, .listrow b, .grow b, .muted { overflow-wrap: anywhere; word-break: break-word; }
 
 /* Mehrtägige Einträge im Monat: Rahmen liegen als eigene Ebene über dem Tag */
-.mday .sp { position: absolute; pointer-events: none; border-style: dashed; box-sizing: border-box; }
+.mday .sp { position: absolute; pointer-events: none; border-style: dashed; box-sizing: border-box; opacity: .6; }
+.mday .sp.is-done { opacity: .4; }
 .mday.has-span { border-color: transparent !important; }
 
 
@@ -746,7 +747,7 @@ button, .btn { min-height: 40px; }
 
 /* Stundenplan (Woche): Wochentage und Aufgaben oben fest, nur das Raster scrollt */
 .plan-screen { display: flex; flex-direction: column; min-height: 0; }
-.plan-screen > .week { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+.plan-screen > .week { flex: 1 1 auto; min-height: 0; overflow-y: auto; scrollbar-gutter: stable; }
 .plan-screen .week .dayhead { display: none; }
 .plan-days {
   --axis-w: 28px;
