@@ -763,3 +763,16 @@ button, .btn { min-height: 40px; }
 
 /* Knopf für die Stundenplan-Einstellungen bleibt beim Wischen auf seiner Ebene */
 .plan-fab { transform: translateZ(0); transition: none; }
+
+/* Wochenansicht: Zeitachse und Wochentage stehen fest, nur die Modul-Spalten wischen */
+.plan-screen { --axis-w: 28px; }
+@media (min-width: 800px) { .plan-screen { --axis-w: 36px; } }
+.plan-screen > .week { display: block; overflow-x: hidden; }
+.plan-rows { display: flex; align-items: flex-start; }
+.plan-rows > .axis { flex: none; width: var(--axis-w); position: relative; border-right: 0; }
+.plan-track { position: relative; flex: 1 1 auto; min-width: 0; overflow: hidden; }
+.plan-cols { position: relative; display: flex; align-items: flex-start; }
+.plan-cols > .daycol { flex: 1 1 0; min-width: 0; }
+.plan-track > .plan-ghost { position: absolute; top: 0; left: 0; right: 0; }
+/* keine senkrechten Linien zwischen den Tagen (nur waagerechte Stundenlinien) */
+.plan-screen .grid { border-left: 0 !important; border-right: 0 !important; }
