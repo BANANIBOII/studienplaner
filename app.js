@@ -8,6 +8,7 @@ const LS_KEY = "studienplaner-v1";
 let START_MIN = 7 * 60;
 let END_MIN = 20 * 60;
 let HOUR_PX = 42;
+const PLAN_HOUR_PX = 52;   // Basishöhe einer Stunde im Stundenplan (Zoom und Einstellung wirken darauf)
 let PX_PER_MIN = HOUR_PX / 60;
 function visibleDates() {
   if (ui.view === "day") return [ui.dayDate];
@@ -34,7 +35,8 @@ function applyDayRange() {
   }
   START_MIN = start;
   END_MIN = end;
-  HOUR_PX = ui.tab === "stundenplan" && planFitPx ? planFitPx : 42 * (s.zoomY || 1);
+  // Stundenplan: feste Höhe pro Stunde (nur durch Zoom oder Einstellung verändert), nicht nach Bildschirm berechnet
+  HOUR_PX = ui.tab === "stundenplan" ? PLAN_HOUR_PX * (s.zoomY || 1) : 42 * (s.zoomY || 1);
   PX_PER_MIN = HOUR_PX / 60;
   document.documentElement.style.setProperty("--hour-px", HOUR_PX + "px");
 }
@@ -1925,6 +1927,14 @@ function headCardHTML() {
     <div class="row" style="gap:6px">
       <button class="btn ${v === "normal" ? "" : "ghost"}" data-act="headset" data-v="normal">Normal</button>
       <button class="btn ${v === "kompakt" ? "" : "ghost"}" data-act="headset" data-v="kompakt">Kompakt</button>
+    </div></div>
+  <div class="card"><h3>Stundenhöhe</h3>
+    <p class="muted" style="margin:0 0 10px">Wie hoch eine Stunde im Stundenplan ist. Zwei Finger auf dem Stundenplan zoomen geht genauso. Die Höhe bleibt beim Wechsel der Woche gleich, nur die Zeitachse passt sich an.</p>
+    <div class="row" style="gap:6px;align-items:center">
+      <button class="btn ghost" data-act="zoomstep" data-v="-0.1">−</button>
+      <b>${Math.round((state.settings.zoomY || 1) * 100)} %</b>
+      <button class="btn ghost" data-act="zoomstep" data-v="0.1">+</button>
+      <button class="btn ghost" data-act="zoomstep" data-v="reset">Standard</button>
     </div></div>`;
 }
 
@@ -2395,27 +2405,10 @@ function fitPlan() {
   const tb = document.querySelector(".tabbar");
   const tbH = tb && getComputedStyle(tb).display !== "none" ? tb.offsetHeight : 0;
   const top = (screen || wk).getBoundingClientRect().top;
-  // Stundenhöhe immer aus der eingestellten Zeitspanne berechnen, nicht aus der automatischen Zeitachse:
-  // so bleibt die Höhe je Stunde in jeder Woche gleich und nur die Anzahl der Stunden ändert sich
-  const hours = (state.settings.dayEnd ?? 20) - (state.settings.dayStart ?? 7);
-  let avail;
+  // Die Stundenhöhe bleibt fest (Zoom/Einstellung). Der Bereich füllt nur den Bildschirm,
+  // oben bleiben Wochentage und Aufgaben stehen, das Raster scrollt bei Bedarf.
   if (screen) {
-    // Wochenansicht: der Bereich füllt den Bildschirm, oben bleiben Wochentage und Aufgaben stehen
-    const screenH = Math.max(160, window.innerHeight - top - tbH - 8);
-    screen.style.height = screenH + "px";
-    avail = screenH - (wk.getBoundingClientRect().top - top) - 8;
-  } else {
-    avail = window.innerHeight - top - tbH - 8 - 50;
-  }
-  const zoom = state.settings.zoomY || 1;
-  const px = Math.max(30, Math.floor(avail / hours)) * zoom;
-  if (Math.abs(px - HOUR_PX) >= 1) {
-    planFitPx = px;
-    HOUR_PX = px;
-    PX_PER_MIN = HOUR_PX / 60;
-    fitting = true;
-    render();
-    fitting = false;
+    screen.style.height = Math.max(160, window.innerHeight - top - tbH - 8) + "px";
   }
 }
 // Leiste oben im Bearbeitungsmodus
@@ -3149,6 +3142,12 @@ document.addEventListener("click", async (e) => {
     case "pushtest": pushTest(el.dataset.kind); break;
     case "setopen": ui.setPage = el.dataset.k; ui.nfOnly = null; render(); break;
     case "headset": state.settings.planHead = el.dataset.v; commit(); break;
+    case "zoomstep": {
+      const z = el.dataset.v === "reset" ? 1 : (state.settings.zoomY || 1) + Number(el.dataset.v);
+      state.settings.zoomY = Math.round(Math.min(2, Math.max(0.5, z)) * 100) / 100;
+      commit();
+      break;
+    }
     case "setback": ui.setPage = null; ui.nfOnly = null; render(); break;
     case "nfopen":
       ui.nfOnly = el.dataset.k;

@@ -750,3 +750,6 @@ button, .btn { min-height: 40px; }
 .plan-days .dayhead { container-type: inline-size; cursor: pointer; border-radius: 10px; min-width: 0; }
 .plan-days.compact .dd { display: none; }
 .plan-days.compact .dayhead.today .dd { display: none; }
+
+/* Knopf für die Stundenplan-Einstellungen bleibt beim Wischen auf seiner Ebene */
+.plan-fab { transform: translateZ(0); transition: none; }
