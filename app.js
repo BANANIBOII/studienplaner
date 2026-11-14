@@ -2224,11 +2224,15 @@ function cloudSection() {
 }
 
 // ---------- Modale Fenster ----------
+// Zurück-Taste: ein Fenster schließt zuerst, dann erst die Seite (siehe popstate weiter unten)
+let ignorePop = 0;   // Anzahl selbst ausgelöster history.back()-Aufrufe, die nicht als Zurück gelten
+let modalTok = 0;    // verhindert, dass ein ausblendendes Fenster ein neu geöffnetes wieder entfernt
 function openModal(html) {
   ui.dayPop = null;
   const root = document.getElementById("modalRoot");
-  // Zurück-Taste schließt das Fenster: eigener Verlaufseintrag für das Fenster
-  if (!root.innerHTML) { try { history.pushState({ sp: "modal" }, ""); } catch (_) {} }
+  modalTok++;
+  // Eigener Verlaufseintrag für das Fenster, damit die Zurück-Taste es zuerst schließt
+  if (!(history.state && history.state.sp === "modal")) { try { history.pushState({ sp: "modal" }, ""); } catch (_) {} }
   root.innerHTML = `<div class="modal" data-act="mbg"><div class="sheet">${html}</div></div>`;
 }
 // ---------- Nächste Frist (Countdown, groß) und Rückblick ----------
@@ -2602,14 +2606,29 @@ document.addEventListener("click", (e) => {
 let modalResolve = null;
 function closeModal() {
   const root = document.getElementById("modalRoot");
-  if (root.innerHTML && history.state && history.state.sp === "modal") { try { history.back(); } catch (_) {} }
+  if (root.innerHTML && history.state && history.state.sp === "modal") {
+    ignorePop++;   // das folgende popstate ist unser eigenes Schließen, kein Zurück
+    try { history.back(); } catch (_) { ignorePop--; }
+  }
+  hideModal();
+}
+// Fenster ausblenden (kurze Animation), Zustand zurücksetzen
+function hideModal() {
+  const root = document.getElementById("modalRoot");
   ui.dayPop = null;
   const pending = modalResolve;
   modalResolve = null;
-  document.getElementById("modalRoot").innerHTML = "";
   ui.noteFor = null;
   ui.noteWindow = false;
   ui.editNote = null;
+  const m = root.querySelector(".modal");
+  if (m && !m.classList.contains("out")) {
+    m.classList.add("out");
+    const tok = ++modalTok;
+    setTimeout(() => { if (tok === modalTok) root.innerHTML = ""; }, 170);
+  } else {
+    root.innerHTML = "";
+  }
   if (pending) pending(null);
 }
 function appConfirm(text, okLabel = "Löschen") {
@@ -3919,9 +3938,9 @@ ui.tab = state.settings.startTab || ui.tab;
 // Verlauf für die Zurück-Taste: Grundeintrag (= Startbildschirm) und aktueller Reiter
 // Alles, was der Zurück-Taste als "Seite" gilt: Reiter, geöffnete Vorlesung, geöffnetes Thema
 function navSnap() {
-  return { tab: ui.tab, modOpen: ui.modOpen || null, topicOpen: ui.topicOpen || null };
+  return { tab: ui.tab, modOpen: ui.modOpen || null, topicOpen: ui.topicOpen || null, view: ui.view || "week", dayDate: ui.view === "day" ? ui.dayDate : null };
 }
-const navKey = (x) => [x.tab, x.modOpen, x.topicOpen].join("|");
+const navKey = (x) => [x.tab, x.modOpen, x.topicOpen, x.view || "week"].join("|");
 let navRestoring = false;
 // Wird bei jedem Neuzeichnen aufgerufen: neue Unterseite = neuer Verlaufseintrag, neuer Reiter = ersetzen
 function syncHistoryNav() {
@@ -3930,7 +3949,12 @@ function syncHistoryNav() {
     const cur = history.state;
     if (!cur || cur.sp !== "nav" || !cur.nav) return;
     const snap = navSnap();
-    if (navKey(cur.nav) === navKey(snap)) return;
+    if (navKey(cur.nav) === navKey(snap)) {
+      // nur der Tag hat sich geändert: Eintrag ersetzen, sonst müsste man beim Zurück jeden Tag einzeln durchgehen
+      if (snap.dayDate !== cur.nav.dayDate) history.replaceState({ sp: "nav", nav: snap }, "");
+      return;
+    }
+    // Wechsel von Woche zu Tag (oder Unterseite): ein Schritt zurück bringt wieder die vorherige Ansicht
     if (cur.nav.tab === snap.tab) history.pushState({ sp: "nav", nav: snap }, "");
     else history.replaceState({ sp: "nav", nav: snap }, "");
   } catch (_) {}
@@ -3939,19 +3963,36 @@ try {
   history.replaceState({ sp: "base" }, "");
   history.pushState({ sp: "nav", nav: navSnap() }, "");
 } catch (_) {}
+let lastRootBack = 0;
+// Ganz vorne in der App: erstes Zurück zeigt einen Hinweis, zweites Zurück innerhalb von 2 s beendet die App
+function handleBackAtRoot() {
+  const now = Date.now();
+  if (now - lastRootBack < 2000) { try { history.back(); } catch (_) {} return; }
+  lastRootBack = now;
+  showToast("Zum Beenden nochmal zurück tippen");
+  try { history.pushState({ sp: "nav", nav: navSnap() }, ""); } catch (_) {}
+}
 window.addEventListener("popstate", (e) => {
+  if (ignorePop > 0) { ignorePop--; return; }   // eigenes Schließen eines Fensters
   const st = e.state || {};
   const root = document.getElementById("modalRoot");
-  if (root && root.innerHTML) { closeModal(); return; }
+  // Ein offenes Fenster schließt sich zuerst, die Seite bleibt wie sie ist
+  if (root && root.innerHTML) { hideModal(); return; }
+  if (!st.sp || st.sp === "base") { handleBackAtRoot(); return; }
   const start = state.settings.startTab || "dashboard";
   const x = st.sp === "nav" && st.nav ? st.nav : { tab: start, modOpen: null, topicOpen: null };
+  const sameTab = x.tab === ui.tab;
+  const viewChanged = (x.view || "week") !== (ui.view || "week");
   ui.tab = x.tab;
   ui.modOpen = x.modOpen;
   ui.topicOpen = x.topicOpen;
+  ui.view = x.view || "week";
+  if (x.dayDate) ui.dayDate = x.dayDate;
+  if (viewChanged) ui.anim = "zoom";
   navRestoring = true;
   try { render(); } finally { navRestoring = false; }
   try { history.replaceState({ sp: "nav", nav: navSnap() }, ""); } catch (_) {}
-  window.scrollTo(0, 0);
+  if (!sameTab) window.scrollTo(0, 0);
 });
 initCloud();
 render();
@@ -4505,6 +4546,7 @@ function topicMenu(name, id) {
 function clearModalQuiet() {
   const root = document.getElementById("modalRoot");
   if (root) root.innerHTML = "";
+  modalTok++;
   modalResolve = null;
   ui.dayPop = null;
   try {

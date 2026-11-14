@@ -838,3 +838,9 @@ button, .btn { min-height: 40px; }
 #app.tab-in.dir-back > * { animation: tabBack .26s cubic-bezier(.2,.8,.2,1) both; }
 /* Wischen: kurzes Nachgleiten nach dem Loslassen */
 .plan-screen .plan-group { transition-timing-function: cubic-bezier(.2,.8,.2,1); }
+
+/* Fenster schließen: kurz ausblenden statt hart verschwinden */
+@keyframes fadeOutBg { from { opacity: 1; } to { opacity: 0; } }
+@keyframes sheetDown { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(16px) scale(.98); } }
+.modal.out { animation: fadeOutBg .17s ease-in forwards; pointer-events: none; }
+.modal.out .sheet { animation: sheetDown .17s ease-in forwards; }
