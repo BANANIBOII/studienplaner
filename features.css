@@ -820,3 +820,21 @@ button, .btn { min-height: 40px; }
 .pmark { position: absolute; left: 0; right: 0; top: 0; border-top: 1px dashed color-mix(in srgb, var(--accent, #2dd4bf) 70%, transparent); pointer-events: none; z-index: 0; }
 .pmark.band { border-top: 0; background: color-mix(in srgb, var(--accent, #2dd4bf) 10%, transparent); }
 .pmark span { position: absolute; left: 4px; top: 2px; font-size: 10px; font-weight: 600; opacity: .85; white-space: nowrap; }
+
+/* ===== Bewegung (einheitlich): gleiche Kurven, kurze Zeiten, kein Doppel-Effekt ===== */
+@keyframes grpFromRight { from { transform: translateX(14.2857%); } to { transform: translateX(0); } }
+@keyframes grpFromLeft { from { transform: translateX(-14.2857%); } to { transform: translateX(0); } }
+@keyframes planZoomIn { from { opacity: 0; transform: scale(.97); } to { opacity: 1; transform: none; } }
+/* Wochen-/Tageswechsel über die Pfeile: die vorgeladenen Seiten gleiten wie beim Wischen */
+.anim-next, .anim-prev { animation: none; }
+.anim-next .plan-group { animation: grpFromRight .3s cubic-bezier(.2,.8,.2,1); }
+.anim-prev .plan-group { animation: grpFromLeft .3s cubic-bezier(.2,.8,.2,1); }
+/* Wechsel Woche ↔ Tag: sanftes Einblenden statt Sprung */
+.anim-zoom { animation: planZoomIn .24s cubic-bezier(.2,.8,.2,1); }
+/* Reiterwechsel: einheitlich und kurz */
+@keyframes tabFwd { from { opacity: 0; transform: translateX(16px); } to { opacity: 1; transform: none; } }
+@keyframes tabBack { from { opacity: 0; transform: translateX(-16px); } to { opacity: 1; transform: none; } }
+#app.tab-in.dir-fwd > * { animation: tabFwd .26s cubic-bezier(.2,.8,.2,1) both; }
+#app.tab-in.dir-back > * { animation: tabBack .26s cubic-bezier(.2,.8,.2,1) both; }
+/* Wischen: kurzes Nachgleiten nach dem Loslassen */
+.plan-screen .plan-group { transition-timing-function: cubic-bezier(.2,.8,.2,1); }

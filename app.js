@@ -1361,7 +1361,7 @@ function planFabHTML() {
 }
 // Wochen- und Tagesansicht umschalten (einmal antippen auf den Reiter oder den Knopf)
 function planToggle() {
-  if (ui.view === "week") { ui.view = "day"; ui.dayDate = iso(new Date()); ui.anim = null; render(); }
+  if (ui.view === "week") { ui.view = "day"; ui.dayDate = iso(new Date()); ui.anim = "zoom"; render(); }
   else toWeekView();
 }
 
@@ -1427,6 +1427,7 @@ function toWeekView() {
   const diff = Math.round((mondayOf(parseIso(ui.dayDate)) - mondayOf(new Date())) / (7 * 86400000));
   ui.weekOffset = diff;
   ui.view = "week";
+  ui.anim = "zoom";
   render();
 }
 
@@ -2997,7 +2998,7 @@ document.addEventListener("click", async (e) => {
     if (key === "stundenplan" && ui.tab === "stundenplan") { planToggle(); return; }
     if (isDouble && key === "stundenplan") {
       // Doppeltippen auf den aktiven Reiter: Woche ↔ Tag
-      if (ui.view === "week") { ui.view = "day"; ui.dayDate = iso(new Date()); ui.anim = null; render(); }
+      if (ui.view === "week") { ui.view = "day"; ui.dayDate = iso(new Date()); ui.anim = "zoom"; render(); }
       else toWeekView();
       return;
     }
@@ -3066,7 +3067,7 @@ document.addEventListener("click", async (e) => {
       break;
     }
     case "heutewoche": toWeekView(); break; // Tagesansicht → Woche des gewählten Tages
-    case "dayopen": ui.view = "day"; ui.dayDate = el.dataset.d; render(); break;
+    case "dayopen": ui.view = "day"; ui.dayDate = el.dataset.d; ui.anim = "zoom"; render(); break;
     case "toweek": toWeekView(); break;
     case "dprev": navigate(-1); break;
     case "dnext": navigate(1); break;
