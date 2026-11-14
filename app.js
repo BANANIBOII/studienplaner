@@ -1266,7 +1266,7 @@ function viewPlan() {
     applyDayRange(pagesDates());
     const dayGroup = pagesGroup((k) => `<div class="plan-cols">${dayColumn(iso(addDays(d, k)), "", true, today, false, "")}</div>`);
     return `${planNavHTML(`KW ${kwOf(d)} · ${fmtD(d)}`, "day")}
-    <div class="${animCls}">${planLaid(`<div class="plan-screen"><div class="plan-daytop"><b class="daytitle">${wd}</b>${chipsHtml}</div><div class="week day-week"><div class="plan-rows"><div class="axis" style="height:${gridHeight()}px">${axisHTML(0)}</div><div class="plan-track" style="height:${gridHeight()}px">${dayGroup}</div></div></div></div>`)}</div>${emptyPlanHint()}${planFabHTML()}`;
+    <div class="${animCls}">${planLaid(`<div class="plan-screen" style="--grid-h:${gridHeight()}px"><div class="plan-daytop"><b class="daytitle">${wd}</b>${chipsHtml}</div><div class="week day-week"><div class="plan-rows"><div class="axis" style="height:${gridHeight()}px">${axisHTML(0)}</div><div class="plan-track" style="height:${gridHeight()}px">${dayGroup}</div></div></div></div>`)}</div>${emptyPlanHint()}${planFabHTML()}`;
   }
 
   const mon = addDays(mondayOf(today), ui.weekOffset * 7);

@@ -795,3 +795,8 @@ button, .btn { min-height: 40px; }
 .plan-group > .allday-strip.plan-strip { flex: 0 0 calc(100% / 7); min-width: 0; height: 52px; margin: 0; display: grid; gap: 0; overflow-y: auto; align-content: start; }
 /* Tagesansicht: Kopf mit Wochentag und Aufgaben ohne Uhrzeit, fest über dem Raster */
 .plan-daytop { padding-left: var(--axis-w); display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 6px; }
+
+/* Tagesansicht: nicht mehr als Spalten-Grid (das ist für die alte Tagesansicht), sondern wie die Wochenansicht */
+.plan-screen .day-week { display: block !important; gap: 0 !important; }
+.plan-screen .day-week .daycol { display: block; }
+.plan-screen .day-week .axis { height: var(--grid-h) !important; padding-top: 0; width: var(--axis-w); grid-column: auto; grid-row: auto; }
