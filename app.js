@@ -1,3 +1,19 @@
+// Fehleranzeige auf dem Bildschirm (hilft, Fehler am Handy zu finden). Tippen schließt sie.
+function showJsError(msg, file = "", line = "") {
+  try {
+    let box = document.getElementById("jsErr");
+    if (!box) {
+      box = document.createElement("div");
+      box.id = "jsErr";
+      box.style.cssText = "position:fixed;left:8px;right:8px;bottom:70px;z-index:9999;background:#7f1d1d;color:#fff;font:12px/1.4 monospace;padding:8px 10px;border-radius:10px;white-space:pre-wrap;max-height:40vh;overflow:auto";
+      box.onclick = () => box.remove();
+      document.body.appendChild(box);
+    }
+    box.textContent += `${msg} ${file ? file.split("/").pop() + ":" + line : ""}\n`;
+  } catch (_) {}
+}
+window.addEventListener("error", (e) => showJsError(e.message, e.filename, e.lineno));
+window.addEventListener("unhandledrejection", (e) => showJsError("Promise: " + String(e.reason && (e.reason.message || e.reason))));
 // ============================================================
 //  Studienplaner – Hauptprogramm
 // ============================================================
@@ -1099,7 +1115,8 @@ function axisHTML(offset = 50) {
   const every = Math.max(1, Math.ceil(14 / (step * PX_PER_MIN)));
   let out = "";
   let i = 0;
-  for (let m = START_MIN; m <= END_MIN; m += step, i++) {
+  // Beschriftung zu vollen Zeiten (z. B. 08:00, 08:45): erster Punkt ist die nächste volle Einheit nach Beginn
+  for (let m = Math.ceil(START_MIN / step) * step; m <= END_MIN; m += step, i++) {
     if (i % every) continue;
     const half = m % 60 !== 0;
     const top = offset + (m - START_MIN) * PX_PER_MIN - (half ? 4 : 8);

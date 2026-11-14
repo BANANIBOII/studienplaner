@@ -805,3 +805,18 @@ button, .btn { min-height: 40px; }
 .plan-days .dayhead { height: 54px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
 .plan-days .daytitle { font-size: 18px; font-weight: 800; letter-spacing: .01em; }
 .plan-dchips { height: 52px; overflow-y: auto; display: flex; flex-wrap: wrap; gap: 4px; align-content: flex-start; }
+
+/* Wochentag-Karten wischen mit den Wochen mit (Zeitachse bleibt fest) */
+.plan-days-week { display: flex; flex: none; gap: 0; margin: 0 0 4px; }
+.plan-dwrap { position: relative; flex: 1 1 auto; min-width: 0; overflow: hidden; height: 54px; }
+.plan-dwrap > .plan-group { height: 54px; align-items: stretch; }
+.plan-group > .plan-dheads { flex: 0 0 calc(100% / 7); min-width: 0; display: grid; gap: 0; height: 54px; }
+.plan-dheads > .dayhead { margin: 0 2px; min-width: 0; }
+
+/* Zeitachse: waagerechte Linien im eingestellten Abstand (statt nur jede Stunde) */
+.plan-screen.steplines .grid { background-image: repeating-linear-gradient(to bottom, var(--line) 0 1px, transparent 1px var(--step-px)); }
+
+/* Eigene Leisten/Pausen im Raster: Linie (eine Uhrzeit) oder Band (von–bis) */
+.pmark { position: absolute; left: 0; right: 0; top: 0; border-top: 1px dashed color-mix(in srgb, var(--accent, #2dd4bf) 70%, transparent); pointer-events: none; z-index: 0; }
+.pmark.band { border-top: 0; background: color-mix(in srgb, var(--accent, #2dd4bf) 10%, transparent); }
+.pmark span { position: absolute; left: 4px; top: 2px; font-size: 10px; font-weight: 600; opacity: .85; white-space: nowrap; }
