@@ -73,7 +73,7 @@ const DEVICE_LS = "studienplaner-device-v1";
 const DEVICE_DEFAULTS = {
   dark: true, weekend: false, scrollbars: true, colors: { dark: {}, light: {} },
   themeMode: "", fontScale: 100, startTab: "dashboard",
-  zoomY: 1, autoRange: false, dayStart: 7, dayEnd: 20,
+  zoomY: 1, autoRange: false, dayStart: 7, dayEnd: 20, planStep: 30, planLines: false,
   dash: { zoomY: 1, grid: "", now: "" },
   planLook: { grid: "", now: "" },
   navSide: "",
@@ -286,7 +286,7 @@ function applyDevice(settings) {
 function deviceFromSettings(s) {
   return {
     dark: s.dark, weekend: s.weekend, colors: s.colors, zoomY: s.zoomY, autoRange: s.autoRange,
-    dayStart: s.dayStart, dayEnd: s.dayEnd, dash: s.dash, navSide: s.navSide || "", checkSide: s.checkSide || "left", scrollbars: s.scrollbars !== false, themeMode: s.themeMode || "", fontScale: s.fontScale || 100, startTab: s.startTab || "dashboard", layouts: s.layouts || {}, cal: s.cal || DEVICE_DEFAULTS.cal,
+    dayStart: s.dayStart, dayEnd: s.dayEnd, planStep: s.planStep || 30, planLines: !!s.planLines, dash: s.dash, navSide: s.navSide || "", checkSide: s.checkSide || "left", scrollbars: s.scrollbars !== false, themeMode: s.themeMode || "", fontScale: s.fontScale || 100, startTab: s.startTab || "dashboard", layouts: s.layouts || {}, cal: s.cal || DEVICE_DEFAULTS.cal,
     planLook: { grid: (s.plan && s.plan.grid) || "", now: (s.plan && s.plan.now) || "" },
   };
 }
@@ -1067,13 +1067,25 @@ function todoItem(t) {
 }
 
 // ---------- Stundenplan ----------
+// Abstand der Zeitachse in Minuten (Einstellung im Stundenplan-Menü, nur auf diesem Gerät)
+const PLAN_STEPS = [5, 10, 15, 20, 30, 45, 60, 90, 120];
+function planStepMin() {
+  const v = Number(state.settings.planStep);
+  return PLAN_STEPS.includes(v) ? v : 30;
+}
+const planLinesCls = () => (state.settings.planLines ? " steplines" : "");
+const stepStyle = () => `--step-px:${planStepMin() * PX_PER_MIN}px;`;
 function axisHTML(offset = 50) {
+  const step = planStepMin();
+  // Beschriftung nur so oft, dass zwischen zwei Zeiten mindestens ca. 14 px Platz bleiben
+  const every = Math.max(1, Math.ceil(14 / (step * PX_PER_MIN)));
   let out = "";
-  for (let m = Math.ceil(START_MIN / 30) * 30; m <= END_MIN; m += 30) {
-    const h = Math.floor(m / 60);
-    const half = m % 60 === 30;
+  let i = 0;
+  for (let m = START_MIN; m <= END_MIN; m += step, i++) {
+    if (i % every) continue;
+    const half = m % 60 !== 0;
     const top = offset + (m - START_MIN) * PX_PER_MIN - (half ? 4 : 8);
-    out += `<div class="axis-h${half ? " half" : ""}" style="top:${top}px">${pad(h)}:${half ? "30" : "00"}</div>`;
+    out += `<div class="axis-h${half ? " half" : ""}" style="top:${top}px">${pad(Math.floor(m / 60))}:${pad(m % 60)}</div>`;
   }
   return out;
 }
@@ -1131,8 +1143,9 @@ function alldayStripHTML(mon, dayCount, bare = false) {
   const sunK = iso(addDays(mon, 6));
   const idx = (k) => Math.round((parseIso(k) - mon) / 86400000);
   const items = state.todos
-    .filter((t) => t.date && t.endDate && t.endDate > t.date && t.date <= sunK && t.endDate >= monK)
-    .map((t) => ({ t, s: Math.max(0, idx(t.date)), e: Math.min(dayCount - 1, idx(t.endDate)) }))
+    // Zeiträume über mehrere Tage, dazu Aufgaben ohne Uhrzeit an einem Tag (die mit Uhrzeit stehen im Raster)
+    .filter((t) => t.date && t.date <= sunK && (t.endDate && t.endDate > t.date ? t.endDate >= monK : (!t.time && t.date >= monK)))
+    .map((t) => ({ t, s: Math.max(0, idx(t.date)), e: Math.min(dayCount - 1, idx(t.endDate && t.endDate > t.date ? t.endDate : t.date)) }))
     .filter((x) => x.s <= x.e)
     .sort((a, b) => a.s - b.s || b.e - a.e);
   // Leerer Streifen behält seine feste Höhe, damit die Stunden in jeder Woche gleich hoch bleiben
@@ -1162,15 +1175,19 @@ function weekColsHTML(mon, dayCount, today) {
   return cols;
 }
 // Wochentage als fester Kopf über dem Aufgaben-Streifen (gleiche Spalten wie der Streifen)
+// Die Karten wischen mit den Wochen mit (wie der Aufgaben-Streifen); die Zeitachse bleibt stehen
 function weekHeadHTML(mon, dayCount, today, compact = "") {
   const todayK = iso(today);
-  let cells = "";
-  for (let i = 0; i < dayCount; i++) {
-    const d = addDays(mon, i);
-    const k = iso(d);
-    cells += `<div class="dayhead${k === todayK ? " today" : ""}" data-act="dayopen" data-d="${k}" style="${dayTintStyle(k)}"><span class="wd"><span class="wd-l">${WEEKDAYS_LONG[i]}</span><span class="wd-s">${WEEKDAYS[i]}</span></span><span class="dd">${pad(d.getDate())}.${pad(d.getMonth() + 1)}.</span></div>`;
-  }
-  return `<div class="plan-days${compact}" style="grid-template-columns:var(--axis-w, 28px) repeat(${dayCount}, minmax(0, 1fr));"><div></div>${cells}</div>`;
+  const cellsOf = (m) => {
+    let cells = "";
+    for (let i = 0; i < dayCount; i++) {
+      const d = addDays(m, i);
+      const k = iso(d);
+      cells += `<div class="dayhead${k === todayK ? " today" : ""}" data-act="dayopen" data-d="${k}" style="${dayTintStyle(k)}"><span class="wd"><span class="wd-l">${WEEKDAYS_LONG[i]}</span><span class="wd-s">${WEEKDAYS[i]}</span></span><span class="dd">${pad(d.getDate())}.${pad(d.getMonth() + 1)}.</span></div>`;
+    }
+    return cells;
+  };
+  return `<div class="plan-days plan-days-week${compact}"><div class="plan-topspacer"></div><div class="plan-dwrap">${pagesGroup((k) => `<div class="plan-dheads" style="grid-template-columns:repeat(${dayCount}, minmax(0, 1fr));">${cellsOf(addDays(mon, k * 7))}</div>`)}</div></div>`;
 }
 // Ein Knopf für die Stundenplan-Einstellungen, außerhalb des Bereichs, der beim Wischen verschoben wird
 function syncPlanFab() {
@@ -1266,7 +1283,7 @@ function viewPlan() {
     applyDayRange(pagesDates());
     const dayGroup = pagesGroup((k) => `<div class="plan-cols">${dayColumn(iso(addDays(d, k)), "", true, today, false, "")}</div>`);
     return `${planNavHTML(`KW ${kwOf(d)} · ${fmtD(d)}`, "day")}
-    <div class="${animCls}">${planLaid(`<div class="plan-screen" style="--grid-h:${gridHeight()}px"><div class="plan-top"><div class="plan-topspacer"></div><div class="plan-stripwrap"><div class="plan-dchips">${dayChips || ""}</div></div></div><div class="plan-days" style="grid-template-columns:var(--axis-w, 28px) minmax(0,1fr);"><div></div><div class="dayhead${iso(d) === iso(today) ? " today" : ""}" data-act="toweek" title="Zur Wochenansicht"><b class="daytitle">${wd}</b></div></div><div class="week day-week"><div class="plan-rows"><div class="axis" style="height:${gridHeight()}px">${axisHTML(0)}</div><div class="plan-track" style="height:${gridHeight()}px">${dayGroup}</div></div></div></div>`)}</div>${emptyPlanHint()}${planFabHTML()}`;
+    <div class="${animCls}">${planLaid(`<div class="plan-screen${planLinesCls()}" style="--grid-h:${gridHeight()}px;${stepStyle()}"><div class="plan-top"><div class="plan-topspacer"></div><div class="plan-stripwrap"><div class="plan-dchips">${dayChips || ""}</div></div></div><div class="plan-days" style="grid-template-columns:var(--axis-w, 28px) minmax(0,1fr);"><div></div><div class="dayhead${iso(d) === iso(today) ? " today" : ""}" data-act="toweek" title="Zur Wochenansicht"><b class="daytitle">${wd}</b></div></div><div class="week day-week"><div class="plan-rows"><div class="axis" style="height:${gridHeight()}px">${axisHTML(0)}</div><div class="plan-track" style="height:${gridHeight()}px">${dayGroup}</div></div></div></div>`)}</div>${emptyPlanHint()}${planFabHTML()}`;
   }
 
   const mon = addDays(mondayOf(today), ui.weekOffset * 7);
@@ -1284,7 +1301,7 @@ function viewPlan() {
   // Oben fest: Wochentage, dann Aufgaben-Streifen. Nur das Raster darunter scrollt.
   const head = weekHeadHTML(mon, dayCount, today, compact);
   // Zeitachse und Kopf stehen fest, nur die Modul-Spalten (plan-track) wischen
-  h += `<div class="${animCls}">${planLaid(`<div class="plan-screen">${topHTML}${head}<div class="week${compact}"><div class="plan-rows"><div class="axis" style="height:${gridHeight()}px">${axisHTML(0)}</div><div class="plan-track" style="height:${gridHeight()}px">${colsGroup}</div></div></div></div>`)}</div>${emptyPlanHint()}`;
+  h += `<div class="${animCls}">${planLaid(`<div class="plan-screen${planLinesCls()}" style="${stepStyle()}">${topHTML}${head}<div class="week${compact}"><div class="plan-rows"><div class="axis" style="height:${gridHeight()}px">${axisHTML(0)}</div><div class="plan-track" style="height:${gridHeight()}px">${colsGroup}</div></div></div></div>`)}</div>${emptyPlanHint()}`;
   return h;
 }
 
@@ -1334,6 +1351,9 @@ function openPlanMenu() {
     <button class="btn" data-act="planedit" style="margin-bottom:12px">Termine bearbeiten (verschieben, kopieren)</button>
     <label class="row" style="margin-bottom:12px"><input type="checkbox" data-change="weekend" ${s.weekend ? "checked" : ""}> Samstag und Sonntag anzeigen</label>
     <label class="row" style="margin-bottom:12px"><input type="checkbox" data-change="autorange" ${s.autoRange ? "checked" : ""}> Zeitachse automatisch an Vorlesungen anpassen (30 Min davor und danach)</label>
+    <label class="muted">Abstand der Zeitachse</label>
+    <select data-plan-step style="margin-bottom:12px">${PLAN_STEPS.map((v) => `<option value="${v}" ${v === planStepMin() ? "selected" : ""}>${v === 60 ? "1 Std" : `${v} Min`}</option>`).join("")}</select>
+    <label class="row" style="margin-bottom:12px"><input type="checkbox" data-change="planlines" ${s.planLines ? "checked" : ""}> Waagerechte Linien im gleichen Abstand (sonst nur jede Stunde)</label>
     <label class="muted">Beginn</label>
     <select data-plan-range="dayStart" ${s.autoRange ? "disabled" : ""}>${opts(6, 11.5, s.dayStart)}</select>
     <label class="muted">Ende</label>
@@ -3413,6 +3433,16 @@ document.addEventListener("change", async (e) => {
   }
   if (t.dataset.calrange) {
     state.settings.cal = { ...calSet(), [t.dataset.calrange === "w" ? "w" : "h"]: Number(t.value) };
+    commit();
+    return;
+  }
+  if (t.hasAttribute && t.hasAttribute("data-plan-step")) {
+    state.settings.planStep = Number(t.value);
+    commit();
+    return;
+  }
+  if (t.dataset.change === "planlines") {
+    state.settings.planLines = t.checked;
     commit();
     return;
   }
