@@ -3938,9 +3938,9 @@ ui.tab = state.settings.startTab || ui.tab;
 // Verlauf für die Zurück-Taste: Grundeintrag (= Startbildschirm) und aktueller Reiter
 // Alles, was der Zurück-Taste als "Seite" gilt: Reiter, geöffnete Vorlesung, geöffnetes Thema
 function navSnap() {
-  return { tab: ui.tab, modOpen: ui.modOpen || null, topicOpen: ui.topicOpen || null, view: ui.view || "week", dayDate: ui.view === "day" ? ui.dayDate : null };
+  return { tab: ui.tab, modOpen: ui.modOpen || null, topicOpen: ui.topicOpen || null, view: ui.view || "week", dayDate: ui.view === "day" ? ui.dayDate : null, setPage: ui.setPage || null, nfOnly: ui.nfOnly || null };
 }
-const navKey = (x) => [x.tab, x.modOpen, x.topicOpen, x.view || "week"].join("|");
+const navKey = (x) => [x.tab, x.modOpen, x.topicOpen, x.view || "week", x.setPage || "", x.nfOnly || ""].join("|");
 let navRestoring = false;
 // Wird bei jedem Neuzeichnen aufgerufen: neue Unterseite = neuer Verlaufseintrag, neuer Reiter = ersetzen
 function syncHistoryNav() {
@@ -3949,14 +3949,16 @@ function syncHistoryNav() {
     const cur = history.state;
     if (!cur || cur.sp !== "nav" || !cur.nav) return;
     const snap = navSnap();
-    if (navKey(cur.nav) === navKey(snap)) {
+    const kNow = navKey(snap);
+    if (navKey(cur.nav) === kNow) {
       // nur der Tag hat sich geändert: Eintrag ersetzen, sonst müsste man beim Zurück jeden Tag einzeln durchgehen
       if (snap.dayDate !== cur.nav.dayDate) history.replaceState({ sp: "nav", nav: snap }, "");
       return;
     }
-    // Wechsel von Woche zu Tag (oder Unterseite): ein Schritt zurück bringt wieder die vorherige Ansicht
-    if (cur.nav.tab === snap.tab) history.pushState({ sp: "nav", nav: snap }, "");
-    else history.replaceState({ sp: "nav", nav: snap }, "");
+    // In-App-Zurück (‹ Zurück, „Woche“) nimmt den Verlaufseintrag zurück, statt einen neuen anzulegen
+    if (cur.nav.prev && navKey(cur.nav.prev) === kNow) { history.back(); return; }
+    // Neue Unterseite oder Ansicht: der Verlauf merkt sich die vorherige Ansicht
+    history.pushState({ sp: "nav", nav: { ...snap, prev: { ...cur.nav, prev: undefined } } }, "");
   } catch (_) {}
 }
 try {
@@ -3988,10 +3990,12 @@ window.addEventListener("popstate", (e) => {
   ui.topicOpen = x.topicOpen;
   ui.view = x.view || "week";
   if (x.dayDate) ui.dayDate = x.dayDate;
+  ui.setPage = x.setPage || null;
+  ui.nfOnly = x.nfOnly || null;
   if (viewChanged) ui.anim = "zoom";
   navRestoring = true;
   try { render(); } finally { navRestoring = false; }
-  try { history.replaceState({ sp: "nav", nav: navSnap() }, ""); } catch (_) {}
+  try { history.replaceState({ sp: "nav", nav: { ...navSnap(), prev: x.prev } }, ""); } catch (_) {}
   if (!sameTab) window.scrollTo(0, 0);
 });
 initCloud();
