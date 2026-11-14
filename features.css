@@ -776,3 +776,11 @@ button, .btn { min-height: 40px; }
 .plan-track > .plan-ghost { position: absolute; top: 0; left: 0; right: 0; }
 /* keine senkrechten Linien zwischen den Tagen (nur waagerechte Stundenlinien) */
 .plan-screen .grid { border-left: 0 !important; border-right: 0 !important; }
+
+/* Aufgaben-Streifen: oben, wischt mit den Wochen mit */
+.plan-top { display: flex; flex: none; margin: 0 0 6px; }
+.plan-topspacer { flex: none; width: var(--axis-w); }
+.plan-stripwrap { position: relative; flex: 1 1 auto; min-width: 0; overflow: hidden; height: 52px; }
+.plan-stripwrap > .allday-strip.plan-strip { display: grid; gap: 0; height: 52px; margin: 0; overflow-y: auto; align-content: start; }
+.plan-stripwrap > .plan-ghost { position: absolute; top: 0; left: 0; right: 0; height: 52px; }
+.plan-stripwrap > .plan-ghost > .plan-strip { height: 52px; }

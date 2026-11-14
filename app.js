@@ -1121,7 +1121,8 @@ function dayTintStyle(k) {
 }
 
 // Mehrtägige To-Dos (Zeiträume) als Balken über den Tagen, statt im Tageskopf
-function alldayStripHTML(mon, dayCount) {
+// bare: nur die Balken ohne Zeitachsen-Spalte (für den mitwischenden Streifen)
+function alldayStripHTML(mon, dayCount, bare = false) {
   const monK = iso(mon);
   const sunK = iso(addDays(mon, 6));
   const idx = (k) => Math.round((parseIso(k) - mon) / 86400000);
@@ -1131,7 +1132,8 @@ function alldayStripHTML(mon, dayCount) {
     .filter((x) => x.s <= x.e)
     .sort((a, b) => a.s - b.s || b.e - a.e);
   // Leerer Streifen behält seine feste Höhe, damit die Stunden in jeder Woche gleich hoch bleiben
-  if (!items.length) return `<div class="allday-strip" aria-hidden="true"></div>`;
+  if (!items.length) return `<div class="allday-strip plan-strip" aria-hidden="true"></div>`;
+  const off = bare ? 1 : 2;   // Spaltennummer des ersten Tages (Zeitachse davor, falls vorhanden)
   // Überlappende Balken untereinander in eigene Zeilen legen
   const rowEnds = [];
   items.forEach((x) => {
@@ -1141,8 +1143,9 @@ function alldayStripHTML(mon, dayCount) {
   });
   const bars = items.map((x) => {
     const c = catColor(x.t.done ? "done" : x.t.type);
-    return `<div class="allday-bar${x.t.done ? " is-done" : ""}" data-act="tedit" data-id="${x.t.id}" style="grid-column:${x.s + 2} / ${x.e + 3};grid-row:${x.row + 1};--c:${c}"><span>${esc(x.t.title)}</span><small>${esc(dateText(x.t))}</small></div>`;
+    return `<div class="allday-bar${x.t.done ? " is-done" : ""}" data-act="tedit" data-id="${x.t.id}" style="grid-column:${x.s + off} / ${x.e + off + 1};grid-row:${x.row + 1};--c:${c}"><span>${esc(x.t.title)}</span><small>${esc(dateText(x.t))}</small></div>`;
   }).join("");
+  if (bare) return `<div class="allday-strip plan-strip" style="grid-template-columns:repeat(${dayCount}, minmax(0, 1fr));">${bars}</div>`;
   return `<div class="allday-strip" style="grid-template-columns:var(--axis-w, 28px) repeat(${dayCount}, minmax(0, 1fr));"><div></div>${bars}</div>`;
 }
 // Die Tagesspalten einer Woche (Wochentag ausgeschrieben, wenn die Spalte breit genug ist, darunter das Datum)
@@ -1267,12 +1270,13 @@ function viewPlan() {
 
   const cols = weekColsHTML(mon, dayCount, today);
   // Mehrtägige Zeiträume oben als Balken, die Tagesspalten bleiben frei
-  const strip = alldayStripHTML(mon, dayCount);
+  // Aufgaben-Streifen: steht oben, wischt aber mit den Wochen mit (Spalte für die Zeitachse daneben)
+  const topHTML = `<div class="plan-top"><div class="plan-topspacer"></div><div class="plan-stripwrap">${alldayStripHTML(mon, dayCount, true)}</div></div>`;
   const compact = state.settings.planHead === "kompakt" ? " compact" : "";
   // Oben fest: Wochentage, dann Aufgaben-Streifen. Nur das Raster darunter scrollt.
   const head = weekHeadHTML(mon, dayCount, today, compact);
   // Zeitachse und Kopf stehen fest, nur die Modul-Spalten (plan-track) wischen
-  h += `<div class="${animCls}">${planLaid(`<div class="plan-screen">${strip}${head}<div class="week${compact}"><div class="plan-rows"><div class="axis" style="height:${gridHeight()}px">${axisHTML(0)}</div><div class="plan-track"><div class="plan-cols">${cols}</div></div></div></div></div>`)}</div>${emptyPlanHint()}`;
+  h += `<div class="${animCls}">${planLaid(`<div class="plan-screen">${topHTML}${head}<div class="week${compact}"><div class="plan-rows"><div class="axis" style="height:${gridHeight()}px">${axisHTML(0)}</div><div class="plan-track"><div class="plan-cols">${cols}</div></div></div></div></div>`)}</div>${emptyPlanHint()}`;
   return h;
 }
 
@@ -2756,42 +2760,45 @@ document.addEventListener("pointermove", (e) => {
 
 // Wischen im Stundenplan: die Ansicht gleitet mit dem Finger, die nächste Woche bzw. der nächste Tag kommt von der Seite
 let swipe = null;
-// Ansicht der Nachbarwoche oder des Nachbartages (Tagesansicht wischt noch als Ganzes)
+// Ansicht der Nachbartag (Tagesansicht wischt noch als Ganzes)
 const planAdjacentHTML = (dir) => {
   const save = { view: ui.view, dayDate: ui.dayDate, weekOffset: ui.weekOffset, anim: ui.anim };
   try {
-    if (ui.view === "day") ui.dayDate = iso(addDays(parseIso(ui.dayDate), dir));
-    else ui.weekOffset += dir;
+    ui.dayDate = iso(addDays(parseIso(ui.dayDate), dir));
     ui.anim = null;
-    // Die Nachbarwoche bekommt ihre eigene Zeitachse (Stundenhöhe bleibt gleich, nur die Stunden passen sich an)
     applyDayRange();
     return viewPlan();
   } finally { Object.assign(ui, save); applyDayRange(); }
 };
-// Nur die Modul-Spalten der Nachbarwoche: Zeitachse und Kopf bleiben beim Wischen stehen
-const planTrackHTML = (dir) => {
+// Nachbarwoche: die Modul-Spalten und der Aufgaben-Streifen (beide wischen mit)
+const planNeighborHTML = (dir) => {
   const save = { weekOffset: ui.weekOffset, anim: ui.anim };
   try {
     ui.weekOffset += dir;
     ui.anim = null;
-    applyDayRange();
+    applyDayRange();   // eigene Zeitachse der Nachbarwoche
     const today = new Date();
     const mon = addDays(mondayOf(today), ui.weekOffset * 7);
-    return `<div class="plan-cols">${weekColsHTML(mon, state.settings.weekend ? 7 : 5, today)}</div>`;
+    const n = state.settings.weekend ? 7 : 5;
+    return {
+      cols: `<div class="plan-cols">${weekColsHTML(mon, n, today)}</div>`,
+      strip: alldayStripHTML(mon, n, true),
+    };
   } finally { Object.assign(ui, save); applyDayRange(); }
 };
 function resetSwipeTrack(app) {
   document.body.classList.remove("swiping");
-  document.querySelectorAll(".plan-cols").forEach((c) => { c.style.transition = ""; c.style.transform = ""; });
+  document.querySelectorAll(".plan-cols, .plan-strip").forEach((c) => { c.style.transition = ""; c.style.transform = ""; });
   if (!app) return;
   app.style.transition = "";
   app.style.transform = "";
   app.style.position = "";
   app.querySelectorAll(".plan-fab").forEach((f) => { f.style.transition = ""; f.style.transform = ""; });
 }
-// Wisch sauber abbrechen (z.B. wenn ein zweiter Finger dazukommt): Geist entfernen, Ansicht zurücksetzen
+// Geister entfernen (Wochenansicht: je Nachbarwoche ein Geist im Raster und einer im Streifen)
 function removeGhosts(sw) {
-  if (sw && sw.ghosts) sw.ghosts.forEach((g) => g.remove());
+  if (!sw || !sw.ghosts) return;
+  sw.ghosts.forEach((g) => { if (g.t) { g.t.remove(); g.s.remove(); } else g.remove(); });
 }
 function abortSwipe() {
   if (!swipe) return;
@@ -2807,29 +2814,37 @@ document.addEventListener("touchstart", (e) => {
   if (!app) { swipe = null; return; }
   const t = e.touches[0];
   const weekMode = ui.view !== "day";
-  // Wochenansicht: nur die Modul-Spalten wischen, Zeitachse und Kopf bleiben stehen
   const track = weekMode ? document.querySelector(".plan-track") : null;
   const cols = weekMode ? document.querySelector(".plan-cols") : null;
-  if (weekMode && (!track || !cols)) { swipe = null; return; }
-  // Vorherige und nächste Woche/Tag werden schon JETZT aufgebaut (nicht erst beim Wischen)
+  const stripWrap = weekMode ? document.querySelector(".plan-stripwrap") : null;
+  const strip = weekMode ? document.querySelector(".plan-strip") : null;
+  if (weekMode && (!track || !cols || !stripWrap || !strip)) { swipe = null; return; }
   if (!weekMode) app.style.position = "relative";
   document.body.classList.add("swiping");
+  // Beide Nachbarwochen werden schon JETZT aufgebaut; beim Wischen wird nur verschoben
   const ghosts = [-1, 1].map((dir) => {
+    if (weekMode) {
+      const p = planNeighborHTML(dir);
+      const tg = document.createElement("div");
+      tg.className = "plan-ghost";
+      tg.innerHTML = p.cols;
+      track.appendChild(tg);
+      const sg = document.createElement("div");
+      sg.className = "plan-ghost plan-ghost-strip";
+      sg.innerHTML = p.strip;
+      stripWrap.appendChild(sg);
+      return { dir, t: tg, s: sg };
+    }
     const g = document.createElement("div");
     g.className = "plan-ghost";
-    if (weekMode) {
-      g.innerHTML = planTrackHTML(dir);
-      g.style.transform = `translateX(${dir * 100}%)`;
-      track.appendChild(g);
-    } else {
-      g.innerHTML = planAdjacentHTML(dir);
-      g.querySelectorAll(".plan-fab").forEach((n) => n.remove());
-      g.style.transform = `translateX(${dir * 100}%)`;
-      app.appendChild(g);
-    }
+    g.innerHTML = planAdjacentHTML(dir);
+    g.querySelectorAll(".plan-fab").forEach((n) => n.remove());
+    g.style.transform = `translateX(${dir * 100}%)`;
+    app.appendChild(g);
     return g;
   });
-  swipe = { x: t.clientX, y: t.clientY, t: Date.now(), dx: 0, mode: null, dir: 0, ghosts, ghost: null, weekMode, track, target: weekMode ? cols : app };
+  if (weekMode) ghosts.forEach((gh) => { gh.t.style.transform = `translateX(${gh.dir * 100}%)`; gh.s.style.transform = `translateX(${gh.dir * 100}%)`; });
+  swipe = { x: t.clientX, y: t.clientY, t: Date.now(), dx: 0, mode: null, dir: 0, ghosts, ghost: null, weekMode, track, targets: weekMode ? [cols, strip] : [app] };
 }, { passive: true });
 document.addEventListener("touchmove", (e) => {
   if (!swipe) return;
@@ -2843,9 +2858,11 @@ document.addEventListener("touchmove", (e) => {
     if (Math.abs(dx) < 1.3 * Math.abs(dy)) { abortSwipe(); return; }   // senkrecht: normal scrollen
     swipe.mode = "h";
     swipe.dir = dx < 0 ? 1 : -1;      // 1 = nächste Woche/Tag, -1 = vorherige
-    // Nur die Seite behalten, in die gewischt wird
-    swipe.ghost = swipe.ghosts[swipe.dir < 0 ? 0 : 1];
-    swipe.ghosts.forEach((g) => { if (g !== swipe.ghost) g.remove(); });
+    if (!swipe.weekMode) {
+      // Tagesansicht: nur die Seite behalten, in die gewischt wird
+      swipe.ghost = swipe.ghosts[swipe.dir < 0 ? 0 : 1];
+      swipe.ghosts.forEach((g) => { if (g !== swipe.ghost) g.remove(); });
+    }
   }
   swipe.dx = dx;
   // Verschieben nur einmal pro Bildwiederholung (ruhiger Lauf)
@@ -2853,12 +2870,11 @@ document.addEventListener("touchmove", (e) => {
     if (!swipe) return;
     swipe.raf = 0;
     if (swipe.weekMode) {
-      swipe.target.style.transition = "none";
-      swipe.target.style.transform = `translateX(${swipe.dx}px)`;
-      if (swipe.ghost) {
-        swipe.ghost.style.transition = "none";
-        swipe.ghost.style.transform = `translateX(calc(${swipe.dir * 100}% + ${swipe.dx}px))`;
-      }
+      // Beide Seiten bleiben im Blick: nach links kommt die nächste, nach rechts die vorherige Woche
+      swipe.targets.forEach((el) => { el.style.transition = "none"; el.style.transform = `translateX(${swipe.dx}px)`; });
+      swipe.ghosts.forEach((gh) => {
+        [gh.t, gh.s].forEach((el) => { el.style.transition = "none"; el.style.transform = `translateX(calc(${gh.dir * 100}% + ${swipe.dx}px))`; });
+      });
       return;
     }
     const a = document.getElementById("app");
@@ -2877,21 +2893,19 @@ document.addEventListener("touchend", () => {
   const app = document.getElementById("app");
   if (!app) return;
   if (!sw.mode || longFired) { removeGhosts(sw); resetSwipeTrack(app); return; }
-  const W = sw.weekMode ? sw.track.offsetWidth : app.offsetWidth;
-  // Wechsel schon ab einem guten Drittel der Breite, oder bei einem schnellen kurzen Wisch
-  const quick = Date.now() - sw.t < 300 && Math.abs(sw.dx) > W * 0.12;
-  const commit = Math.abs(sw.dx) > W * 0.3 || quick;
   const ease = "transform .32s cubic-bezier(.2,.8,.2,1)";
   if (sw.weekMode) {
-    sw.target.style.transition = ease;
-    sw.target.style.transform = commit ? `translateX(${-sw.dir * W}px)` : "translateX(0)";
-    if (sw.ghost) {
-      sw.ghost.style.transition = ease;
-      sw.ghost.style.transform = commit ? "translateX(0)" : `translateX(${sw.dir * 100}%)`;
-    }
+    // Richtung nach dem letzten Stand des Fingers
+    const dir = sw.dx < 0 ? 1 : -1;
+    const W = sw.track.offsetWidth;
+    const quick = Date.now() - sw.t < 300 && Math.abs(sw.dx) > W * 0.12;
+    const commit = Math.abs(sw.dx) > W * 0.3 || quick;
+    const gh = sw.ghosts.find((g) => g.dir === dir);
+    sw.targets.forEach((el) => { el.style.transition = ease; el.style.transform = commit ? `translateX(${-dir * W}px)` : "translateX(0)"; });
+    if (gh) [gh.t, gh.s].forEach((el) => { el.style.transition = ease; el.style.transform = commit ? "translateX(0)" : `translateX(${dir * 100}%)`; });
     setTimeout(() => {
       if (commit) {
-        ui.weekOffset += sw.dir;
+        ui.weekOffset += dir;
         ui.anim = null;
         render();
         resetSwipeTrack(document.getElementById("app") || app);
@@ -2902,12 +2916,16 @@ document.addEventListener("touchend", () => {
     }, 330);
     return;
   }
+  const W = app.offsetWidth;
+  // Wechsel schon ab einem guten Drittel der Breite, oder bei einem schnellen kurzen Wisch
+  const quick = Date.now() - sw.t < 300 && Math.abs(sw.dx) > W * 0.12;
+  const commit = Math.abs(sw.dx) > W * 0.3 || quick;
   app.style.transition = ease;
   app.style.transform = commit ? `translateX(${-sw.dir * W}px)` : "translateX(0)";
   app.querySelectorAll(".plan-fab").forEach((f) => { f.style.transition = ease; f.style.transform = "translateX(0)"; });
   setTimeout(() => {
     if (commit) {
-      if (ui.view === "day") ui.dayDate = iso(addDays(parseIso(ui.dayDate), sw.dir));
+      ui.dayDate = iso(addDays(parseIso(ui.dayDate), sw.dir));
       ui.anim = null;
       render();
       resetSwipeTrack(document.getElementById("app") || app);
