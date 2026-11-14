@@ -1074,6 +1074,24 @@ function planStepMin() {
   return PLAN_STEPS.includes(v) ? v : 30;
 }
 const planLinesCls = () => (state.settings.planLines ? " steplines" : "");
+// Eigene Leisten im Raster: eine Uhrzeit = Linie, Uhrzeit + Ende = Band (z. B. Pause)
+const toMinSafe = (s) => { const m = /^(\d{1,2}):(\d{2})$/.exec(s || ""); return m ? Number(m[1]) * 60 + Number(m[2]) : null; };
+function marksHTML() {
+  let out = "";
+  (state.settings.planMarks || []).forEach((mk) => {
+    const s = toMinSafe(mk.time);
+    if (s == null) return;
+    const e = toMinSafe(mk.end);
+    const band = e != null && e > s;
+    const from = Math.max(s, START_MIN);
+    const to = Math.min(band ? e : s, END_MIN);
+    if (to < START_MIN || from > END_MIN || (band && to <= from)) return;
+    const top = (from - START_MIN) * PX_PER_MIN;
+    const h = band ? (to - from) * PX_PER_MIN : 0;
+    out += `<div class="pmark${band ? " band" : ""}" style="top:${top}px;${band ? `height:${h}px;` : ""}">${mk.label ? `<span>${esc(mk.label)}</span>` : ""}</div>`;
+  });
+  return out;
+}
 const stepStyle = () => `--step-px:${planStepMin() * PX_PER_MIN}px;`;
 function axisHTML(offset = 50) {
   const step = planStepMin();
@@ -1262,10 +1280,11 @@ function dayColumn(k, label, wide, today, noNav = false, chips = "") {
   }
   const gridStyle = ` style="height:${gridHeight()}px;${plan.grid ? `background-color:${plan.grid};` : ""}"`;
   const headAct = noNav ? "" : (wide ? "toweek" : "dayopen");
+  const marks = ui.tab === "stundenplan" ? marksHTML() : "";
   return `<div class="daycol${wide ? " wide" : ""}">
     <div class="dayhead ${isToday ? "today" : ""}" data-act="${headAct}" data-d="${k}" style="${dayTintStyle(k)}">${label}</div>
     ${chips}
-    <div class="grid" data-date="${k}"${gridStyle}>${blocks}${now}</div></div>`;
+    <div class="grid" data-date="${k}"${gridStyle}>${marks}${blocks}${now}</div></div>`;
 }
 
 function viewPlan() {
@@ -1365,6 +1384,15 @@ function openPlanMenu() {
     <input type="color" value="${gridVal}" data-plan="grid">
     <label class="muted">Farbe der Linie (aktuelle Uhrzeit)</label>
     <input type="color" value="${nowVal}" data-plan="now">
+    <h4 style="margin:16px 0 6px">Leisten & Pausen</h4>
+    <p class="muted" style="margin:0 0 8px">Ohne Ende eine Linie, mit Ende ein Band (z. B. Mittagspause 12:00–13:00).</p>
+    ${(s.planMarks || []).map((mk) => `<div class="row" style="gap:6px;flex-wrap:wrap;margin-bottom:8px">
+      <input type="time" value="${mk.time || ""}" data-mark="time" data-id="${mk.id}" style="width:auto">
+      <input type="time" value="${mk.end || ""}" data-mark="end" data-id="${mk.id}" style="width:auto" title="Ende (leer = nur Linie)">
+      <input value="${esc(mk.label || "")}" data-mark="label" data-id="${mk.id}" placeholder="Name" style="flex:1;min-width:80px">
+      <button class="btn ghost" data-act="markdel" data-id="${mk.id}" title="Löschen">✕</button>
+    </div>`).join("")}
+    <button class="btn ghost" data-act="markadd" style="margin-bottom:12px">+ Leiste hinzufügen</button>
     <div class="row" style="margin-top:14px">
       <button class="btn ghost" data-act="planreset">Standard</button>
       <button class="btn" data-act="mclose">Fertig</button>
@@ -3038,6 +3066,12 @@ document.addEventListener("click", async (e) => {
       clearModalQuiet();
       commit(); break;
     }
+    case "markadd":
+      state.settings.planMarks = [...(state.settings.planMarks || []), { id: uid(), time: "12:00", end: "", label: "" }];
+      commit(); openPlanMenu(); break;
+    case "markdel":
+      state.settings.planMarks = (state.settings.planMarks || []).filter((mk) => mk.id !== el.dataset.id);
+      commit(); openPlanMenu(); break;
     case "planreset":
       // Nur Hintergrund und Linie zurücksetzen; die Kategorie-Farben gelten überall und bleiben
       state.settings.plan = { ...state.settings.plan, grid: "", now: "" };
@@ -3438,6 +3472,12 @@ document.addEventListener("change", async (e) => {
   }
   if (t.hasAttribute && t.hasAttribute("data-plan-step")) {
     state.settings.planStep = Number(t.value);
+    commit();
+    return;
+  }
+  if (t.dataset.mark) {
+    const mk = (state.settings.planMarks || []).find((x) => x.id === t.dataset.id);
+    if (mk) mk[t.dataset.mark] = t.value;
     commit();
     return;
   }
