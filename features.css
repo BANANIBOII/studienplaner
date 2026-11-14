@@ -784,3 +784,14 @@ button, .btn { min-height: 40px; }
 .plan-stripwrap > .allday-strip.plan-strip { display: grid; gap: 0; height: 52px; margin: 0; overflow-y: auto; align-content: start; }
 .plan-stripwrap > .plan-ghost { position: absolute; top: 0; left: 0; right: 0; height: 52px; }
 .plan-stripwrap > .plan-ghost > .plan-strip { height: 52px; }
+
+/* Vorgeladene Wochen/Tage: eine Gruppe mit 7 Seiten nebeneinander, die mittlere ist die aktuelle */
+.plan-track { position: relative; flex: 1 1 auto; min-width: 0; overflow: hidden; }
+.plan-stripwrap { position: relative; flex: 1 1 auto; min-width: 0; overflow: hidden; height: 52px; }
+.plan-group { position: absolute; top: 0; left: -300%; width: 700%; display: flex; align-items: flex-start; will-change: transform; }
+.plan-stripwrap > .plan-group { height: 52px; align-items: stretch; }
+.plan-group > .plan-cols { flex: 0 0 calc(100% / 7); min-width: 0; position: relative; display: flex; align-items: flex-start; }
+.plan-cols > .daycol { flex: 1 1 0; min-width: 0; }
+.plan-group > .allday-strip.plan-strip { flex: 0 0 calc(100% / 7); min-width: 0; height: 52px; margin: 0; display: grid; gap: 0; overflow-y: auto; align-content: start; }
+/* Tagesansicht: Kopf mit Wochentag und Aufgaben ohne Uhrzeit, fest über dem Raster */
+.plan-daytop { padding-left: var(--axis-w); display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 6px; }
