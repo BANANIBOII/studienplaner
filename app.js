@@ -2155,12 +2155,12 @@ function notifyLogHTML() {
 
 // Einstellungen: Hauptliste mit Suche, jeder Punkt öffnet eine Unterseite
 const SETTINGS_LIST = [
-  { k: "allg", t: "Allgemein", d: "Werkzeuge, Sicherung", w: "sicherung export werkzeuge" },
-  { k: "darst", t: "Erscheinungsbild", d: "Designs, Hell/Dunkel, Schrift, Startseite, Reiterleiste", w: "design vorlage preset hell dunkel schrift startseite reiterleiste scrollbalken haken" },
-  { k: "benach", t: "Benachrichtigungen", d: "Module, Mensa, Fristen, Ruhezeit, Tests", w: "benachrichtigung mensa fristen modul ruhezeit test vorwarnzeit push" },
-  { k: "farben", t: "Farben", d: "Hintergrund, Akzent, Kategorien", w: "farben kategorie akzent" },
-  { k: "stunden", t: "Semester & Stundenplan", d: "Semester, Stundenplan importieren", w: "semester stundenplan ics termine" },
-  { k: "daten", t: "Daten & Cloud", d: "Papierkorb, Backup, Zurücksetzen, Sync", w: "papierkorb backup zurücksetzen cloud sync anmelden" },
+  { k: "allg", t: "Allgemein", d: "Werkzeuge, Sicherung", w: "sicherung export werkzeuge", ic: "🧰", col: "#64748b" },
+  { k: "darst", t: "Erscheinungsbild", d: "Designs, Hell/Dunkel, Schrift, Startseite, Reiterleiste", w: "design vorlage preset hell dunkel schrift startseite reiterleiste scrollbalken haken", ic: "🎨", col: "#ec4899" },
+  { k: "benach", t: "Benachrichtigungen", d: "Module, Mensa, Fristen, Ruhezeit, Tests", w: "benachrichtigung mensa fristen modul ruhezeit test vorwarnzeit push", ic: "🔔", col: "#f59e0b" },
+  { k: "farben", t: "Farben", d: "Hintergrund, Akzent, Kategorien", w: "farben kategorie akzent", ic: "🌈", col: "#8b5cf6" },
+  { k: "stunden", t: "Semester & Stundenplan", d: "Semester, Stundenplan importieren", w: "semester stundenplan ics termine", ic: "📅", col: "#0ea5e9" },
+  { k: "daten", t: "Daten & Cloud", d: "Papierkorb, Backup, Zurücksetzen, Sync", w: "papierkorb backup zurücksetzen cloud sync anmelden", ic: "☁️", col: "#10b981" },
 ];
 
 function viewSettings() {
@@ -2180,15 +2180,14 @@ function viewSettings() {
     const info = SETTINGS_LIST.find((x) => x.k === ui.setPage);
     // Designs gehören zum Erscheinungsbild
     const extra = ui.setPage === "darst" ? pages.design || "" : "";
-    return `<div class="row" style="gap:10px;margin-bottom:12px"><button class="btn ghost" data-act="setback">‹ Zurück</button><h2 style="margin:0">${info ? info.t : ""}</h2></div>${pages[ui.setPage]}${extra}`;
+    return `<div class="row" style="gap:10px;margin-bottom:12px"><button class="btn ghost" data-act="setback">‹ Zurück</button><h2 style="margin:0;display:flex;align-items:center;gap:8px"><span class="setic" style="--c:${info ? info.col : "#64748b"}">${info ? info.ic : ""}</span>${info ? info.t : ""}</h2></div>${pages[ui.setPage]}${extra}`;
   }
   const q = (ui.setQuery || "").trim().toLowerCase();
   const rows = SETTINGS_LIST.filter((x) => !q || `${x.t} ${x.d} ${x.w}`.toLowerCase().includes(q));
-  const rowStyle = "display:flex;align-items:center;gap:10px;width:100%;padding:14px;border:0;border-bottom:1px solid var(--line);background:none;text-align:left;color:inherit;min-height:56px;font:inherit";
   return `<h2 style="margin-bottom:10px">Einstellungen</h2>
     <input type="search" data-setq="1" placeholder="Einstellungen suchen" value="${esc(ui.setQuery || "")}" style="width:100%;margin-bottom:12px">
-    <div class="card" style="padding:0;overflow:hidden">
-      ${rows.map((x) => `<button data-act="setopen" data-k="${x.k}" style="${rowStyle}"><div class="grow"><b>${x.t}</b><div class="muted" style="font-size:13px">${x.d}</div></div><span class="muted">›</span></button>`).join("") || `<div class="muted" style="padding:14px">Nichts gefunden.</div>`}
+    <div class="card setcard">
+      ${rows.map((x) => `<button data-act="setopen" data-k="${x.k}" class="setrow" style="--c:${x.col || "#64748b"}"><span class="setic">${x.ic || "⚙️"}</span><span class="grow"><b>${x.t}</b><span class="muted setd">${x.d}</span></span><span class="setchev">›</span></button>`).join("") || `<div class="muted" style="padding:14px">Nichts gefunden.</div>`}
     </div>`;
 }
 
@@ -2999,6 +2998,45 @@ let lastDayTap = { d: "", t: 0 };
 let lastTabTap = { k: "", t: 0 };
 
 // ---------- Klicks, Eingaben, Formulare ----------
+// Erneutes Tippen auf den aktiven Reiter (jeder Reiter hat seine eigene Abfolge)
+function activeTabTap(key) {
+  if (key === "dashboard") return dashNextCard();
+  if (key === "stundenplan") return planActiveTap();
+  if (key === "kalender") return calActiveTap();
+  if (key === "einstellungen") { ui.setPage = null; ui.nfOnly = null; ui.setQuery = ""; render(); window.scrollTo(0, 0); return; }
+  window.scrollTo(0, 0);
+}
+// Dashboard: zur nächsten Karte springen, nach der letzten wieder ganz nach oben
+function dashNextCard() {
+  const y = window.scrollY + 70;
+  const cards = [...document.querySelectorAll(".card")].filter((c) => c.offsetParent && !(c.parentElement && c.parentElement.closest(".card")));
+  const next = cards.find((c) => c.getBoundingClientRect().top + window.scrollY > y + 8);
+  if (next) window.scrollTo({ top: next.getBoundingClientRect().top + window.scrollY - 64, behavior: "smooth" });
+  else window.scrollTo({ top: 0, behavior: "smooth" });
+}
+// Stundenplan: aktuelle Woche → heute → Wochenansicht
+function planActiveTap() {
+  const todayK = iso(new Date());
+  if (ui.view === "day") {
+    if (ui.dayDate !== todayK) { ui.dayDate = todayK; ui.anim = "zoom"; render(); }
+    else toWeekView();
+    return;
+  }
+  if (ui.weekOffset) { ui.weekOffset = 0; ui.anim = "zoom"; render(); return; }
+  ui.view = "day"; ui.dayDate = todayK; ui.anim = "zoom"; render();
+}
+// Kalender: heutiger Tag → Filter und Suche zurücksetzen → nach oben
+function calActiveTap() {
+  const now = new Date();
+  const todayK = iso(now);
+  const curMonth = ui.month && ui.month.getFullYear() === now.getFullYear() && ui.month.getMonth() === now.getMonth();
+  if (!curMonth || ui.selDate !== todayK) { ui.month = new Date(now.getFullYear(), now.getMonth(), 1); ui.selDate = todayK; render(); return; }
+  if (ui.calSearch || ui.calFrom || ui.calTo || ui.calType || ui.calMod || ui.calFilterOpen) {
+    ui.calSearch = ""; ui.calFrom = ""; ui.calTo = ""; ui.calType = ""; ui.calMod = ""; ui.calFilterOpen = false; render(); return;
+  }
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
 document.addEventListener("click", async (e) => {
   if (longFired) { longFired = false; e.preventDefault(); e.stopPropagation(); return; }
   // Dashboard: Tippen auf eine leere Stelle im Tages-Stundenplan schließt das Notizfeld
@@ -3012,23 +3050,7 @@ document.addEventListener("click", async (e) => {
   const tabBtn = e.target.closest("[data-tab]");
   if (tabBtn) {
     const key = tabBtn.dataset.tab;
-    const nowT = Date.now();
-    const isDouble = key === ui.tab && lastTabTap.k === key && nowT - lastTabTap.t < 450;
-    lastTabTap = { k: key, t: nowT };
-    if (key === "stundenplan" && ui.tab === "stundenplan") { planToggle(); return; }
-    if (isDouble && key === "stundenplan") {
-      // Doppeltippen auf den aktiven Reiter: Woche ↔ Tag
-      if (ui.view === "week") { ui.view = "day"; ui.dayDate = iso(new Date()); ui.anim = "zoom"; render(); }
-      else toWeekView();
-      return;
-    }
-    if (isDouble && key === "kalender") {
-      // Doppeltippen: zurück zum heutigen Tag
-      ui.month = new Date();
-      ui.selDate = iso(new Date());
-      render();
-      return;
-    }
+    if (key === ui.tab) { activeTabTap(key); return; }
     ui.tab = key;
     ui.modOpen = null;
     ui.topicOpen = null;
@@ -3944,6 +3966,14 @@ function navSnap() {
 const navKey = (x) => [x.tab, x.modOpen, x.topicOpen, x.view || "week", x.setPage || "", x.nfOnly || ""].join("|");
 let navRestoring = false;
 // Wird bei jedem Neuzeichnen aufgerufen: neue Unterseite = neuer Verlaufseintrag, neuer Reiter = ersetzen
+// Eigene Liste der Verlaufseinträge (Kennung je Eintrag), damit „Zurück in der App“ nur dann den Verlauf nutzt, wenn der Eintrag davor wirklich passt
+let navSeqC = 0;
+let navHist = [];
+function navPush(snap, prev) {
+  const seq = ++navSeqC;
+  navHist.push(seq);
+  history.pushState({ sp: "nav", nav: { ...snap, seq, prev } }, "");
+}
 function syncHistoryNav() {
   if (navRestoring) return;
   try {
@@ -3953,18 +3983,24 @@ function syncHistoryNav() {
     const kNow = navKey(snap);
     if (navKey(cur.nav) === kNow) {
       // nur der Tag hat sich geändert: Eintrag ersetzen, sonst müsste man beim Zurück jeden Tag einzeln durchgehen
-      if (snap.dayDate !== cur.nav.dayDate) history.replaceState({ sp: "nav", nav: snap }, "");
+      if (snap.dayDate !== cur.nav.dayDate) history.replaceState({ sp: "nav", nav: { ...snap, seq: cur.nav.seq, prev: cur.nav.prev } }, "");
       return;
     }
-    // In-App-Zurück (‹ Zurück, „Woche“) nimmt den Verlaufseintrag zurück, statt einen neuen anzulegen
-    if (cur.nav.prev && navKey(cur.nav.prev) === kNow) { history.back(); return; }
-    // Neue Unterseite oder Ansicht: der Verlauf merkt sich die vorherige Ansicht
-    history.pushState({ sp: "nav", nav: { ...snap, prev: { ...cur.nav, prev: undefined } } }, "");
+    const top = navHist[navHist.length - 1];
+    const below = navHist[navHist.length - 2];
+    // In-App-Zurück (‹ Zurück, Woche/Tag, Reiter): den Verlaufseintrag zurücknehmen, wenn er wirklich der vorherige ist
+    if (cur.nav.prev && top === cur.nav.seq && below === cur.nav.prev.seq && navKey(cur.nav.prev) === kNow) {
+      navHist.pop();
+      history.back();
+      return;
+    }
+    // Neue Ansicht: neuer Verlaufseintrag, der sich die vorherige Ansicht merkt
+    navPush(snap, { ...cur.nav, prev: undefined });
   } catch (_) {}
 }
 try {
   history.replaceState({ sp: "base" }, "");
-  history.pushState({ sp: "nav", nav: navSnap() }, "");
+  navPush(navSnap(), undefined);
 } catch (_) {}
 let lastRootBack = 0;
 // Ganz vorne in der App: erstes Zurück zeigt einen Hinweis, zweites Zurück innerhalb von 2 s beendet die App
@@ -3973,7 +4009,7 @@ function handleBackAtRoot() {
   if (now - lastRootBack < 2000) { try { history.back(); } catch (_) {} return; }
   lastRootBack = now;
   showToast("Zum Beenden nochmal zurück tippen");
-  try { history.pushState({ sp: "nav", nav: navSnap() }, ""); } catch (_) {}
+  try { navPush(navSnap(), undefined); } catch (_) {}
 }
 window.addEventListener("popstate", (e) => {
   if (ignorePop > 0) { ignorePop--; return; }   // eigenes Schließen eines Fensters
@@ -3996,7 +4032,9 @@ window.addEventListener("popstate", (e) => {
   if (viewChanged) ui.anim = "zoom";
   navRestoring = true;
   try { render(); } finally { navRestoring = false; }
-  try { history.replaceState({ sp: "nav", nav: { ...navSnap(), prev: x.prev } }, ""); } catch (_) {}
+  const at = navHist.indexOf(x.seq);
+  if (at >= 0) navHist = navHist.slice(0, at + 1); else navHist = x.seq ? [x.seq] : navHist;
+  try { history.replaceState({ sp: "nav", nav: { ...navSnap(), seq: x.seq, prev: x.prev } }, ""); } catch (_) {}
   if (!sameTab) window.scrollTo(0, 0);
 });
 initCloud();
