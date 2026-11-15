@@ -592,6 +592,7 @@ function applyTheme() {
   document.body.classList.toggle("nav-bottom", state.settings.navSide === "bottom");
   document.body.classList.toggle("check-right", state.settings.checkSide === "right");
   document.body.classList.toggle("no-scrollbars", state.settings.scrollbars === false);
+  document.documentElement.classList.toggle("no-scrollbars", state.settings.scrollbars === false);
   const c = themeColors();
   const r = document.documentElement.style;
   r.setProperty("--accent", c.accent);
