@@ -2032,85 +2032,93 @@ function headCardHTML() {
     </div></div>`;
 }
 
-// Liefert alle Unterseiten der Einstellungen als Abschnitte (Schlüssel = Seitenname)
+// Abschnitte der Einstellungen (Schlüssel = Seitenname). Jede Karte ist eine klar benannte Gruppe.
 function settingsPages() {
   const s = state.settings;
   const mode = currentMode();
   const c = themeColors();
   const pages = {};
-  let h = "";
-  const take = (k) => { pages[k] = h; h = ""; };
+  const btns = (items, cur, act) => `<div class="row" style="gap:6px;flex-wrap:wrap">${items.map(([v, l]) =>
+    `<button class="btn ${cur === v ? "" : "ghost"}" data-act="${act}" data-v="${v}">${l}</button>`).join("")}</div>`;
+  const themeNow = s.themeMode === "system" ? "system" : s.dark ? "dark" : "light";
+  const zoomBtns = `<div class="row" style="gap:6px;align-items:center">
+      <button class="btn ghost" data-act="zoomstep" data-v="-0.1">−</button>
+      <b>${Math.round((s.zoomY || 1) * 100)} %</b>
+      <button class="btn ghost" data-act="zoomstep" data-v="0.1">+</button>
+      <button class="btn ghost" data-act="zoomstep" data-v="reset">Standard</button>
+    </div>`;
 
-  h += phoneToolsHTML();
-  h += `<div class="card"><h3 style="margin-top:0">Sicherung</h3>
-    <p class="muted" style="margin:0 0 10px">Speichert alle deine Daten als Datei auf dem Gerät.</p>
-    <button class="btn ghost" data-act="exportdata">Daten exportieren</button></div>`;
-  take("allg");
-  h += `<div class="card"><h3>Erscheinungsbild</h3>
-    <label class="muted" style="display:block;margin-bottom:6px">Design (nur auf diesem Gerät)</label>
-    <div class="row" style="gap:6px;flex-wrap:wrap;margin-bottom:14px">
-      ${[["light", "Hell"], ["dark", "Dunkel"], ["system", "Wie Gerät"]].map(([v, l]) =>
-        `<button class="btn ${(s.themeMode === "system" ? "system" : s.dark ? "dark" : "light") === v ? "" : "ghost"}" data-act="themeset" data-v="${v}">${l}</button>`).join("")}
-    </div>
-    <label class="muted" style="display:block;margin-bottom:6px">Schriftgröße: ${s.fontScale || 100} % (nur auf diesem Gerät)</label>
-    <input type="range" min="80" max="150" step="5" value="${s.fontScale || 100}" data-change="fontscale" style="width:100%;margin-bottom:14px">
-    <label class="muted" style="display:block;margin-bottom:6px">Startseite beim Öffnen (nur auf diesem Gerät)</label>
-    <div class="row" style="gap:6px;flex-wrap:wrap;margin-bottom:14px">
-      ${[["dashboard", "Dashboard"], ["stundenplan", "Stundenplan"], ["kalender", "Kalender"], ["protokolle", "Protokolle"], ["einstellungen", "Einstellungen"]].map(([v, l]) =>
-        `<button class="btn ${(s.startTab || "dashboard") === v ? "" : "ghost"}" data-act="startset" data-v="${v}">${l}</button>`).join("")}
-    </div>
-    <label class="row" style="margin-top:10px"><input type="checkbox" data-change="scrollbars" ${s.scrollbars !== false ? "checked" : ""}> Scrollbalken anzeigen (nur auf diesem Gerät)</label>
-    <label class="muted" style="display:block;margin-top:14px">Reiterleiste (nur auf diesem Gerät)</label>
-    <div class="row" style="gap:6px;flex-wrap:wrap">
-      ${[["", "Automatisch"], ["left", "Links"], ["bottom", "Unten"]].map(([v, l]) =>
-        `<button class="btn ${(s.navSide || "") === v ? "" : "ghost"}" data-act="navset" data-v="${v}">${l}</button>`).join("")}
-    </div>
-    <p class="muted" style="margin-bottom:0">Automatisch: links am PC, unten am Handy.</p>
-    <label class="muted" style="display:block;margin-top:14px">Haken bei Listen (nur dieses Gerät)</label>
-    <div class="row" style="gap:6px">
-      ${[["left", "Links vom Namen"], ["right", "Rechts vom Namen"]].map(([v, l]) =>
-        `<button class="btn ${(s.checkSide || "left") === v ? "" : "ghost"}" data-act="checkset" data-v="${v}">${l}</button>`).join("")}
-    </div>
-  </div>`;
-  h += viewDesignCard();
-  h += headCardHTML();
-  take("darst");
-  h += pushCardHTML() + notifyDetailsHTML();
-  take("benach");
-  h += `<div class="card"><h3>Farben (${mode === "dark" ? "Dunkel" : "Hell"}-Modus)</h3>
-    <p class="muted" style="margin-top:0">Jeder Modus hat eigene Farben.</p>
-    ${Object.keys(THEME_LABELS).map((key) => `<label class="muted" style="display:block;margin-top:10px">${THEME_LABELS[key]}</label>
-      <input type="color" value="${c[key]}" data-change="color" data-key="${key}">`).join("")}
-    <div class="row" style="margin-top:14px"><button class="btn ghost" data-act="colorreset">Standardfarben wiederherstellen</button></div>
-  </div>`;
-  h += `<div class="card"><h3>Kategorie-Farben</h3>
-    <p class="muted" style="margin-top:0">Gelten auf allen Geräten gleich.</p>
-    ${[["todo", "To-Do"], ["abgabe", "Abgabe"], ["klausur", "Klausur"], ["done", "Erledigt (im Kalender)"]].map(([key, label]) =>
-      `<label class="muted" style="display:block;margin-top:10px">${label}</label>
-      <input type="color" value="${s.plan[key] || PLAN_DEFAULTS[key]}" data-change="catcolor" data-key="${key}">`).join("")}
-  </div>`;
-  take("farben");
-  h += `<div class="card"><h3>Semester & Stundenplan</h3>
-    <form data-form="semester"><label class="muted">Semester-Bezeichnung</label>
-      <input name="semester" value="${esc(s.semester)}"><button class="btn">Speichern</button></form>
-    <label class="muted" style="display:block;margin-top:14px">Stundenplan (.ics) hochladen</label>
-    <input type="file" accept=".ics,text/calendar" data-change="ics">
-    <p class="muted">Ersetzt den bisherigen Stundenplan. Module werden automatisch angelegt, vorhandene Einträge bleiben erhalten. Aktuell: ${state.events.length} Termine.</p>
-  </div>`;
-  take("stunden");
-  h += trashSection();
-  h += `<div class="card"><h3>Alles zurücksetzen</h3>
-    <p class="muted">Löscht Stundenplan, Protokolle, To-Dos, Karten und den Papierkorb. Mit „Rückgängig“ lässt sich das wieder zurücknehmen. Die Änderung wird auch in der Cloud gespeichert.</p>
-    <button class="btn danger" data-act="resetall">Alle Daten zurücksetzen</button>
-  </div>`;
-  h += `<div class="card"><h3>Backup</h3>
-    <div class="row"><button class="btn" data-act="export">Backup speichern (JSON)</button></div>
-    <label class="muted" style="display:block;margin-top:14px">Backup wiederherstellen</label>
-    <input type="file" accept=".json,application/json" data-change="import">
-    <p class="muted">Du wählst beim Einspielen, welche Teile ersetzt werden. Nicht gewählte Teile bleiben unverändert.</p>
-  </div>`;
-  h += `<div class="card"><h3>Cloud-Sync (Supabase)</h3>${cloudSection()}</div>`;
-  take("daten");
+  // Erscheinungsbild: Modus, Designs, Schrift, Farben
+  pages.darst = [
+    `<div class="card"><h3>Hell oder dunkel</h3>
+      <p class="muted" style="margin-top:0">Gilt nur für dieses Gerät.</p>
+      ${btns([["light", "Hell"], ["dark", "Dunkel"], ["system", "Wie Gerät"]], themeNow, "themeset")}</div>`,
+    viewDesignCard(),
+    `<div class="card"><h3>Schrift & Anzeige</h3>
+      <label class="muted" style="display:block;margin-bottom:6px">Schriftgröße: ${s.fontScale || 100} % (nur auf diesem Gerät)</label>
+      <input type="range" min="80" max="150" step="5" value="${s.fontScale || 100}" data-change="fontscale" style="width:100%;margin-bottom:14px">
+      <label class="row"><input type="checkbox" data-change="scrollbars" ${s.scrollbars !== false ? "checked" : ""}> Scrollbalken anzeigen (nur auf diesem Gerät)</label>
+    </div>`,
+    `<div class="card"><h3>Farben (${mode === "dark" ? "Dunkel" : "Hell"}-Modus)</h3>
+      <p class="muted" style="margin-top:0">Jeder Modus hat eigene Farben.</p>
+      ${Object.keys(THEME_LABELS).map((key) => `<label class="muted" style="display:block;margin-top:10px">${THEME_LABELS[key]}</label>
+        <input type="color" value="${c[key]}" data-change="color" data-key="${key}">`).join("")}
+      <div class="row" style="margin-top:14px"><button class="btn ghost" data-act="colorreset">Standardfarben wiederherstellen</button></div>
+    </div>`,
+    `<div class="card"><h3>Kategorie-Farben</h3>
+      <p class="muted" style="margin-top:0">Gelten auf allen Geräten gleich.</p>
+      ${[["todo", "To-Do"], ["abgabe", "Abgabe"], ["klausur", "Klausur"], ["done", "Erledigt (im Kalender)"]].map(([key, label]) =>
+        `<label class="muted" style="display:block;margin-top:10px">${label}</label>
+        <input type="color" value="${s.plan[key] || PLAN_DEFAULTS[key]}" data-change="catcolor" data-key="${key}">`).join("")}
+    </div>`,
+  ].join("");
+
+  // Stundenplan: Semester, Datei, Anzeige. Zeitachse, Wochenende und Termine stehen im ⋮-Menü des Stundenplans.
+  pages.stunden = [
+    `<div class="card"><h3>Semester</h3>
+      <form data-form="semester"><label class="muted">Semester-Bezeichnung</label>
+        <input name="semester" value="${esc(s.semester)}"><button class="btn">Speichern</button></form></div>`,
+    `<div class="card"><h3>Stundenplan-Datei</h3>
+      <p class="muted" style="margin-top:0">Ersetzt den bisherigen Stundenplan. Module werden automatisch angelegt, vorhandene Einträge bleiben erhalten. Aktuell: ${state.events.length} Termine.</p>
+      <input type="file" accept=".ics,text/calendar" data-change="ics"></div>`,
+    `<div class="card"><h3>Anzeige</h3>
+      <label class="muted" style="display:block;margin-bottom:6px">Kopfzeile: Normal zeigt Wochentag und Datum, Kompakt nur den Wochentag</label>
+      ${btns([["normal", "Normal"], ["kompakt", "Kompakt"]], s.planHead === "kompakt" ? "kompakt" : "normal", "headset")}
+      <label class="muted" style="display:block;margin:16px 0 6px">Stundenhöhe (zwei Finger auf dem Stundenplan geht auch)</label>
+      ${zoomBtns}
+      <p class="muted" style="margin-bottom:0">Zeitachse, Wochenende und Termine stellst du im ⋮-Menü des Stundenplans ein.</p>
+    </div>`,
+  ].join("");
+
+  // Bedienung: Startseite, Reiterleiste, Haken, Werkzeuge
+  pages.navi = [
+    `<div class="card"><h3>Startseite</h3>
+      <p class="muted" style="margin-top:0">Dieser Reiter wird beim Öffnen der App zuerst gezeigt. Nur auf diesem Gerät.</p>
+      ${btns([["dashboard", "Dashboard"], ["stundenplan", "Stundenplan"], ["kalender", "Kalender"], ["protokolle", "Protokolle"], ["einstellungen", "Einstellungen"]], s.startTab || "dashboard", "startset")}</div>`,
+    `<div class="card"><h3>Reiterleiste</h3>
+      ${btns([["", "Automatisch"], ["left", "Links"], ["bottom", "Unten"]], s.navSide || "", "navset")}
+      <p class="muted" style="margin-bottom:0">Automatisch: links am PC, unten am Handy. Nur auf diesem Gerät.</p></div>`,
+    `<div class="card"><h3>Haken bei Listen</h3>
+      ${btns([["left", "Links vom Namen"], ["right", "Rechts vom Namen"]], s.checkSide || "left", "checkset")}</div>`,
+    phoneToolsHTML(),
+  ].join("");
+
+  // Daten & Cloud: Sicherung, Cloud, Papierkorb, Zurücksetzen
+  pages.daten = [
+    `<div class="card"><h3>Sicherung</h3>
+      <p class="muted" style="margin-top:0">Backup: du wählst, was hinein soll. Beim Wiederherstellen wählst du, was ersetzt wird. Vollständige Kopie: alle Daten ohne Auswahl.</p>
+      <div class="row" style="gap:8px;flex-wrap:wrap">
+        <button class="btn" data-act="export">Backup speichern (JSON)</button>
+        <button class="btn ghost" data-act="exportdata">Vollständige Kopie</button>
+      </div>
+      <label class="muted" style="display:block;margin-top:14px">Backup wiederherstellen</label>
+      <input type="file" accept=".json,application/json" data-change="import"></div>`,
+    `<div class="card"><h3>Cloud-Sync (Supabase)</h3>${cloudSection()}</div>`,
+    trashSection(),
+    `<div class="card"><h3>Alles zurücksetzen</h3>
+      <p class="muted">Löscht Stundenplan, Protokolle, To-Dos, Karten und den Papierkorb. Mit „Rückgängig“ lässt sich das wieder zurücknehmen. Die Änderung wird auch in der Cloud gespeichert.</p>
+      <button class="btn danger" data-act="resetall">Alle Daten zurücksetzen</button></div>`,
+  ].join("");
   return pages;
 }
 
@@ -2153,14 +2161,13 @@ function notifyLogHTML() {
     `<div class="listrow" style="align-items:flex-start"><div class="grow"><b>${esc(r.title)}</b><div class="muted" style="white-space:pre-line;font-size:13px">${esc(r.body || "")}</div></div><span class="muted" style="font-size:12px;white-space:nowrap">${when(r.created_at)}</span></div>`).join("")}</div>`;
 }
 
-// Einstellungen: Hauptliste mit Suche, jeder Punkt öffnet eine Unterseite
+// Einstellungen: Hauptliste mit Suche, jeder Punkt öffnet einen Bereich
 const SETTINGS_LIST = [
-  { k: "allg", t: "Allgemein", d: "Werkzeuge, Sicherung", w: "sicherung export werkzeuge", ic: "🧰", col: "#64748b" },
-  { k: "darst", t: "Erscheinungsbild", d: "Designs, Hell/Dunkel, Schrift, Startseite, Reiterleiste", w: "design vorlage preset hell dunkel schrift startseite reiterleiste scrollbalken haken", ic: "🎨", col: "#ec4899" },
+  { k: "darst", t: "Erscheinungsbild", d: "Hell/Dunkel, Designs, Schrift, Farben", w: "design vorlage preset hell dunkel schrift scrollbalken farben kategorie akzent", ic: "🎨", col: "#ec4899" },
+  { k: "stunden", t: "Stundenplan", d: "Semester, Stundenplan-Datei, Kopfzeile, Höhe", w: "stundenplan semester ics termine kopfzeile höhe zoom", ic: "📅", col: "#0ea5e9" },
   { k: "benach", t: "Benachrichtigungen", d: "Module, Mensa, Fristen, Ruhezeit, Tests", w: "benachrichtigung mensa fristen modul ruhezeit test vorwarnzeit push", ic: "🔔", col: "#f59e0b" },
-  { k: "farben", t: "Farben", d: "Hintergrund, Akzent, Kategorien", w: "farben kategorie akzent", ic: "🌈", col: "#8b5cf6" },
-  { k: "stunden", t: "Semester & Stundenplan", d: "Semester, Stundenplan importieren", w: "semester stundenplan ics termine", ic: "📅", col: "#0ea5e9" },
-  { k: "daten", t: "Daten & Cloud", d: "Papierkorb, Backup, Zurücksetzen, Sync", w: "papierkorb backup zurücksetzen cloud sync anmelden", ic: "☁️", col: "#10b981" },
+  { k: "navi", t: "Bedienung", d: "Startseite, Reiterleiste, Werkzeuge", w: "bedienung startseite reiterleiste navigation haken werkzeuge rückgängig layout", ic: "🧭", col: "#8b5cf6" },
+  { k: "daten", t: "Daten & Cloud", d: "Sicherung, Cloud-Sync, Papierkorb, Zurücksetzen", w: "backup sicherung export import papierkorb zurücksetzen cloud sync anmelden", ic: "☁️", col: "#10b981" },
 ];
 
 function viewSettings() {
@@ -2178,9 +2185,7 @@ function viewSettings() {
   }
   if (ui.setPage && pages[ui.setPage] !== undefined) {
     const info = SETTINGS_LIST.find((x) => x.k === ui.setPage);
-    // Designs gehören zum Erscheinungsbild
-    const extra = ui.setPage === "darst" ? pages.design || "" : "";
-    return `<div class="row" style="gap:10px;margin-bottom:12px"><button class="btn ghost" data-act="setback">‹ Zurück</button><h2 style="margin:0;display:flex;align-items:center;gap:8px"><span class="setic" style="--c:${info ? info.col : "#64748b"}">${info ? info.ic : ""}</span>${info ? info.t : ""}</h2></div>${pages[ui.setPage]}${extra}`;
+    return `<div class="row" style="gap:10px;margin-bottom:12px"><button class="btn ghost" data-act="setback">‹ Zurück</button><h2 style="margin:0;display:flex;align-items:center;gap:8px"><span class="setic" style="--c:${info ? info.col : "#64748b"}">${info ? info.ic : ""}</span>${info ? info.t : ""}</h2></div>${pages[ui.setPage]}`;
   }
   const q = (ui.setQuery || "").trim().toLowerCase();
   const rows = SETTINGS_LIST.filter((x) => !q || `${x.t} ${x.d} ${x.w}`.toLowerCase().includes(q));
@@ -3455,7 +3460,20 @@ document.addEventListener("click", async (e) => {
   }
 });
 
+// Beschriftung eines Reglers wird beim Ziehen sofort aktualisiert (nicht erst beim Öffnen neu)
+function updateRangeLabel(t) {
+  const v = t.value;
+  let txt = null;
+  if (t.dataset.change === "fontscale") txt = `Schriftgröße: ${v} % (nur auf diesem Gerät)`;
+  else if (t.hasAttribute("data-dash-zoom") || t.hasAttribute("data-plan-zoom")) txt = `Höhe: ${v} %`;
+  else if (t.dataset.calrange === "w") txt = `Breite des Kalenders: ${v} %`;
+  else if (t.dataset.calrange === "h") txt = `Höhe der Tage: ${v} %`;
+  const lab = t.previousElementSibling;
+  if (txt && lab && lab.tagName === "LABEL") lab.textContent = txt;
+}
+
 document.addEventListener("input", (e) => {
+  if (e.target.type === "range") updateRangeLabel(e.target);
   if (e.target.id === "calSearch") {
     const pos = e.target.selectionStart;
     ui.calSearch = e.target.value;
