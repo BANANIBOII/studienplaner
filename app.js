@@ -719,6 +719,8 @@ function render() {
   }
   appEl.dataset.shownTab = ui.tab;
   syncPlanFab();
+  syncLayFab();
+  syncTabBadge();
   // Einblenden nur beim Wechsel des Reiters, nicht bei jedem Haken oder Klick
   if (tabChanged) {
     appEl.classList.remove("dir-fwd", "dir-back");
@@ -1920,6 +1922,63 @@ function topicComplete(m, t) {
   return es.length > 0 && es.every((x) => x.checked);
 }
 
+// Schwebender Knopf für den Layout-Modus. Erscheint, sobald der Modus einmal aktiviert wurde.
+const LAYFAB_KEY = "sp-layfab";
+function layFabOn() { try { return localStorage.getItem(LAYFAB_KEY) === "1"; } catch { return false; } }
+function setLayFabOn() { try { localStorage.setItem(LAYFAB_KEY, "1"); } catch {} }
+function syncLayFab() {
+  const old = document.getElementById("layFab");
+  if (!layFabOn()) { if (old) old.remove(); return; }
+  const label = ui.layEdit ? "✓" : "▦";
+  const title = ui.layEdit ? "Layout fertig" : "Layout bearbeiten";
+  if (old) { old.textContent = label; old.title = title; old.classList.toggle("on", ui.layEdit); return; }
+  document.body.insertAdjacentHTML("beforeend", `<button id="layFab" class="lay-fab${ui.layEdit ? " on" : ""}" data-act="laytoggle" title="${title}">${label}</button>`);
+}
+// Zahl am Kalender-Reiter: offene Aufgaben bis Sonntag (überfällige eingeschlossen)
+function syncTabBadge() {
+  const btn = document.querySelector('.tabbar button[data-tab="kalender"]');
+  if (!btn) return;
+  const weekEnd = iso(addDays(mondayOf(new Date()), 6));
+  const n = state.todos.filter((t) => !t.done && t.date && t.date <= weekEnd).length;
+  let b = btn.querySelector(".tab-badge");
+  if (!n) { if (b) b.remove(); return; }
+  if (!b) { b = document.createElement("span"); b.className = "tab-badge"; btn.appendChild(b); }
+  b.textContent = n > 99 ? "99+" : String(n);
+}
+// Links und Quellen pro Modul (z. B. NotebookLM)
+function openModLinkEdit(name, id) {
+  const m = state.modules[name];
+  const l = id && m.links ? m.links.find((x) => x.id === id) : null;
+  const v = l || { title: "", url: "https://" };
+  openModal(`<h3>Link · ${esc(name)}</h3>
+    <form data-form="modlink" data-m="${enc(name)}" data-id="${l ? l.id : ""}">
+      <label class="muted">Titel</label>
+      <input name="title" required value="${esc(v.title)}" placeholder="z. B. NotebookLM Skript Kap. 3">
+      <label class="muted">Link</label>
+      <input name="url" type="url" required value="${esc(v.url)}" placeholder="https://…">
+      <div class="sheet-actions">
+        ${l ? `<button type="button" class="danger-text" data-act="mldel" data-m="${enc(name)}" data-id="${l.id}">Löschen</button>` : "<span></span>"}
+        <div class="right"><button type="button" class="btn ghost" data-act="mclose">Abbrechen</button><button class="btn">Speichern</button></div>
+      </div>
+    </form>`);
+}
+function linksCardHTML(name, m) {
+  const n = enc(name);
+  const links = m.links || [];
+  const rows = links.map((l) => `<div class="listrow" style="align-items:center;gap:8px">
+      <div class="grow"><b>${esc(l.title)}</b><div class="muted" style="font-size:12px;word-break:break-all">${esc(l.url)}</div></div>
+      <a class="btn ghost" href="${esc(l.url)}" target="_blank" rel="noopener">Öffnen</a>
+      <button class="btn ghost" data-act="mledit" data-m="${n}" data-id="${l.id}">✎</button>
+    </div>`).join("");
+  return `<div class="card">
+      <div class="row" style="justify-content:space-between">
+        <div class="sec-title" style="margin:0">Links & Quellen</div>
+        <button class="btn" data-act="mlnew" data-m="${n}">+ Link</button>
+      </div>
+      ${rows || `<div class="muted">Noch kein Link, z. B. zu NotebookLM oder einer Quelle.</div>`}
+    </div>`;
+}
+
 function viewModuleDetail(name) {
   const m = state.modules[name];
   if (ui.topicOpen && topicOf(m, ui.topicOpen)) return viewTopicDetail(name, ui.topicOpen);
@@ -1937,6 +1996,7 @@ function viewModuleDetail(name) {
       </div>
       <div class="progress"><div style="width:${pct}%;background:${m.color}"></div></div>
     </div>
+    ${linksCardHTML(name, m)}
     <div class="card">
       <div class="sec-title">Themen</div>
       <form data-form="topic" data-m="${n}" class="row quick-row">
@@ -2536,7 +2596,7 @@ function layBarHTML() {
   return `<div class="card laybar">
     <div class="grow"><b>Layout bearbeiten</b>
       <div class="muted" style="font-size:13px">Am Rand ziehen: Größe · in der Mitte ziehen: verschieben · einmal tippen: Zahlen eingeben</div></div>
-    <button class="btn" data-act="cardnew">+ Karte</button>
+    ${ui.tab === "dashboard" ? `<button class="btn" data-act="cardnew">+ Karte</button>` : `<span class="muted" style="font-size:13px">Karten fügst du im Dashboard hinzu.</span>`}
     <button class="btn ghost" data-act="layreset">Zurücksetzen</button>
   </div>`;
 }
@@ -3004,6 +3064,55 @@ document.addEventListener("wheel", (e) => {
 let lastDayTap = { d: "", t: 0 };
 let lastTabTap = { k: "", t: 0 };
 
+// ---------- Schnellmenü am Reiter und globale Suche ----------
+let tabPressTimer = null;
+let tabPressFired = false;
+document.addEventListener("pointerdown", (e) => {
+  tabPressFired = false;
+  const btn = e.target.closest(".tabbar button[data-tab]");
+  clearTimeout(tabPressTimer);
+  if (!btn || e.button > 0) return;
+  tabPressTimer = setTimeout(() => {
+    tabPressFired = true;
+    if (navigator.vibrate) navigator.vibrate(12);
+    openQuickSheet();
+  }, 500);
+}, true);
+["pointerup", "pointercancel", "pointerleave"].forEach((ev) =>
+  document.addEventListener(ev, () => clearTimeout(tabPressTimer), true));
+
+function openQuickSheet() {
+  openModal(`<h3>Schnell</h3>
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <button class="btn" data-act="qa" data-v="event">+ Neuer Termin</button>
+      <button class="btn" data-act="qa" data-v="todo">+ Neuer Eintrag (To-Do, Abgabe, Klausur)</button>
+      <button class="btn ghost" data-act="qa" data-v="search">🔍 Suchen</button>
+    </div>`);
+}
+
+function openSearch() {
+  openModal(`<h3>Suchen</h3>
+    <input type="search" data-qsearch="1" placeholder="Termine, To-Dos, Module, Einstellungen …" style="width:100%;margin-bottom:10px">
+    <div id="qsRes"><p class="muted">Tippe einen Begriff ein.</p></div>`);
+  setTimeout(() => { const i = document.querySelector('[data-qsearch]'); if (i) i.focus(); }, 0);
+}
+
+function searchResultsHTML(q) {
+  q = (q || "").trim().toLowerCase();
+  if (!q) return `<p class="muted">Tippe einen Begriff ein.</p>`;
+  const hit = (s) => (s || "").toLowerCase().includes(q);
+  const out = [];
+  Object.keys(state.modules).filter((n) => hit(n)).forEach((n) => out.push(
+    `<button class="listbtn" data-act="qaopen" data-k="mod" data-id="${enc(n)}"><b>${esc(n)}</b><span class="muted">Protokoll</span></button>`));
+  state.todos.filter((t) => hit(t.title) || hit(t.desc)).forEach((t) => out.push(
+    `<button class="listbtn" data-act="qaopen" data-k="todo" data-id="${t.id}"><b>${esc(t.title)}</b><span class="muted">${t.date ? fmtD(parseIso(t.date)) : "ohne Datum"}</span></button>`));
+  state.events.filter((e) => hit(e.name) || hit(e.room)).forEach((e) => out.push(
+    `<button class="listbtn" data-act="qaopen" data-k="ev" data-id="${e.id}"><b>${esc(e.name)}</b><span class="muted">${fmtD(parseIso(e.date))} ${fmtMin(e.start)}</span></button>`));
+  SETTINGS_LIST.filter((x) => hit(x.t) || hit(x.w)).forEach((x) => out.push(
+    `<button class="listbtn" data-act="qaopen" data-k="set" data-id="${x.k}"><b>${esc(x.t)}</b><span class="muted">Einstellungen</span></button>`));
+  return out.slice(0, 40).join("") || `<p class="muted">Nichts gefunden.</p>`;
+}
+
 // ---------- Klicks, Eingaben, Formulare ----------
 // Erneutes Tippen auf den aktiven Reiter (jeder Reiter hat seine eigene Abfolge)
 function activeTabTap(key) {
@@ -3046,6 +3155,7 @@ function calActiveTap() {
 
 document.addEventListener("click", async (e) => {
   if (longFired) { longFired = false; e.preventDefault(); e.stopPropagation(); return; }
+  if (tabPressFired) { tabPressFired = false; e.preventDefault(); e.stopPropagation(); return; }
   // Dashboard: Tippen auf eine leere Stelle im Tages-Stundenplan schließt das Notizfeld
   if (ui.tab === "dashboard" && e.target.closest(".excerpt .grid") && !e.target.closest(".ev")) {
     ui.noteFor = null;
@@ -3241,7 +3351,7 @@ document.addEventListener("click", async (e) => {
     case "navset": state.settings.navSide = el.dataset.v; commit(); break;
     case "calmenu": openCalMenu(); break;
     case "checkset": state.settings.checkSide = el.dataset.v; commit(); break;
-    case "laytoggle": ui.layEdit = !ui.layEdit; render(); break;
+    case "laytoggle": ui.layEdit = !ui.layEdit; if (ui.layEdit) setLayFabOn(); render(); break;
     case "mensareload": loadMensa(true); break;
     case "dtoday": ui.dayDate = iso(new Date()); ui.anim = null; render(); break;
     case "planview": planToggle(); break;
@@ -3362,6 +3472,34 @@ document.addEventListener("click", async (e) => {
       if (i >= 0) list.splice(i, 1);
       closeModal(); commit(); break;
     }
+    case "qa": {
+      const v = el.dataset.v;
+      if (v === "search") { openSearch(); break; }
+      const today = iso(new Date());
+      const now = new Date();
+      if (v === "todo") { openTodoModal(null, today); break; }
+      const nm = now.getHours() * 60 + now.getMinutes();
+      openEventCreate(today, Math.min(Math.ceil(nm / 30) * 30, END_MIN - 90));
+      break;
+    }
+    case "qaopen": {
+      const k = el.dataset.k;
+      const key = dec(el.dataset.id);
+      closeModal();
+      if (k === "mod") { ui.tab = "protokolle"; ui.modOpen = key; ui.topicOpen = null; commit(); window.scrollTo(0, 0); }
+      else if (k === "todo") openTodoModal(key);
+      else if (k === "ev") openEventEdit(key);
+      else if (k === "set") { ui.tab = "einstellungen"; ui.setPage = key; ui.nfOnly = null; commit(); }
+      break;
+    }
+    case "mlnew": openModLinkEdit(m, null); break;
+    case "mledit": openModLinkEdit(m, id); break;
+    case "mldel": {
+      if (!(await appConfirm("Diesen Link löschen?"))) break;
+      const mod = state.modules[m];
+      if (mod && mod.links) mod.links = mod.links.filter((x) => x.id !== id);
+      closeModal(); commit(); break;
+    }
     case "evrnew": openEvReminderEdit(id, null); break;
     case "evredit": openEvReminderEdit(id, el.dataset.rid); break;
     case "evrdel": {
@@ -3459,7 +3597,7 @@ document.addEventListener("click", async (e) => {
     }
 
     // Eigene Karten
-    case "cardnew": openCardModal(); break;
+    case "cardnew": if (ui.tab === "dashboard") openCardModal(); break;
     case "cardedit": openCardModal(id); break;
     case "carddel": {
       if (!(await appConfirm("Karte in den Papierkorb verschieben?"))) break;
@@ -3493,6 +3631,7 @@ function updateRangeLabel(t) {
 
 document.addEventListener("input", (e) => {
   if (e.target.type === "range") updateRangeLabel(e.target);
+  if (e.target.dataset && e.target.dataset.qsearch) { const r = document.getElementById("qsRes"); if (r) r.innerHTML = searchResultsHTML(e.target.value); return; }
   if (e.target.id === "calSearch") {
     const pos = e.target.selectionStart;
     ui.calSearch = e.target.value;
@@ -3664,6 +3803,18 @@ document.addEventListener("submit", async (e) => {
       const old = f.dataset.id ? list.find((x) => x.id === f.dataset.id) : null;
       const item = { id: old ? old.id : uid(), title: (data.title || "").trim(), body: (data.body || "").trim(), time: data.time, days, on: old ? old.on : true };
       if (old) Object.assign(old, item); else list.push(item);
+      closeModal(); commit(); break;
+    }
+    case "modlink": {
+      const name = dec(f.dataset.m);
+      const m = state.modules[name];
+      if (!m) break;
+      if (!Array.isArray(m.links)) m.links = [];
+      const url = (data.url || "").trim();
+      if (!/^https?:\/\//i.test(url)) { appAlert("Der Link muss mit https:// beginnen."); break; }
+      const old = f.dataset.id ? m.links.find((x) => x.id === f.dataset.id) : null;
+      const item = { id: old ? old.id : uid(), title: (data.title || "").trim(), url };
+      if (old) Object.assign(old, item); else m.links.push(item);
       closeModal(); commit(); break;
     }
     case "evrsave": {
