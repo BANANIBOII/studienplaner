@@ -1541,6 +1541,7 @@ function openEventEdit(id) {
       <input type="hidden" name="color" value="${color}">
       <div class="row" style="margin-bottom:8px"><span class="muted">Farbe wählen:</span><input type="color" id="evColorPick" value="${color}"></div>
       ${mod ? "" : `<label class="row" style="margin-top:12px"><input type="checkbox" name="protokoll"> Auch im Vorlesungs-Protokoll anlegen</label>`}
+      <button type="button" class="btn ghost" data-act="medit" data-m="${enc(ev.name)}" style="margin-bottom:10px">Erinnerungen für diese Vorlesung</button>
       <div class="sheet-actions">
         <button type="button" class="danger-text" data-act="evdelmenu" data-id="${ev.id}">Löschen</button>
         <div class="right">
@@ -1909,6 +1910,11 @@ function openModuleEdit(name) {
     <h3>${esc(name)} bearbeiten</h3>
     <div class="muted">Farbe (gilt auch im Stundenplan)</div>
     <div class="row" style="margin:10px 0"><input type="color" value="${m.color}" data-mcolorpick data-m="${n}"></div>
+    <div class="muted" style="margin-top:16px">Erinnerungen vor jedem Termin</div>
+    ${moduleReminders(name).map((r) => `<div class="listrow" style="align-items:center;gap:8px">
+      <div class="grow"><b>${esc(r.title || name)}</b><div class="muted" style="font-size:13px">${r.before} Min vor Beginn</div></div>
+      <button class="btn ghost" data-act="mredit" data-m="${n}" data-id="${r.id}">Bearbeiten</button></div>`).join("") || `<p class="muted" style="margin:6px 0">Noch keine.</p>`}
+    <div class="row" style="margin-top:8px"><button class="btn ghost" data-act="mrnew" data-m="${n}">+ Erinnerung hinzufügen</button></div>
     <div class="row" style="margin-top:14px"><button class="btn" data-act="mclose">Fertig</button></div>`);
 }
 
@@ -2127,6 +2133,7 @@ const NF_SUBS = [
   { k: "push", t: "Gerät & Aktivierung", d: "Aktivieren, deaktivieren" },
   { k: "test", t: "Testnachrichten", d: "Beispiel für jede Art senden" },
   { k: "mod", t: "Modul-Erinnerungen", d: "Vorwarnzeit, Module ein- und ausschalten" },
+  { k: "custom", t: "Eigene Erinnerungen", d: "Feste Uhrzeit oder vor einer Vorlesung" },
   { k: "mensa", t: "Mensa", d: "An/aus und Uhrzeit" },
   { k: "fristen", t: "Fristen am Morgen", d: "An/aus und Uhrzeit" },
   { k: "vorschau", t: "Vorschau nächste Woche", d: "Freitag, Samstag, Sonntag" },
@@ -2180,7 +2187,7 @@ function viewSettings() {
       return back("Benachrichtigungen", "setback") + `<div class="card" style="padding:0;overflow:hidden">${rows}</div>`;
     }
     const info = NF_SUBS.find((x) => x.k === ui.nfOnly);
-    const body = ui.nfOnly === "push" ? pushCardHTML() : ui.nfOnly === "log" ? notifyLogHTML() : notifyDetailsHTML();
+    const body = ui.nfOnly === "push" ? pushCardHTML() : ui.nfOnly === "log" ? notifyLogHTML() : ui.nfOnly === "custom" ? customNotifyHTML() : notifyDetailsHTML();
     return back(info ? info.t : "", "nfback") + body;
   }
   if (ui.setPage && pages[ui.setPage] !== undefined) {
@@ -3351,6 +3358,24 @@ document.addEventListener("click", async (e) => {
     case "mcolor": state.modules[ui.modOpen].color = el.dataset.c; commit(); break;
     case "mcolorm": state.modules[m].color = el.dataset.c; commit(); openModuleEdit(m); break;
     case "medit": openModuleEdit(m); break;
+    case "cnnew": openCustomEdit(null); break;
+    case "cnedit": openCustomEdit(id); break;
+    case "cndel": {
+      if (!(await appConfirm("Diese Erinnerung löschen?"))) break;
+      const list = customList();
+      const i = list.findIndex((x) => x.id === id);
+      if (i >= 0) list.splice(i, 1);
+      closeModal(); commit(); break;
+    }
+    case "mrnew": openModReminderEdit(m, null); break;
+    case "mredit": openModReminderEdit(m, el.dataset.id); break;
+    case "mrdel": {
+      if (!(await appConfirm("Diese Erinnerung löschen?"))) break;
+      const list = moduleReminders(m);
+      const i = list.findIndex((x) => x.id === el.dataset.id);
+      if (i >= 0) list.splice(i, 1);
+      closeModal(); commit(); break;
+    }
     case "mtrash": {
       if (!(await appConfirm(`Protokoll „${m}“ in den Papierkorb verschieben? Die Termine im Stundenplan bleiben.`))) break;
       const mod = state.modules[m];
@@ -3507,6 +3532,8 @@ let colorTimer = null;
 
 document.addEventListener("change", async (e) => {
   const t = e.target;
+  if (t.dataset.cnon) { const c = customList().find((x) => x.id === t.dataset.cnon); if (c) c.on = t.checked; commit(); return; }
+  if (t.dataset.mrnon) { const r = moduleReminders(dec(t.dataset.m)).find((x) => x.id === t.dataset.mrnon); if (r) r.on = t.checked; commit(); return; }
   if (t.name === "topic") {
     const w = document.getElementById("newTopicWrap");
     if (w) w.style.display = t.value === "__new" ? "block" : "none";
@@ -3636,6 +3663,23 @@ document.addEventListener("submit", async (e) => {
     return;
   }
   switch (f.dataset.form) {
+    case "cnsave": {
+      const days = [...f.querySelectorAll('input[name="d"]:checked')].map((x) => Number(x.value));
+      if (!days.length) { appAlert("Bitte mindestens einen Tag wählen."); break; }
+      const list = customList();
+      const old = f.dataset.id ? list.find((x) => x.id === f.dataset.id) : null;
+      const item = { id: old ? old.id : uid(), title: (data.title || "").trim(), body: (data.body || "").trim(), time: data.time, days, on: old ? old.on : true };
+      if (old) Object.assign(old, item); else list.push(item);
+      closeModal(); commit(); break;
+    }
+    case "mrsave": {
+      const name = dec(f.dataset.m);
+      const list = moduleReminders(name);
+      const old = f.dataset.id ? list.find((x) => x.id === f.dataset.id) : null;
+      const item = { id: old ? old.id : uid(), before: Math.max(0, Math.min(1440, Math.round(Number(data.before)) || 0)), title: (data.title || "").trim(), body: (data.body || "").trim(), on: old ? old.on : true };
+      if (old) Object.assign(old, item); else list.push(item);
+      closeModal(); commit(); break;
+    }
     case "layoutform": {
       const p = { c: parseInt(data.c, 10), r: parseInt(data.r, 10), w: parseInt(data.w, 10), h: parseInt(data.h, 10) };
       if ([p.c, p.r, p.w, p.h].some((n) => !Number.isFinite(n))) { await appAlert("Bitte nur ganze Zahlen eingeben."); break; }
@@ -4179,6 +4223,108 @@ function notifyDetailsHTML() {
     `<label class="row" style="gap:8px">${chk("quiet.on", n.quiet.on)} Keine Nachrichten in dieser Zeit</label>
      <label class="row" style="gap:8px;margin-top:8px">Von ${tm("quiet.from", n.quiet.from)} bis ${tm("quiet.to", n.quiet.to)}</label>`);
   return h;
+}
+
+// ---------- Eigene Erinnerungen ----------
+// Feste Erinnerungen (Uhrzeit + Tage) liegen in settings.notify.custom.
+// Vorlesungs-Erinnerungen (z. B. 25 Min vor Beginn) liegen beim Modul: modules[name].reminders.
+const WD_SHORT = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
+const DAY_ORDER = [1, 2, 3, 4, 5, 6, 0]; // Montag zuerst
+function customList() {
+  const n = notifyCfg();
+  if (!Array.isArray(n.custom)) n.custom = [];
+  return n.custom;
+}
+function moduleReminders(name) {
+  const m = state.modules[name];
+  if (!m) return [];
+  if (!Array.isArray(m.reminders)) m.reminders = [];
+  return m.reminders;
+}
+function daysLabel(days) {
+  if (!days || !days.length) return "keine Tage";
+  if (days.length === 7) return "jeden Tag";
+  if (days.length === 5 && [1, 2, 3, 4, 5].every((d) => days.includes(d))) return "Mo–Fr";
+  return DAY_ORDER.filter((d) => days.includes(d)).map((d) => WD_SHORT[d]).join(", ");
+}
+
+// Liste aller eigenen Erinnerungen (Unterseite unter Benachrichtigungen)
+function customNotifyHTML() {
+  const list = customList();
+  const modNames = Object.keys(state.modules).filter((n) => moduleReminders(n).length)
+    .sort((a, b) => a.localeCompare(b, "de"));
+  const fixed = list.length
+    ? list.map((c) => `<div class="listrow" style="align-items:center;gap:8px">
+        <div class="grow"><b>${esc(c.title || "Erinnerung")}</b>
+          <div class="muted" style="font-size:13px">${esc(c.time)} · ${daysLabel(c.days)}${c.body ? " · " + esc(c.body) : ""}</div></div>
+        <input type="checkbox" data-cnon="${c.id}" ${c.on ? "checked" : ""} title="an/aus">
+        <button class="btn ghost" data-act="cnedit" data-id="${c.id}">Bearbeiten</button>
+      </div>`).join("")
+    : `<p class="muted">Noch keine feste Erinnerung.</p>`;
+  const mods = modNames.flatMap((name) => moduleReminders(name).map((r) => `<div class="listrow" style="align-items:center;gap:8px">
+        <div class="grow"><b>${esc(r.title || name)}</b>
+          <div class="muted" style="font-size:13px">${esc(name)} · ${r.before} Min vor Beginn${r.body ? " · " + esc(r.body) : ""}</div></div>
+        <input type="checkbox" data-mrnon="${r.id}" data-m="${enc(name)}" ${r.on !== false ? "checked" : ""} title="an/aus">
+        <button class="btn ghost" data-act="mredit" data-m="${enc(name)}" data-id="${r.id}">Bearbeiten</button>
+      </div>`));
+  return `<div class="card"><h3>Feste Erinnerungen</h3>
+      <p class="muted" style="margin-top:0">Eine Nachricht zu einer festen Uhrzeit an den gewählten Tagen, zum Beispiel „Losgehen“ um 7:30.</p>
+      ${fixed}
+      <button class="btn" data-act="cnnew" style="margin-top:12px">+ Neue Erinnerung</button>
+    </div>
+    <div class="card"><h3>Vor Vorlesungen</h3>
+      <p class="muted" style="margin-top:0">Vor jedem Termin einer Vorlesung, z. B. 25 Min vorher. Neue Erinnerungen legst du hier unter „Vorlesung“ an oder über den Termin im Stundenplan.</p>
+      ${mods.length ? mods.join("") : `<p class="muted">Noch keine Erinnerung vor einer Vorlesung.</p>`}
+    </div>`;
+}
+
+// Fenster für eine feste Erinnerung (neu oder bearbeiten)
+function openCustomEdit(id) {
+  const c = id ? customList().find((x) => x.id === id) : null;
+  const v = c || { title: "", body: "", time: "07:30", days: [1, 2, 3, 4, 5] };
+  openModal(`<h3>${c ? "Erinnerung bearbeiten" : "Neue Erinnerung"}</h3>
+    <form data-form="cnsave" data-id="${c ? c.id : ""}">
+      <label class="muted">Titel</label>
+      <input name="title" required value="${esc(v.title)}" placeholder="z. B. Losgehen">
+      <label class="muted">Text (optional)</label>
+      <textarea name="body" rows="2" placeholder="z. B. Bus 7:52 ab Haltestelle">${esc(v.body || "")}</textarea>
+      <label class="muted">Uhrzeit</label>
+      <input type="time" name="time" required value="${v.time}">
+      <label class="muted">Tage</label>
+      <div class="row" style="gap:10px;flex-wrap:wrap;margin-bottom:8px">
+        ${DAY_ORDER.map((d) => `<label class="row" style="gap:4px"><input type="checkbox" name="d" value="${d}" ${v.days.includes(d) ? "checked" : ""}> ${WD_SHORT[d]}</label>`).join("")}
+      </div>
+      <div class="sheet-actions">
+        ${c ? `<button type="button" class="danger-text" data-act="cndel" data-id="${c.id}">Löschen</button>` : "<span></span>"}
+        <div class="right">
+          <button type="button" class="btn ghost" data-act="mclose">Abbrechen</button>
+          <button class="btn">Speichern</button>
+        </div>
+      </div>
+    </form>`);
+}
+
+// Fenster für eine Erinnerung vor einer Vorlesung
+function openModReminderEdit(name, id) {
+  const r = id ? moduleReminders(name).find((x) => x.id === id) : null;
+  const v = r || { before: 25, title: "", body: "" };
+  openModal(`<h3>Erinnerung · ${esc(name)}</h3>
+    <form data-form="mrsave" data-m="${enc(name)}" data-id="${r ? r.id : ""}">
+      <label class="muted">Wie viele Minuten vor Beginn?</label>
+      <input type="number" name="before" min="0" max="1440" required value="${v.before}">
+      <label class="muted">Titel</label>
+      <input name="title" required value="${esc(v.title)}" placeholder="z. B. Losgehen">
+      <label class="muted">Text (optional)</label>
+      <textarea name="body" rows="2" placeholder="z. B. Mit dem Rad, 12 Min">${esc(v.body || "")}</textarea>
+      <p class="muted">Gilt für jeden Termin dieser Vorlesung.</p>
+      <div class="sheet-actions">
+        ${r ? `<button type="button" class="danger-text" data-act="mrdel" data-m="${enc(name)}" data-id="${r.id}">Löschen</button>` : "<span></span>"}
+        <div class="right">
+          <button type="button" class="btn ghost" data-act="medit" data-m="${enc(name)}">Abbrechen</button>
+          <button class="btn">Speichern</button>
+        </div>
+      </div>
+    </form>`);
 }
 
 // Wird bei jeder Eingabe in den Benachrichtigungs-Einstellungen aufgerufen
