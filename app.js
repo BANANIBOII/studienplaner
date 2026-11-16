@@ -4299,11 +4299,30 @@ function openCustomEdit(id) {
     </form>`);
 }
 
-// Liste der Erinnerungen an einem Termin (im Termin-Fenster)
+// Gilt eine Erinnerung von Termin „src“ auch für Termin „ev“? (gleiche Logik wie in der Function)
+function ruleApplies(src, r, ev) {
+  if (ev.name !== src.name || ev.start == null) return false;
+  const rep = r.repeat || "once";
+  if (rep === "once") return ev.id === src.id;
+  if (ev.start !== src.start || ev.date < src.date) return false;
+  if (parseIso(ev.date).getDay() !== parseIso(src.date).getDay()) return false;
+  if (rep === "weekly") return true;
+  const even = kwOf(parseIso(ev.date)) % 2 === 0;
+  return rep === "even" ? even : !even;
+}
+// Alle Erinnerungen, die für diesen Termin gelten (eigene und geerbte aus der Serie)
+function effectiveRules(ev) {
+  const out = [];
+  for (const src of state.events) for (const r of (src.reminders || [])) if (ruleApplies(src, r, ev)) out.push({ src, r });
+  return out;
+}
+
+// Liste der Erinnerungen im Termin-Fenster. Geerbte Regeln sind zu sehen und werden am Ursprung bearbeitet.
 function evReminderRows(ev) {
-  const rows = (ev.reminders || []).map((r) => `<div class="listrow" style="align-items:center;gap:8px">
-      <div class="grow"><b>${esc(r.title || ev.name)}</b><div class="muted" style="font-size:13px">${r.before} Min vorher · ${REPEAT_LABEL[r.repeat || "once"]}</div></div>
-      <button type="button" class="btn ghost" data-act="evredit" data-id="${ev.id}" data-rid="${r.id}">Bearbeiten</button>
+  const rows = effectiveRules(ev).map(({ src, r }) => `<div class="listrow" style="align-items:center;gap:8px">
+      <div class="grow"><b>${esc(r.title || ev.name)}</b>
+        <div class="muted" style="font-size:13px">${r.before} Min vorher · ${REPEAT_LABEL[r.repeat || "once"]}${src.id !== ev.id ? ` · festgelegt am ${fmtD(parseIso(src.date))} ${fmtMin(src.start)}` : ""}</div></div>
+      <button type="button" class="btn ghost" data-act="evredit" data-id="${src.id}" data-rid="${r.id}">Bearbeiten</button>
     </div>`).join("");
   return `<div class="muted" style="margin:10px 0 4px">Erinnerungen für diesen Termin</div>${rows || `<p class="muted" style="margin:4px 0">Keine.</p>`}
     <button type="button" class="btn ghost" data-act="evrnew" data-id="${ev.id}" style="margin-bottom:6px">+ Erinnerung</button>`;
