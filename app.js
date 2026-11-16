@@ -1541,7 +1541,7 @@ function openEventEdit(id) {
       <input type="hidden" name="color" value="${color}">
       <div class="row" style="margin-bottom:8px"><span class="muted">Farbe wählen:</span><input type="color" id="evColorPick" value="${color}"></div>
       ${mod ? "" : `<label class="row" style="margin-top:12px"><input type="checkbox" name="protokoll"> Auch im Vorlesungs-Protokoll anlegen</label>`}
-      <button type="button" class="btn ghost" data-act="medit" data-m="${enc(ev.name)}" style="margin-bottom:10px">Erinnerungen für diese Vorlesung</button>
+      ${evReminderRows(ev)}
       <div class="sheet-actions">
         <button type="button" class="danger-text" data-act="evdelmenu" data-id="${ev.id}">Löschen</button>
         <div class="right">
@@ -1910,11 +1910,6 @@ function openModuleEdit(name) {
     <h3>${esc(name)} bearbeiten</h3>
     <div class="muted">Farbe (gilt auch im Stundenplan)</div>
     <div class="row" style="margin:10px 0"><input type="color" value="${m.color}" data-mcolorpick data-m="${n}"></div>
-    <div class="muted" style="margin-top:16px">Erinnerungen vor jedem Termin</div>
-    ${moduleReminders(name).map((r) => `<div class="listrow" style="align-items:center;gap:8px">
-      <div class="grow"><b>${esc(r.title || name)}</b><div class="muted" style="font-size:13px">${r.before} Min vor Beginn</div></div>
-      <button class="btn ghost" data-act="mredit" data-m="${n}" data-id="${r.id}">Bearbeiten</button></div>`).join("") || `<p class="muted" style="margin:6px 0">Noch keine.</p>`}
-    <div class="row" style="margin-top:8px"><button class="btn ghost" data-act="mrnew" data-m="${n}">+ Erinnerung hinzufügen</button></div>
     <div class="row" style="margin-top:14px"><button class="btn" data-act="mclose">Fertig</button></div>`);
 }
 
@@ -3367,13 +3362,12 @@ document.addEventListener("click", async (e) => {
       if (i >= 0) list.splice(i, 1);
       closeModal(); commit(); break;
     }
-    case "mrnew": openModReminderEdit(m, null); break;
-    case "mredit": openModReminderEdit(m, el.dataset.id); break;
-    case "mrdel": {
+    case "evrnew": openEvReminderEdit(id, null); break;
+    case "evredit": openEvReminderEdit(id, el.dataset.rid); break;
+    case "evrdel": {
       if (!(await appConfirm("Diese Erinnerung löschen?"))) break;
-      const list = moduleReminders(m);
-      const i = list.findIndex((x) => x.id === el.dataset.id);
-      if (i >= 0) list.splice(i, 1);
+      const ev = state.events.find((x) => x.id === id);
+      if (ev && ev.reminders) ev.reminders = ev.reminders.filter((x) => x.id !== el.dataset.rid);
       closeModal(); commit(); break;
     }
     case "mtrash": {
@@ -3533,7 +3527,7 @@ let colorTimer = null;
 document.addEventListener("change", async (e) => {
   const t = e.target;
   if (t.dataset.cnon) { const c = customList().find((x) => x.id === t.dataset.cnon); if (c) c.on = t.checked; commit(); return; }
-  if (t.dataset.mrnon) { const r = moduleReminders(dec(t.dataset.m)).find((x) => x.id === t.dataset.mrnon); if (r) r.on = t.checked; commit(); return; }
+  if (t.dataset.evrnon) { const [eid, rid] = t.dataset.evrnon.split("|"); const ev = state.events.find((x) => x.id === eid); const r = ev && (ev.reminders || []).find((x) => x.id === rid); if (r) r.on = t.checked; commit(); return; }
   if (t.name === "topic") {
     const w = document.getElementById("newTopicWrap");
     if (w) w.style.display = t.value === "__new" ? "block" : "none";
@@ -3672,12 +3666,13 @@ document.addEventListener("submit", async (e) => {
       if (old) Object.assign(old, item); else list.push(item);
       closeModal(); commit(); break;
     }
-    case "mrsave": {
-      const name = dec(f.dataset.m);
-      const list = moduleReminders(name);
-      const old = f.dataset.id ? list.find((x) => x.id === f.dataset.id) : null;
-      const item = { id: old ? old.id : uid(), before: Math.max(0, Math.min(1440, Math.round(Number(data.before)) || 0)), title: (data.title || "").trim(), body: (data.body || "").trim(), on: old ? old.on : true };
-      if (old) Object.assign(old, item); else list.push(item);
+    case "evrsave": {
+      const ev = state.events.find((x) => x.id === f.dataset.id);
+      if (!ev) break;
+      if (!Array.isArray(ev.reminders)) ev.reminders = [];
+      const old = f.dataset.rid ? ev.reminders.find((x) => x.id === f.dataset.rid) : null;
+      const item = { id: old ? old.id : uid(), before: Math.max(0, Math.min(1440, Math.round(Number(data.before)) || 0)), title: (data.title || "").trim(), body: (data.body || "").trim(), repeat: ["once", "weekly", "even", "odd"].includes(data.repeat) ? data.repeat : "once", on: old ? old.on : true };
+      if (old) Object.assign(old, item); else ev.reminders.push(item);
       closeModal(); commit(); break;
     }
     case "layoutform": {
@@ -4226,20 +4221,16 @@ function notifyDetailsHTML() {
 }
 
 // ---------- Eigene Erinnerungen ----------
-// Feste Erinnerungen (Uhrzeit + Tage) liegen in settings.notify.custom.
-// Vorlesungs-Erinnerungen (z. B. 25 Min vor Beginn) liegen beim Modul: modules[name].reminders.
+// Feste Erinnerungen (Uhrzeit + Tage): settings.notify.custom
+// Erinnerungen am Termin: ev.reminders = [{id, before, title, body, repeat, on}]
+// repeat: once (nur dieser Termin) | weekly (jede Woche, gleicher Wochentag und Zeit) | even/odd (gerade/ungerade KW)
 const WD_SHORT = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
 const DAY_ORDER = [1, 2, 3, 4, 5, 6, 0]; // Montag zuerst
+const REPEAT_LABEL = { once: "nur dieser Termin", weekly: "jede Woche", even: "gerade KW", odd: "ungerade KW" };
 function customList() {
   const n = notifyCfg();
   if (!Array.isArray(n.custom)) n.custom = [];
   return n.custom;
-}
-function moduleReminders(name) {
-  const m = state.modules[name];
-  if (!m) return [];
-  if (!Array.isArray(m.reminders)) m.reminders = [];
-  return m.reminders;
 }
 function daysLabel(days) {
   if (!days || !days.length) return "keine Tage";
@@ -4247,12 +4238,16 @@ function daysLabel(days) {
   if (days.length === 5 && [1, 2, 3, 4, 5].every((d) => days.includes(d))) return "Mo–Fr";
   return DAY_ORDER.filter((d) => days.includes(d)).map((d) => WD_SHORT[d]).join(", ");
 }
+// Alle Erinnerungen am Termin, sortiert nach Termin
+function eventRules() {
+  const out = [];
+  for (const ev of state.events) for (const r of (ev.reminders || [])) out.push({ ev, r });
+  return out.sort((a, b) => a.ev.date.localeCompare(b.ev.date) || a.ev.start - b.ev.start);
+}
 
-// Liste aller eigenen Erinnerungen (Unterseite unter Benachrichtigungen)
+// Liste unter Einstellungen → Benachrichtigungen → Eigene Erinnerungen
 function customNotifyHTML() {
   const list = customList();
-  const modNames = Object.keys(state.modules).filter((n) => moduleReminders(n).length)
-    .sort((a, b) => a.localeCompare(b, "de"));
   const fixed = list.length
     ? list.map((c) => `<div class="listrow" style="align-items:center;gap:8px">
         <div class="grow"><b>${esc(c.title || "Erinnerung")}</b>
@@ -4261,20 +4256,20 @@ function customNotifyHTML() {
         <button class="btn ghost" data-act="cnedit" data-id="${c.id}">Bearbeiten</button>
       </div>`).join("")
     : `<p class="muted">Noch keine feste Erinnerung.</p>`;
-  const mods = modNames.flatMap((name) => moduleReminders(name).map((r) => `<div class="listrow" style="align-items:center;gap:8px">
-        <div class="grow"><b>${esc(r.title || name)}</b>
-          <div class="muted" style="font-size:13px">${esc(name)} · ${r.before} Min vor Beginn${r.body ? " · " + esc(r.body) : ""}</div></div>
-        <input type="checkbox" data-mrnon="${r.id}" data-m="${enc(name)}" ${r.on !== false ? "checked" : ""} title="an/aus">
-        <button class="btn ghost" data-act="mredit" data-m="${enc(name)}" data-id="${r.id}">Bearbeiten</button>
-      </div>`));
+  const rules = eventRules().map(({ ev, r }) => `<div class="listrow" style="align-items:center;gap:8px">
+        <div class="grow"><b>${esc(r.title || ev.name)}</b>
+          <div class="muted" style="font-size:13px">${esc(ev.name)} · ${fmtD(parseIso(ev.date))} ${fmtMin(ev.start)} · ${r.before} Min vorher · ${REPEAT_LABEL[r.repeat || "once"]}</div></div>
+        <input type="checkbox" data-evrnon="${ev.id}|${r.id}" ${r.on !== false ? "checked" : ""} title="an/aus">
+        <button class="btn ghost" data-act="evredit" data-id="${ev.id}" data-rid="${r.id}">Bearbeiten</button>
+      </div>`).join("");
   return `<div class="card"><h3>Feste Erinnerungen</h3>
       <p class="muted" style="margin-top:0">Eine Nachricht zu einer festen Uhrzeit an den gewählten Tagen, zum Beispiel „Losgehen“ um 7:30.</p>
       ${fixed}
       <button class="btn" data-act="cnnew" style="margin-top:12px">+ Neue Erinnerung</button>
     </div>
-    <div class="card"><h3>Vor Vorlesungen</h3>
-      <p class="muted" style="margin-top:0">Vor jedem Termin einer Vorlesung, z. B. 25 Min vorher. Neue Erinnerungen legst du hier unter „Vorlesung“ an oder über den Termin im Stundenplan.</p>
-      ${mods.length ? mods.join("") : `<p class="muted">Noch keine Erinnerung vor einer Vorlesung.</p>`}
+    <div class="card"><h3>Vor Terminen</h3>
+      <p class="muted" style="margin-top:0">Erinnerungen vor einzelnen Terminen im Stundenplan, z. B. 25 Min vorher. Neue legst du an, indem du einen Termin antippst und „Erinnerung“ wählst.</p>
+      ${rules || `<p class="muted">Noch keine Erinnerung vor einem Termin.</p>`}
     </div>`;
 }
 
@@ -4304,23 +4299,38 @@ function openCustomEdit(id) {
     </form>`);
 }
 
-// Fenster für eine Erinnerung vor einer Vorlesung
-function openModReminderEdit(name, id) {
-  const r = id ? moduleReminders(name).find((x) => x.id === id) : null;
-  const v = r || { before: 25, title: "", body: "" };
-  openModal(`<h3>Erinnerung · ${esc(name)}</h3>
-    <form data-form="mrsave" data-m="${enc(name)}" data-id="${r ? r.id : ""}">
-      <label class="muted">Wie viele Minuten vor Beginn?</label>
+// Liste der Erinnerungen an einem Termin (im Termin-Fenster)
+function evReminderRows(ev) {
+  const rows = (ev.reminders || []).map((r) => `<div class="listrow" style="align-items:center;gap:8px">
+      <div class="grow"><b>${esc(r.title || ev.name)}</b><div class="muted" style="font-size:13px">${r.before} Min vorher · ${REPEAT_LABEL[r.repeat || "once"]}</div></div>
+      <button type="button" class="btn ghost" data-act="evredit" data-id="${ev.id}" data-rid="${r.id}">Bearbeiten</button>
+    </div>`).join("");
+  return `<div class="muted" style="margin:10px 0 4px">Erinnerungen für diesen Termin</div>${rows || `<p class="muted" style="margin:4px 0">Keine.</p>`}
+    <button type="button" class="btn ghost" data-act="evrnew" data-id="${ev.id}" style="margin-bottom:6px">+ Erinnerung</button>`;
+}
+
+// Fenster für eine Erinnerung an einem Termin
+function openEvReminderEdit(evId, rid) {
+  const ev = state.events.find((x) => x.id === evId);
+  if (!ev) return;
+  const r = rid ? (ev.reminders || []).find((x) => x.id === rid) : null;
+  const v = r || { before: 25, title: "", body: "", repeat: "once" };
+  openModal(`<h3>Erinnerung</h3>
+    <p class="muted" style="margin-top:0">${esc(ev.name)} · ${fmtD(parseIso(ev.date))} ${fmtMin(ev.start)}</p>
+    <form data-form="evrsave" data-id="${ev.id}" data-rid="${r ? r.id : ""}">
+      <label class="muted">Wie viele Minuten vorher?</label>
       <input type="number" name="before" min="0" max="1440" required value="${v.before}">
       <label class="muted">Titel</label>
       <input name="title" required value="${esc(v.title)}" placeholder="z. B. Losgehen">
       <label class="muted">Text (optional)</label>
       <textarea name="body" rows="2" placeholder="z. B. Mit dem Rad, 12 Min">${esc(v.body || "")}</textarea>
-      <p class="muted">Gilt für jeden Termin dieser Vorlesung.</p>
+      <label class="muted">Wiederholung</label>
+      <select name="repeat">${Object.entries(REPEAT_LABEL).map(([k, l]) => `<option value="${k}" ${(v.repeat || "once") === k ? "selected" : ""}>${l}</option>`).join("")}</select>
+      <p class="muted">„Jede Woche“ gilt für Termine dieser Vorlesung am gleichen Wochentag und zur gleichen Uhrzeit. Gerade/ungerade KW nur in jeder zweiten Woche.</p>
       <div class="sheet-actions">
-        ${r ? `<button type="button" class="danger-text" data-act="mrdel" data-m="${enc(name)}" data-id="${r.id}">Löschen</button>` : "<span></span>"}
+        ${r ? `<button type="button" class="danger-text" data-act="evrdel" data-id="${ev.id}" data-rid="${r.id}">Löschen</button>` : "<span></span>"}
         <div class="right">
-          <button type="button" class="btn ghost" data-act="medit" data-m="${enc(name)}">Abbrechen</button>
+          <button type="button" class="btn ghost" data-act="mclose">Abbrechen</button>
           <button class="btn">Speichern</button>
         </div>
       </div>
