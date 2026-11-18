@@ -1298,7 +1298,7 @@ function dayColumn(k, label, wide, today, noNav = false, chips = "") {
         <b>${esc(it.name)}</b><small>${fmtMin(it.start)} · erledigt</small></div>`;
     }
     if (it.kind === "todo") {
-      return `<div class="ev block-todo" data-drag="${it.id}" data-act="tedit" data-id="${it.id}" style="${pos}background:color-mix(in srgb, ${c} 80%, transparent);border-left:4px solid ${c}">
+      return `<div class="ev block-todo" data-drag="${it.id}" data-act="tedit" data-id="${it.id}" style="${pos}border:2px dashed ${c};background:color-mix(in srgb, ${c} 10%, transparent)">
         <b>${esc(it.name)}</b><small>${fmtMin(it.start)} · To-Do</small></div>`;
     }
     return `<div class="ev block-outline" data-drag="${it.id}" data-act="tedit" data-id="${it.id}" style="${pos}border:2px dashed ${c};background:color-mix(in srgb, ${c} 10%, transparent)">
@@ -1351,13 +1351,13 @@ function viewPlan() {
   // Aufgaben-Streifen: steht oben und wischt mit den Wochen mit (Spalte für die Zeitachse daneben)
   const tasksOpen = ui.planTasksOpen !== false;
   const weekTasks = state.todos.filter((t) => !t.done && t.date && t.date >= iso(mon) && t.date <= iso(addDays(mon, 6))).length;
-  const tbar = `<div class="plan-tbar"><button class="plan-tbtn" data-act="planTasks">Aufgaben (${weekTasks}) ${tasksOpen ? "▴" : "▾"}</button><button class="plan-tbtn${ui.planDense ? " on" : ""}" data-act="planDense">Kompakt</button></div>`;
+  const tbar = `<div class="plan-tbar"><button class="plan-tbtn" data-act="planTasks">Aufgaben (${weekTasks}) ${tasksOpen ? "▴" : "▾"}</button></div>`;
   const topHTML = tbar + (tasksOpen ? `<div class="plan-top"><div class="plan-topspacer"></div><div class="plan-stripwrap">${pagesGroup((k) => alldayStripHTML(addDays(mon, k * 7), dayCount, true))}</div></div>` : "");
   const compact = state.settings.planHead === "kompakt" ? " compact" : "";
   // Oben fest: Wochentage, dann Aufgaben-Streifen. Nur das Raster darunter scrollt.
   const head = weekHeadHTML(mon, dayCount, today, compact);
   // Zeitachse und Kopf stehen fest, nur die Modul-Spalten (plan-track) wischen
-  h += `<div class="${animCls}">${planLaid(`<div class="plan-screen${planLinesCls()}${ui.planDense ? " dense" : ""}" style="${stepStyle()}">${topHTML}${head}<div class="week${compact}"><div class="plan-rows"><div class="axis" style="height:${mpx(END_MIN - START_MIN)}">${axisHTML(0)}</div><div class="plan-track" style="height:${mpx(END_MIN - START_MIN)}">${colsGroup}</div></div></div></div>`)}</div>${emptyPlanHint()}`;
+  h += `<div class="${animCls}">${planLaid(`<div class="plan-screen${planLinesCls()}${ui.planDense ? " dense" : ""}" style="${stepStyle()}">${head}${topHTML}<div class="week${compact}"><div class="plan-rows"><div class="axis" style="height:${mpx(END_MIN - START_MIN)}">${axisHTML(0)}</div><div class="plan-track" style="height:${mpx(END_MIN - START_MIN)}">${colsGroup}</div></div></div></div>`)}</div>${emptyPlanHint()}`;
   return h;
 }
 
@@ -2598,6 +2598,10 @@ function fitPlan() {
     fitting = true;
     render();
     fitting = false;
+    // render() baut den Stundenplan neu auf und verwirft dabei die Höhe. Sie wird hier wieder gesetzt,
+    // sonst wächst das Raster auf seine volle Länge und die ganze Seite scrollt statt des Rasters.
+    const s2 = document.querySelector(".plan-screen");
+    if (s2) s2.style.height = screenH + "px";
   }
 }
 // Leiste oben im Bearbeitungsmodus
