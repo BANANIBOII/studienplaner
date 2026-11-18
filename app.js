@@ -1227,6 +1227,15 @@ function weekColsHTML(mon, dayCount, today) {
 function dayCountOf(k) {
   return state.events.filter((e) => e.date === k).length + todosOn(k).filter((t) => !t.done).length;
 }
+// Knopf zum Ein- und Ausklappen der Aufgaben ohne Uhrzeit (in der Ecke über der Zeitspalte)
+function planCornerHTML(count, open) {
+  return `<button class="plan-corner${open ? " on" : ""}" data-act="planTasks" aria-label="Aufgaben ein- und ausblenden"><span>${open ? "▴" : "▾"}</span><small>${count}</small></button>`;
+}
+// Gibt es Aufgaben ohne Uhrzeit im Zeitraum (dann gibt es eine Leiste und einen Knopf)
+function untimedInRange(from, to) {
+  const f = iso(from), t2 = iso(to);
+  return state.todos.some((t) => t.date && !t.time && t.date <= t2 && ((t.endDate && t.endDate > t.date) ? t.endDate >= f : t.date >= f));
+}
 function weekHeadHTML(mon, dayCount, today, compact = "", corner = "") {
   const todayK = iso(today);
   const cellsOf = (m) => {
@@ -1235,7 +1244,7 @@ function weekHeadHTML(mon, dayCount, today, compact = "", corner = "") {
       const d = addDays(m, i);
       const k = iso(d);
       const n = dayCountOf(k);
-      cells += `<div class="dayhead${k === todayK ? " today" : ""}" data-act="dayopen" data-d="${k}" style="${dayTintStyle(k)}"><span class="wd"><span class="wd-l">${WEEKDAYS_LONG[i]}</span><span class="wd-s">${WEEKDAYS[i]}</span></span><span class="dd">${pad(d.getDate())}.${pad(d.getMonth() + 1)}.${n ? " · " + n : ""}</span></div>`;
+      cells += `<div class="dayhead${k === todayK ? " today" : ""}" data-act="dayopen" data-d="${k}" style="${dayTintStyle(k)}"><span class="wd"><span class="wd-l">${WEEKDAYS_LONG[i]}</span><span class="wd-s">${WEEKDAYS[i]}</span></span><span class="dd">${pad(d.getDate())}.${pad(d.getMonth() + 1)}.</span></div>`;
     }
     return cells;
   };
@@ -1332,11 +1341,16 @@ function viewPlan() {
     // Tagesansicht: Aufgaben ohne Uhrzeit stehen direkt unter dem Wochentag
     const dayChips = dayTodoChips(ui.dayDate);
     const chipsHtml = dayChips ? `<div class="dchips">${dayChips}</div>` : "";
+    // Aufklappbar wie in der Wochenansicht: Knopf in der Ecke, Leiste nur wenn es Aufgaben ohne Uhrzeit gibt
+    const dayUntimed = todosOn(ui.dayDate).some((t) => !t.time);
+    const dayOpen = dayUntimed && ui.planTasksOpen !== false;
+    const dayCorner = dayUntimed ? planCornerHTML(todosOn(ui.dayDate).filter((t) => !t.time && !t.done).length, dayOpen) : "";
+    const dayTop = dayOpen ? `<div class="plan-top"><div class="plan-topspacer"></div><div class="plan-stripwrap"><div class="plan-dchips">${dayChips || ""}</div></div></div>` : "";
     // Vorgeladene Tage, alle mit derselben Zeitachse
     applyDayRange(pagesDates());
     const dayGroup = pagesGroup((k) => `<div class="plan-cols">${dayColumn(iso(addDays(d, k)), "", true, today, false, "")}</div>`);
     return `${planNavHTML(`KW ${kwOf(d)} · ${fmtD(d)}`, "day")}
-    <div class="${animCls}">${planLaid(`<div class="plan-screen${planLinesCls()}" style="--grid-h:${mpx(END_MIN - START_MIN)};${stepStyle()}"><div class="plan-top"><div class="plan-topspacer"></div><div class="plan-stripwrap"><div class="plan-dchips">${dayChips || ""}</div></div></div><div class="plan-days" style="grid-template-columns:var(--axis-w, 28px) minmax(0,1fr);"><div></div><div class="dayhead${iso(d) === iso(today) ? " today" : ""}" data-act="toweek" title="Zur Wochenansicht"><b class="daytitle">${wd}</b><span class="dd">${pad(d.getDate())}.${pad(d.getMonth() + 1)}.</span></div></div><div class="week day-week"><div class="plan-rows"><div class="axis" style="height:${mpx(END_MIN - START_MIN)}">${axisHTML(0)}</div><div class="plan-track" style="height:${mpx(END_MIN - START_MIN)}">${dayGroup}</div></div></div></div>`)}</div>${emptyPlanHint()}${planFabHTML()}`;
+    <div class="${animCls}">${planLaid(`<div class="plan-screen${planLinesCls()}" style="--grid-h:${mpx(END_MIN - START_MIN)};${stepStyle()}">${dayTop}<div class="plan-days" style="grid-template-columns:var(--axis-w, 28px) minmax(0,1fr);"><div>${dayCorner}</div><div class="dayhead${iso(d) === iso(today) ? " today" : ""}" data-act="toweek" title="Zur Wochenansicht"><b class="daytitle">${wd}</b><span class="dd">${pad(d.getDate())}.${pad(d.getMonth() + 1)}.</span></div></div><div class="week day-week"><div class="plan-rows"><div class="axis" style="height:${mpx(END_MIN - START_MIN)}">${axisHTML(0)}</div><div class="plan-track" style="height:${mpx(END_MIN - START_MIN)}">${dayGroup}</div></div></div></div>`)}</div>${emptyPlanHint()}${planFabHTML()}`;
   }
 
   const mon = addDays(mondayOf(today), ui.weekOffset * 7);
@@ -1349,16 +1363,17 @@ function viewPlan() {
   applyDayRange(pagesDates());
   const colsGroup = pagesGroup((k) => `<div class="plan-cols">${weekColsHTML(addDays(mon, k * 7), dayCount, today)}</div>`);
   // Aufgaben-Streifen: steht oben und wischt mit den Wochen mit (Spalte für die Zeitachse daneben)
-  const tasksOpen = ui.planTasksOpen !== false;
+  const hasUntimed = untimedInRange(addDays(mon, -7 * PRELOAD), addDays(mon, 7 * (PRELOAD + 1) - 1));
+  const tasksOpen = hasUntimed && ui.planTasksOpen !== false;
   const weekTasks = state.todos.filter((t) => !t.done && t.date && t.date >= iso(mon) && t.date <= iso(addDays(mon, 6))).length;
   // Der Aufklapp-Knopf sitzt in der leeren Ecke über der Zeitspalte, oben stehen nur die Wochentage
-  const corner = `<button class="plan-corner${tasksOpen ? " on" : ""}" data-act="planTasks" aria-label="Aufgaben ein- und ausblenden"><span>${tasksOpen ? "▴" : "▾"}</span><small>${weekTasks}</small></button>`;
+  const corner = hasUntimed ? planCornerHTML(weekTasks, tasksOpen) : "";
   const topHTML = (tasksOpen ?`<div class="plan-top"><div class="plan-topspacer"></div><div class="plan-stripwrap">${pagesGroup((k) => alldayStripHTML(addDays(mon, k * 7), dayCount, true))}</div></div>` : "");
   const compact = state.settings.planHead === "kompakt" ? " compact" : "";
   // Oben fest: Wochentage, dann Aufgaben-Streifen. Nur das Raster darunter scrollt.
   const head = weekHeadHTML(mon, dayCount, today, compact, corner);
   // Zeitachse und Kopf stehen fest, nur die Modul-Spalten (plan-track) wischen
-  h += `<div class="${animCls}">${planLaid(`<div class="plan-screen${planLinesCls()}${ui.planDense ? " dense" : ""}" style="${stepStyle()}">${head}${topHTML}<div class="week${compact}"><div class="plan-rows"><div class="axis" style="height:${mpx(END_MIN - START_MIN)}">${axisHTML(0)}</div><div class="plan-track" style="height:${mpx(END_MIN - START_MIN)}">${colsGroup}</div></div></div></div>`)}</div>${emptyPlanHint()}`;
+  h += `<div class="${animCls}">${planLaid(`<div class="plan-screen${planLinesCls()}${ui.planDense ? " dense" : ""}" style="${stepStyle()}">${topHTML}${head}<div class="week${compact}"><div class="plan-rows"><div class="axis" style="height:${mpx(END_MIN - START_MIN)}">${axisHTML(0)}</div><div class="plan-track" style="height:${mpx(END_MIN - START_MIN)}">${colsGroup}</div></div></div></div>`)}</div>${emptyPlanHint()}`;
   return h;
 }
 
