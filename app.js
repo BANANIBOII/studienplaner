@@ -2985,7 +2985,7 @@ function startSwipe(t, target) {
   const track = document.querySelector(".plan-screen .plan-track");
   const groups = [...document.querySelectorAll(".plan-screen .plan-group")];
   if (!track || !groups.length) { swipe = null; return; }
-  document.body.classList.add("swiping");
+  // „swiping“ erst bei echter Wischgeste setzen: sonst bekommt jeder senkrechte Scroll schon den Zustand, der Sprünge auslöst
   swipe = { x: t.clientX, y: t.clientY, t: Date.now(), dx: 0, mode: null, dir: 0, track, groups };
 }
 document.addEventListener("touchstart", (e) => {
@@ -3003,6 +3003,7 @@ document.addEventListener("touchmove", (e) => {
     if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return;
     if (Math.abs(dx) < 1.3 * Math.abs(dy)) { abortSwipe(); return; }   // senkrecht: normal scrollen
     swipe.mode = "h";
+    document.body.classList.add("swiping");
   }
   swipe.dx = dx;
   // Verschieben nur einmal pro Bildwiederholung (ruhiger Lauf)
