@@ -2984,6 +2984,7 @@ function pagesGroup(build) {
   for (let k = -PRELOAD; k <= PRELOAD; k++) s += build(k);
   return `<div class="plan-group">${s}</div>`;
 }
+let swipeAnim = 0;   // Nummer der laufenden Auslauf-Animation; ein neuer Finger macht ältere Aufräum-Timer ungültig
 function resetSwipeTrack(app) {
   document.body.classList.remove("swiping");
   document.querySelectorAll(".plan-screen .plan-group").forEach((g) => { g.style.transition = ""; g.style.transform = ""; });
@@ -3008,7 +3009,10 @@ function startSwipe(t, target) {
   const groups = [...document.querySelectorAll(".plan-screen .plan-group")];
   if (!track || !groups.length) { swipe = null; return; }
   // „swiping“ erst bei echter Wischgeste setzen: sonst bekommt jeder senkrechte Scroll schon den Zustand, der Sprünge auslöst
-  swipe = { x: t.clientX, y: t.clientY, t: Date.now(), dx: 0, mode: null, dir: 0, track, groups };
+  swipeAnim++;
+  let base = 0;
+  try { base = new DOMMatrix(getComputedStyle(groups[0]).transform).m41 || 0; } catch (_) {}
+  swipe = { x: t.clientX, y: t.clientY, t: Date.now(), dx: 0, mode: null, dir: 0, track, groups, base };
 }
 document.addEventListener("touchstart", (e) => {
   if (e.touches.length !== 1) { abortSwipe(); return; }
@@ -3032,7 +3036,7 @@ document.addEventListener("touchmove", (e) => {
   if (!swipe.raf) swipe.raf = requestAnimationFrame(() => {
     if (!swipe) return;
     swipe.raf = 0;
-    swipe.groups.forEach((g) => { g.style.transition = "none"; g.style.transform = `translateX(${swipe.dx}px)`; });
+    swipe.groups.forEach((g) => { g.style.transition = "none"; g.style.transform = `translateX(${swipe.base + swipe.dx}px)`; });
   });
 }, { passive: false });
 document.addEventListener("touchend", () => {
@@ -3040,24 +3044,81 @@ document.addEventListener("touchend", () => {
   swipe = null;
   if (!sw) return;
   if (sw.raf) cancelAnimationFrame(sw.raf);
-  if (!sw.mode || longFired) { resetSwipeTrack(document.getElementById("app")); return; }
-  const dir = sw.dx < 0 ? 1 : -1;     // nach links = nächste Woche/Tag
+  const app = document.getElementById("app");
+  if (!sw.mode || longFired) { resetSwipeTrack(app); return; }
+  const total = sw.base + sw.dx;                      // so weit ist die Ansicht gerade verschoben
   const W = sw.track.offsetWidth;
   const quick = Date.now() - sw.t < 300 && Math.abs(sw.dx) > W * 0.12;
-  const commit = Math.abs(sw.dx) > W * 0.3 || quick;
+  const commit = Math.abs(total) > W * 0.3 || quick;
+  const dir = (quick ? sw.dx : total) < 0 ? 1 : -1;   // nach links = nächste Woche/Tag
   const ease = "transform .32s cubic-bezier(.2,.8,.2,1)";
-  sw.groups.forEach((g) => { g.style.transition = ease; g.style.transform = commit ? `translateX(${-dir * W}px)` : "translateX(0)"; });
+  if (!commit) {
+    sw.groups.forEach((g) => { g.style.transition = ease; g.style.transform = "translateX(0)"; });
+    const id = ++swipeAnim;
+    setTimeout(() => { if (id === swipeAnim) resetSwipeTrack(document.getElementById("app")); }, 340);
+    return;
+  }
+  // Sofort umschalten (nicht erst nach der Animation): ein neuer Finger trifft dann schon die neue Ansicht.
+  // Die neue Ansicht startet genau dort, wo die alte gerade stand, und gleitet in die Mitte.
+  resetSwipeTrack(app);
+  if (ui.view === "day") ui.dayDate = iso(addDays(parseIso(ui.dayDate), dir));
+  else ui.weekOffset += dir;
+  ui.anim = null;
+  render();
+  const gs = [...document.querySelectorAll(".plan-screen .plan-group")];
+  const from = total + dir * W;
+  gs.forEach((g) => { g.style.transition = "none"; g.style.transform = `translateX(${from}px)`; });
+  void document.body.offsetWidth;
+  gs.forEach((g) => { g.style.transition = ease; g.style.transform = "translateX(0)"; });
+  const id = ++swipeAnim;
   setTimeout(() => {
-    if (commit) {
-      if (ui.view === "day") ui.dayDate = iso(addDays(parseIso(ui.dayDate), dir));
-      else ui.weekOffset += dir;
-      ui.anim = null;
-      render();
-    }
-    resetSwipeTrack(document.getElementById("app"));
-  }, 330);
+    if (id !== swipeAnim) return;
+    gs.forEach((g) => { g.style.transition = ""; g.style.transform = ""; });
+  }, 340);
 }, { passive: true });
 document.addEventListener("touchcancel", () => abortSwipe(), { passive: true });
+
+// Gummiband: am oberen/unteren Ende des Rasters gibt das Raster beim Weiterziehen kurz nach und federt zurück.
+// Nur optisch (transform auf .plan-rows), die Scrollposition und das Wischen bleiben unberührt.
+let band = null;
+const bandShow = (raw) => (raw < 0 ? -1 : 1) * 56 * (1 - Math.exp(-Math.abs(raw) / 110));
+function bandRelease() {
+  const b = band;
+  band = null;
+  if (!b || !b.raw || !b.rows) return;
+  const rows = b.rows;
+  rows.style.transition = "transform .38s cubic-bezier(.2,.9,.3,1.2)";
+  rows.style.transform = "";
+  setTimeout(() => { rows.style.transition = ""; }, 400);
+}
+document.addEventListener("touchstart", (e) => {
+  if (band) bandRelease();
+  if (e.touches.length !== 1 || ui.tab !== "stundenplan" || ui.layEdit || ui.planEdit || document.querySelector(".modal")) return;
+  const wk = e.target.closest && e.target.closest(".plan-screen > .week");
+  const rows = wk && wk.querySelector(".plan-rows");
+  if (!rows) return;
+  rows.style.transition = "none";
+  band = { wk, rows, last: e.touches[0].clientY, raw: 0 };
+}, { passive: true });
+document.addEventListener("touchmove", (e) => {
+  if (!band) return;
+  if (e.touches.length !== 1 || (swipe && swipe.mode === "h") || pinch) { band.raw = 0; band.rows.style.transform = ""; band = null; return; }
+  const y = e.touches[0].clientY;
+  const d = y - band.last;
+  band.last = y;
+  const wk = band.wk;
+  const atTop = wk.scrollTop <= 0.5;
+  const atBottom = wk.scrollTop >= wk.scrollHeight - wk.clientHeight - 0.5;
+  if (band.raw === 0) {
+    // erst ab dem Rand: nach unten ziehen am Anfang, nach oben ziehen am Ende
+    if (!((atTop && d > 0) || (atBottom && d < 0))) return;
+  }
+  const next = band.raw + d;
+  band.raw = (band.raw !== 0 && Math.sign(next) !== Math.sign(band.raw)) ? 0 : next;
+  band.rows.style.transform = band.raw ? `translateY(${bandShow(band.raw)}px)` : "";
+}, { passive: true });
+document.addEventListener("touchend", () => bandRelease(), { passive: true });
+document.addEventListener("touchcancel", () => bandRelease(), { passive: true });
 
 // Streckung in Y-Richtung: zwei Finger auf dem Stundenplan (am PC: Strg + Mausrad)
 let pinch = null;
@@ -4350,7 +4411,17 @@ handleLaunch();
 window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
   if (state.settings.themeMode === "system") render();
 });
-setInterval(() => { if (ui.tab === "stundenplan" && !document.querySelector(".modal")) render(); }, 60000);
+// Der Neuaufbau tauscht die Elemente aus: liegt gerade ein Finger darauf, bricht das Scrollen ab und hängt, bis man neu ansetzt.
+let touchDown = 0, lastTouchEnd = 0;
+["touchstart", "touchend", "touchcancel"].forEach((n) => document.addEventListener(n, (e) => {
+  touchDown = e.touches.length;
+  if (n !== "touchstart") lastTouchEnd = Date.now();
+}, { passive: true, capture: true }));
+function tickPlan() {
+  if (touchDown || Date.now() - lastTouchEnd < 1500 || swipe || pinch || document.body.classList.contains("swiping")) { setTimeout(tickPlan, 1600); return; }
+  if (ui.tab === "stundenplan" && !document.querySelector(".modal")) render();
+}
+setInterval(tickPlan, 60000);
 
 // ---------- Push-Benachrichtigungen ----------
 const VAPID_PUBLIC_KEY = "BET0TZ9SGPPKXHs2r3t3WPyzHyE7QNsyOGEk4uipfwjV6-HbB1G5nrNjYZjtLkhTL6X_-iBxAFMI9uvTfE_kbjA";
