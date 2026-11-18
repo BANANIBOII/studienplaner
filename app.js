@@ -58,7 +58,7 @@ function applyDayRange(dates = visibleDates()) {
   // Stundenplan: feste Höhe pro Stunde (nur durch Zoom oder Einstellung verändert), nicht nach Bildschirm berechnet
   // Wochenansicht: das Raster hat immer dieselbe Höhe, der sichtbare Zeitbereich wird darauf verteilt
   HOUR_PX = ui.tab === "stundenplan"
-    ? Math.max(20, Math.floor(planGridAvail / Math.max(1, (END_MIN - START_MIN) / 60))) * (s.zoomY || 1)
+    ? Math.max(20, planGridAvail / Math.max(1, (END_MIN - START_MIN) / 60)) * Math.max(1, s.zoomY || 1)
     : 42 * (s.zoomY || 1);
   PX_PER_MIN = HOUR_PX / 60;
   document.documentElement.style.setProperty("--hour-px", HOUR_PX + "px");
@@ -1409,7 +1409,7 @@ function openPlanMenu() {
     <label class="muted">Ende</label>
     <select data-plan-range="dayEnd" ${s.autoRange ? "disabled" : ""}>${opts(14, 23.5, s.dayEnd)}</select>
     <label class="muted">Höhe: ${Math.round(getZoom("plan") * 100)} %</label>
-    <input type="range" min="50" max="200" step="5" value="${Math.round(getZoom("plan") * 100)}" data-plan-zoom>
+    <input type="range" min="100" max="200" step="5" value="${Math.round(Math.max(1, getZoom("plan")) * 100)}" data-plan-zoom>
     <p class="muted">Alternativ mit zwei Fingern zusammenziehen oder auseinanderziehen (am PC: Strg + Mausrad).</p>
     <label class="muted">Hintergrund des Stundenplans</label>
     <input type="color" value="${gridVal}" data-plan="grid">
@@ -3028,7 +3028,7 @@ let zoomTimer = null;
 const zoomScope = (el) => (el.closest(".excerpt") ? "dash" : "plan");
 const getZoom = (scope) => (scope === "dash" ? state.settings.dash.zoomY : state.settings.zoomY) || 1;
 function setZoom(scope, z) {
-  const v = Math.round(Math.min(2, Math.max(0.5, z)) * 100) / 100;
+  const v = Math.round(Math.min(2, Math.max(scope === "dash" ? 0.5 : 1, z)) * 100) / 100;   // Stundenplan: nicht kleiner als der Bildschirm
   if (scope === "dash") state.settings.dash.zoomY = v; else state.settings.zoomY = v;
 }
 // Beim Zoomen mit dem Finger wird NICHT neu gezeichnet (sonst verliert das Handy die Fingerbewegung).
@@ -3046,13 +3046,14 @@ document.addEventListener("touchmove", (e) => {
   e.preventDefault();
   const [a, b] = e.touches;
   const d = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
-  const z = Math.round(Math.min(2, Math.max(0.5, pinch.z0 * d / pinch.d0)) * 100) / 100;
+  const z = Math.round(Math.min(2, Math.max(pinch.scope === "dash" ? 0.5 : 1, pinch.z0 * d / pinch.d0)) * 100) / 100;
   pinch.zNow = z;
   pinch.moved = true;
   pinch.el.style.transformOrigin = "0 0";
   pinch.el.style.transform = `scaleY(${z / pinch.z0})`;
 }, { passive: false });
 const endPinch = () => {
+  if (pinch && pinch.el) { pinch.el.style.transform = ""; pinch.el.style.transformOrigin = ""; }
   if (pinch && pinch.moved) { setZoom(pinch.scope, pinch.zNow); commit(); }
   pinch = null;
 };
@@ -3404,7 +3405,7 @@ document.addEventListener("click", async (e) => {
     case "headset": state.settings.planHead = el.dataset.v; commit(); break;
     case "zoomstep": {
       const z = el.dataset.v === "reset" ? 1 : (state.settings.zoomY || 1) + Number(el.dataset.v);
-      state.settings.zoomY = Math.round(Math.min(2, Math.max(0.5, z)) * 100) / 100;
+      state.settings.zoomY = Math.round(Math.min(2, Math.max(1, z)) * 100) / 100;
       commit();
       break;
     }
@@ -3738,7 +3739,7 @@ document.addEventListener("change", async (e) => {
     return;
   }
   if (t.hasAttribute && t.hasAttribute("data-plan-zoom")) {
-    state.settings.zoomY = Number(t.value) / 100;
+    state.settings.zoomY = Math.max(1, Number(t.value) / 100);
     commit();
     return;
   }
