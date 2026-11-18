@@ -906,3 +906,36 @@ html.no-scrollbars::-webkit-scrollbar { display: none; width: 0; height: 0; }
 .plan-corner span { font-size: 11px; }
 .plan-corner small { font-size: 10px; font-weight: 700; color: var(--accent); }
 .plan-corner.on { border-color: var(--accent); }
+
+/* ---------- Heute im Stundenplan: ganzer Kopf in der Akzentfarbe (nicht nur das Datum) ---------- */
+.dayhead.today { background: var(--accent) !important; color: var(--bg) !important; border-color: transparent !important; }
+.dayhead.today .dd { background: transparent; color: inherit; padding: 0; border-radius: 0; opacity: .9; font-weight: 600; margin-top: 2px; }
+
+/* ---------- Dashboard: Wochentag im kleinen Stundenplan bleibt über seinem Raster stehen ---------- */
+.week.excerpt .dayhead { position: static; }
+
+/* ---------- Dashboard am Handy: Stundenplan schmal, rechts daneben To-Dos und Countdown ---------- */
+@media (max-width: 799px) {
+  .dash-main { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
+  .dash-main > .card, .dash-side > .card { padding: 10px; border-radius: 16px; }
+  .dash-side { gap: 8px; }
+  .dash-main h3 { font-size: 13px; line-height: 1.25; margin-bottom: 8px; }
+  .dash-main h4 { margin: 10px 0 4px; font-size: 11px; }
+  .dash-main .row { flex-wrap: nowrap; gap: 6px; }
+  .dash-main .menu-btn { padding: 0 6px; min-height: 30px; flex: none; }
+  /* kleiner Stundenplan: Zeitachse schmaler */
+  .dash-main .week.excerpt .axis { width: 28px; }
+  .dash-main .week.excerpt .axis-h { font-size: 9px; }
+  .dash-main .week.excerpt .dayhead b { font-size: 12px; }
+  /* To-Dos: Titel in eigener Zeile, Knöpfe und Priorität ausgeblendet (Antippen öffnet den Eintrag) */
+  .dash-main .quick-row { flex-wrap: wrap !important; margin: 6px 0 8px; }
+  .dash-main .quick-row input[name="title"] { flex: 1 1 100% !important; }
+  .dash-main .quick-row input[type="date"] { flex: 1 1 0; min-width: 0; width: auto; }
+  .dash-main .quick-row .btn { flex: none; min-height: 40px; padding: 0 14px; }
+  .dash-main .item, .dash-main .listrow { gap: 8px; padding: 8px 0; }
+  .dash-main .item { padding: 8px; margin-bottom: 6px; }
+  .dash-main .item .prio, .dash-main .listrow .prio,
+  .dash-main .item > .btn, .dash-main .listrow > .btn { display: none; }
+  .dash-main .listrow { flex-wrap: wrap; gap: 2px 8px; }
+  .dash-main .item .muted, .dash-main .listrow .muted { font-size: 11px; }
+}

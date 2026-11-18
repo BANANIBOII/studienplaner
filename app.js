@@ -936,9 +936,9 @@ function viewDashboard() {
   const rueckCard = rueckblickCard();
   const flow = `<div style="margin-bottom:18px">${nextCard}</div><div class="dash-main">${planCard}<div class="dash-side">${todoCard}${countCard}</div></div><div style="margin-top:18px">${mensaCard}</div><div style="margin-top:18px">${rueckCard}</div><div style="margin-top:18px">${linksCard}</div>`;
   h += searchBtnHTML() + laid("dash", [
-    { id: "plan", w: 7, h: 20, html: planCard },
-    { id: "todo", w: 5, h: 12, html: todoCard },
-    { id: "count", w: 5, h: 8, html: countCard },
+    { id: "plan", w: 7, nw: 7, h: 20, html: planCard },
+    { id: "todo", w: 5, nw: 5, h: 12, html: todoCard },
+    { id: "count", w: 5, nw: 5, h: 8, html: countCard },
     { id: "next", w: 12, h: 4, html: nextCard },
     { id: "mensa", w: 5, h: 8, html: mensaCard },
     { id: "rueck", w: 7, h: 8, html: rueckCard },
@@ -1350,7 +1350,8 @@ function viewPlan() {
     // Aufklappbar wie in der Wochenansicht: Knopf in der Ecke, Leiste nur wenn es Aufgaben ohne Uhrzeit gibt
     const dayUntimed = todosOn(ui.dayDate).some((t) => !t.time);
     const dayOpen = dayUntimed && ui.planTasksOpen !== false;
-    const dayCorner = dayUntimed ? planCornerHTML(todosOn(ui.dayDate).filter((t) => !t.time && !t.done).length, dayOpen) : "";
+    const dayAny = untimedInRange(addDays(d, -PRELOAD), addDays(d, PRELOAD));
+    const dayCorner = (dayUntimed || dayAny) ? planCornerHTML(todosOn(ui.dayDate).filter((t) => !t.time && !t.done).length, dayOpen) : "";
     const dayTop = dayOpen ? `<div class="plan-top"><div class="plan-topspacer"></div><div class="plan-stripwrap"><div class="plan-dchips">${dayChips || ""}</div></div></div>` : "";
     // Vorgeladene Tage, alle mit derselben Zeitachse
     applyDayRange(pagesDates());
@@ -2565,7 +2566,7 @@ function placeLayout(items, saved) {
   });
   items.forEach((it) => {
     if (out[it.id]) return;
-    const w = layNarrow() ? LAY_COLS : Math.min(LAY_COLS, it.w || 6);
+    const w = layNarrow() ? (it.nw || LAY_COLS) : Math.min(LAY_COLS, it.w || 6);
     const h = it.h || 6;
     for (let r = 1; ; r++) {
       let placed = false;
@@ -3021,6 +3022,8 @@ function scheduleSwipeFlush() {
     render();
   }, 380);
 }
+// Wie weit man wischen muss, um die Woche/den Tag zu wechseln (Anteil der Breite). Kurzer, schneller Wisch zählt schon ab SWIPE_FLICK.
+const SWIPE_FRAC = 0.14, SWIPE_FLICK = 0.05;
 let swipeAnim = 0;   // Nummer der laufenden Auslauf-Animation; ein neuer Finger macht ältere Aufräum-Timer ungültig
 function resetSwipeTrack(app) {
   document.body.classList.remove("swiping");
@@ -3086,8 +3089,8 @@ document.addEventListener("touchend", () => {
   if (!sw.mode || longFired) { resetSwipeTrack(app); return; }
   const W = sw.track.offsetWidth;
   const rel = sw.base + sw.dx + swipePage * W;         // Abstand von der aktuellen Ruheseite
-  const quick = Date.now() - sw.t < 300 && Math.abs(sw.dx) > W * 0.12;
-  const commit = Math.abs(rel) > W * 0.3 || quick;
+  const quick = Date.now() - sw.t < 300 && Math.abs(sw.dx) > W * SWIPE_FLICK;
+  const commit = Math.abs(rel) > W * SWIPE_FRAC || quick;
   const dir = (quick ? sw.dx : rel) < 0 ? 1 : -1;      // nach links = nächste Woche/Tag
   if (commit) swipePage = Math.max(-PRELOAD, Math.min(PRELOAD, swipePage + dir));
   const ease = "transform .32s cubic-bezier(.2,.8,.2,1)";
