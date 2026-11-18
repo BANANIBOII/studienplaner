@@ -882,3 +882,20 @@ html.no-scrollbars::-webkit-scrollbar { display: none; width: 0; height: 0; }
 
 /* Ergebnisse der Suche */
 .listbtn { display: flex; justify-content: space-between; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 12px 6px; border: 0; border-bottom: 1px solid rgba(127, 127, 127, .25); background: transparent; color: inherit; font: inherit; }
+
+/* Stundenplan (Handy): die Seite bleibt stehen, nur das Raster scrollt */
+@media (max-width: 799px) {
+  html.plan-tab, html.plan-tab body { overflow: hidden; height: 100%; }
+}
+/* Aufgaben ein-/ausklappen und Kompakt-Schalter */
+.plan-tbar { display: flex; gap: 6px; align-items: center; margin: 0 0 4px; }
+.plan-tbtn { font: inherit; font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line); background: transparent; color: var(--muted); }
+.plan-tbtn:first-child { margin-right: auto; }
+.plan-tbtn.on { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
+/* Abgaben und Klausuren mit farbigem Rand */
+.allday-bar.is-klausur { box-shadow: inset 4px 0 0 #ef4444; }
+.allday-bar.is-abgabe { box-shadow: inset 4px 0 0 #f59e0b; }
+/* Heute im Aufgabenstreifen */
+.strip-today { background: var(--accent-soft); border-radius: 8px; opacity: .55; pointer-events: none; }
+/* Kompakt: kleinere Termine */
+.plan-screen.dense .ev { padding: 1px 3px !important; font-size: 10px !important; line-height: 1.15 !important; }

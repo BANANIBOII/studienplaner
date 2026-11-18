@@ -718,6 +718,7 @@ function render() {
     if (newWeek) newWeek.scrollTop = keepScroll;
   }
   appEl.dataset.shownTab = ui.tab;
+  document.documentElement.classList.toggle("plan-tab", ui.tab === "stundenplan");
   syncPlanFab();
   syncLayFab();
   syncTabBadge();
@@ -1196,9 +1197,12 @@ function alldayStripHTML(mon, dayCount, bare = false) {
     if (r < 0) { r = rowEnds.length; rowEnds.push(x.e); } else rowEnds[r] = x.e;
     x.row = r;
   });
-  const bars = items.map((x) => {
+  const tk = iso(new Date());
+  const ti = Math.round((parseIso(tk) - mon) / 86400000);
+  const todayCell = ti >= 0 && ti < dayCount ? `<div class="strip-today" style="grid-column:${ti + off} / ${ti + off + 1};grid-row:1 / 9"></div>` : "";
+  const bars = todayCell + items.map((x) => {
     const c = catColor(x.t.done ? "done" : x.t.type);
-    return `<div class="allday-bar${x.t.done ? " is-done" : ""}" data-act="tedit" data-id="${x.t.id}" style="grid-column:${x.s + off} / ${x.e + off + 1};grid-row:${x.row + 1};--c:${c}"><span>${esc(x.t.title)}</span><small>${esc(dateText(x.t))}</small></div>`;
+    return `<div class="allday-bar${x.t.done ? " is-done" : ""} is-${x.t.type}" data-act="tedit" data-id="${x.t.id}" style="grid-column:${x.s + off} / ${x.e + off + 1};grid-row:${x.row + 1};--c:${c}"><span>${esc(x.t.title)}</span><small>${esc(dateText(x.t))}</small></div>`;
   }).join("");
   if (bare) return `<div class="allday-strip plan-strip" style="grid-template-columns:repeat(${dayCount}, minmax(0, 1fr));">${bars}</div>`;
   return `<div class="allday-strip" style="grid-template-columns:var(--axis-w, 28px) repeat(${dayCount}, minmax(0, 1fr));"><div></div>${bars}</div>`;
@@ -1214,6 +1218,9 @@ function weekColsHTML(mon, dayCount, today) {
 }
 // Wochentage als fester Kopf über dem Aufgaben-Streifen (gleiche Spalten wie der Streifen)
 // Die Karten wischen mit den Wochen mit (wie der Aufgaben-Streifen); die Zeitachse bleibt stehen
+function dayCountOf(k) {
+  return state.events.filter((e) => e.date === k).length + todosOn(k).filter((t) => !t.done).length;
+}
 function weekHeadHTML(mon, dayCount, today, compact = "") {
   const todayK = iso(today);
   const cellsOf = (m) => {
@@ -1221,7 +1228,8 @@ function weekHeadHTML(mon, dayCount, today, compact = "") {
     for (let i = 0; i < dayCount; i++) {
       const d = addDays(m, i);
       const k = iso(d);
-      cells += `<div class="dayhead${k === todayK ? " today" : ""}" data-act="dayopen" data-d="${k}" style="${dayTintStyle(k)}"><span class="wd"><span class="wd-l">${WEEKDAYS_LONG[i]}</span><span class="wd-s">${WEEKDAYS[i]}</span></span><span class="dd">${pad(d.getDate())}.${pad(d.getMonth() + 1)}.</span></div>`;
+      const n = dayCountOf(k);
+      cells += `<div class="dayhead${k === todayK ? " today" : ""}" data-act="dayopen" data-d="${k}" style="${dayTintStyle(k)}"><span class="wd"><span class="wd-l">${WEEKDAYS_LONG[i]}</span><span class="wd-s">${WEEKDAYS[i]}</span></span><span class="dd">${pad(d.getDate())}.${pad(d.getMonth() + 1)}.${n ? " · " + n : ""}</span></div>`;
     }
     return cells;
   };
@@ -1335,12 +1343,15 @@ function viewPlan() {
   applyDayRange(pagesDates());
   const colsGroup = pagesGroup((k) => `<div class="plan-cols">${weekColsHTML(addDays(mon, k * 7), dayCount, today)}</div>`);
   // Aufgaben-Streifen: steht oben und wischt mit den Wochen mit (Spalte für die Zeitachse daneben)
-  const topHTML = `<div class="plan-top"><div class="plan-topspacer"></div><div class="plan-stripwrap">${pagesGroup((k) => alldayStripHTML(addDays(mon, k * 7), dayCount, true))}</div></div>`;
+  const tasksOpen = ui.planTasksOpen !== false;
+  const weekTasks = state.todos.filter((t) => !t.done && t.date && t.date >= iso(mon) && t.date <= iso(addDays(mon, 6))).length;
+  const tbar = `<div class="plan-tbar"><button class="plan-tbtn" data-act="planTasks">Aufgaben (${weekTasks}) ${tasksOpen ? "▴" : "▾"}</button><button class="plan-tbtn${ui.planDense ? " on" : ""}" data-act="planDense">Kompakt</button></div>`;
+  const topHTML = tbar + (tasksOpen ? `<div class="plan-top"><div class="plan-topspacer"></div><div class="plan-stripwrap">${pagesGroup((k) => alldayStripHTML(addDays(mon, k * 7), dayCount, true))}</div></div>` : "");
   const compact = state.settings.planHead === "kompakt" ? " compact" : "";
   // Oben fest: Wochentage, dann Aufgaben-Streifen. Nur das Raster darunter scrollt.
   const head = weekHeadHTML(mon, dayCount, today, compact);
   // Zeitachse und Kopf stehen fest, nur die Modul-Spalten (plan-track) wischen
-  h += `<div class="${animCls}">${planLaid(`<div class="plan-screen${planLinesCls()}" style="${stepStyle()}">${topHTML}${head}<div class="week${compact}"><div class="plan-rows"><div class="axis" style="height:${gridHeight()}px">${axisHTML(0)}</div><div class="plan-track" style="height:${gridHeight()}px">${colsGroup}</div></div></div></div>`)}</div>${emptyPlanHint()}`;
+  h += `<div class="${animCls}">${planLaid(`<div class="plan-screen${planLinesCls()}${ui.planDense ? " dense" : ""}" style="${stepStyle()}">${topHTML}${head}<div class="week${compact}"><div class="plan-rows"><div class="axis" style="height:${gridHeight()}px">${axisHTML(0)}</div><div class="plan-track" style="height:${gridHeight()}px">${colsGroup}</div></div></div></div>`)}</div>${emptyPlanHint()}`;
   return h;
 }
 
@@ -3492,6 +3503,8 @@ document.addEventListener("click", async (e) => {
       else if (k === "set") { ui.tab = "einstellungen"; ui.setPage = key; ui.nfOnly = null; commit(); }
       break;
     }
+    case "planTasks": ui.planTasksOpen = ui.planTasksOpen === false; render(); break;
+    case "planDense": ui.planDense = !ui.planDense; render(); break;
     case "mlnew": openModLinkEdit(m, null); break;
     case "mledit": openModLinkEdit(m, id); break;
     case "mldel": {
