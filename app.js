@@ -711,7 +711,8 @@ function render() {
   const dir = tabOrder.indexOf(ui.tab) >= tabOrder.indexOf(prevTab) ? "dir-fwd" : "dir-back";
   // Scroll-Position des Rasters merken, damit es nach dem Wischen nicht nach oben springt
   const oldWeek = appEl.querySelector(".plan-screen > .week");
-  const keepScroll = !tabChanged && oldWeek ? oldWeek.scrollTop : null;
+  const keepScroll = !tabChanged && oldWeek ? (fitting && planScrollMem != null ? planScrollMem : oldWeek.scrollTop) : null;
+  if (keepScroll != null) planScrollMem = keepScroll;
   appEl.innerHTML = (ui.layEdit ? layBarHTML() : "") + (ui.planEdit && ui.tab === "stundenplan" ? planEditBarHTML() : "") + views[ui.tab]();
   if (keepScroll != null) {
     const newWeek = appEl.querySelector(".plan-screen > .week");
@@ -733,6 +734,11 @@ function render() {
   if (ui.tab === "dashboard") loadMensa(false);
   if (ui.dayPop) openDayModal(ui.dayPop);
   if (ui.tab === "stundenplan" && !ui.layEdit) fitPlan();
+  // Erst nach fitPlan hat das Raster seine feste Höhe: erst jetzt bleibt die Scrollposition erhalten
+  if (keepScroll != null && !fitting) {
+    const w2 = appEl.querySelector(".plan-screen > .week");
+    if (w2) w2.scrollTop = keepScroll;
+  }
   // Stundenplan: Eintragskarte als eigenes Fenster
   if (ui.tab === "stundenplan" && ui.noteFor && ui.noteWindow) openModal(notePanelHTML(ui.noteFor.name, ui.noteFor.date));
   ui.anim = null;
@@ -1345,13 +1351,13 @@ function viewPlan() {
   // Aufgaben-Streifen: steht oben und wischt mit den Wochen mit (Spalte für die Zeitachse daneben)
   const tasksOpen = ui.planTasksOpen !== false;
   const weekTasks = state.todos.filter((t) => !t.done && t.date && t.date >= iso(mon) && t.date <= iso(addDays(mon, 6))).length;
-  const tbar = `<div class="plan-tbar"><button class="plan-tbtn" data-act="planTasks">Aufgaben (${weekTasks}) ${tasksOpen ? "▴" : "▾"}</button><button class="plan-tbtn${ui.planDense ? " on" : ""}" data-act="planDense">Kompakt</button></div>`;
+  const tbar = `<div class="plan-tbar"><button class="plan-tbtn" data-act="planTasks">Aufgaben (${weekTasks}) ${tasksOpen ? "▴" : "▾"}</button></div>`;
   const topHTML = tbar + (tasksOpen ? `<div class="plan-top"><div class="plan-topspacer"></div><div class="plan-stripwrap">${pagesGroup((k) => alldayStripHTML(addDays(mon, k * 7), dayCount, true))}</div></div>` : "");
   const compact = state.settings.planHead === "kompakt" ? " compact" : "";
   // Oben fest: Wochentage, dann Aufgaben-Streifen. Nur das Raster darunter scrollt.
   const head = weekHeadHTML(mon, dayCount, today, compact);
   // Zeitachse und Kopf stehen fest, nur die Modul-Spalten (plan-track) wischen
-  h += `<div class="${animCls}">${planLaid(`<div class="plan-screen${planLinesCls()}${ui.planDense ? " dense" : ""}" style="${stepStyle()}">${topHTML}${head}<div class="week${compact}"><div class="plan-rows"><div class="axis" style="height:${gridHeight()}px">${axisHTML(0)}</div><div class="plan-track" style="height:${gridHeight()}px">${colsGroup}</div></div></div></div>`)}</div>${emptyPlanHint()}`;
+  h += `<div class="${animCls}">${planLaid(`<div class="plan-screen${planLinesCls()}" style="${stepStyle()}">${topHTML}${head}<div class="week${compact}"><div class="plan-rows"><div class="axis" style="height:${gridHeight()}px">${axisHTML(0)}</div><div class="plan-track" style="height:${gridHeight()}px">${colsGroup}</div></div></div></div>`)}</div>${emptyPlanHint()}`;
   return h;
 }
 
@@ -2571,6 +2577,7 @@ function layOverlaps(scope, id, p) {
 }
 // Stundenplan füllt den Bildschirm: Stundenhöhe so wählen, dass alle Stunden sichtbar sind (Höhe % = Anteil davon)
 let fitting = false;
+let planScrollMem = null;   // Scrollposition des Rasters über das Neuzeichnen in fitPlan hinweg
 let planFitPx = null;   // zuletzt berechnete Stundenhöhe für den Stundenplan
 function fitPlan() {
   if (fitting) return;
@@ -2592,6 +2599,9 @@ function fitPlan() {
     fitting = true;
     render();
     fitting = false;
+    // Das neu gezeichnete Element hat noch keine feste Höhe: sonst scrollt das Raster nicht mehr
+    const scr2 = document.querySelector(".plan-screen");
+    if (scr2) scr2.style.height = screenH + "px";
   }
 }
 // Leiste oben im Bearbeitungsmodus
@@ -3039,7 +3049,13 @@ document.addEventListener("touchstart", (e) => {
   if (!el || el.classList.contains("excerpt")) { pinch = null; return; }
   const scope = zoomScope(el);
   const [a, b] = e.touches;
-  pinch = { el, scope, d0: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY), z0: getZoom(scope), zNow: getZoom(scope), moved: false };
+  const tgt = (scope === "plan" && el.querySelector(".plan-rows")) || el;
+  const midY = (a.clientY + b.clientY) / 2;
+  pinch = {
+    el, tgt, scope, d0: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY), z0: getZoom(scope), zNow: getZoom(scope), moved: false,
+    st: el.scrollTop, vy: midY - el.getBoundingClientRect().top,
+    oy: midY - tgt.getBoundingClientRect().top,
+  };
 }, { passive: true });
 document.addEventListener("touchmove", (e) => {
   if (!pinch || e.touches.length !== 2) return;
@@ -3049,13 +3065,25 @@ document.addEventListener("touchmove", (e) => {
   const z = Math.round(Math.min(2, Math.max(pinch.scope === "dash" ? 0.5 : 1, pinch.z0 * d / pinch.d0)) * 100) / 100;
   pinch.zNow = z;
   pinch.moved = true;
-  pinch.el.style.transformOrigin = "0 0";
-  pinch.el.style.transform = `scaleY(${z / pinch.z0})`;
+  pinch.tgt.style.transformOrigin = `0 ${pinch.oy}px`;
+  pinch.tgt.style.transform = `scaleY(${z / pinch.z0})`;
 }, { passive: false });
 const endPinch = () => {
-  if (pinch && pinch.el) { pinch.el.style.transform = ""; pinch.el.style.transformOrigin = ""; }
-  if (pinch && pinch.moved) { setZoom(pinch.scope, pinch.zNow); commit(); }
+  const pz = pinch;
   pinch = null;
+  if (!pz) return;
+  pz.tgt.style.transform = "";
+  pz.tgt.style.transformOrigin = "";
+  if (pz.moved) {
+    setZoom(pz.scope, pz.zNow);
+    commit();
+    // Die Stelle zwischen den Fingern bleibt an ihrem Platz
+    if (pz.scope === "plan") {
+      const w = document.querySelector(".plan-screen > .week");
+      const ratio = (getZoom("plan")) / (pz.z0 || 1);
+      if (w) { w.scrollTop = (pz.st + pz.vy) * ratio - pz.vy; planScrollMem = w.scrollTop; }
+    }
+  }
 };
 document.addEventListener("touchend", endPinch, { passive: true });
 document.addEventListener("touchcancel", endPinch, { passive: true });
