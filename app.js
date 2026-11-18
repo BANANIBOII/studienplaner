@@ -24,6 +24,7 @@ const LS_KEY = "studienplaner-v1";
 let START_MIN = 7 * 60;
 let END_MIN = 20 * 60;
 let HOUR_PX = 42;
+let planScreenH = 0;      // zuletzt gemessene Höhe des Stundenplan-Bereichs (render() setzt sie sofort wieder, bevor die Scrollposition zurückkommt)
 let planGridAvail = 480;  // verfügbare Höhe für das Raster im Stundenplan (wird in fitPlan gemessen)
 let PX_PER_MIN = HOUR_PX / 60;
 function visibleDates() {
@@ -721,6 +722,10 @@ function render() {
   appEl.innerHTML = (ui.layEdit ? layBarHTML() : "") + (ui.planEdit && ui.tab === "stundenplan" ? planEditBarHTML() : "") + views[ui.tab]();
   if (keepScroll != null) {
     const newWeek = appEl.querySelector(".plan-screen > .week");
+    // Erst die Höhe des Bereichs setzen: ohne sie ist das Raster noch voll lang, es gibt nichts zu scrollen
+    // und die gemerkte Position wird auf 0 gekürzt (Sprung nach oben).
+    const newScreen = appEl.querySelector(".plan-screen");
+    if (newScreen && planScreenH && !ui.layEdit) newScreen.style.height = planScreenH + "px";
     if (newWeek) newWeek.scrollTop = keepScroll;
   }
   appEl.dataset.shownTab = ui.tab;
@@ -2607,6 +2612,7 @@ function fitPlan() {
   if (!screen) return;
   const screenH = Math.max(160, window.innerHeight - top - tbH - 8);
   screen.style.height = screenH + "px";
+  planScreenH = screenH;
   // Platz, den das Raster hat (ohne Wochentage und Aufgaben oben)
   const avail = Math.max(120, Math.floor(screenH - (wk.getBoundingClientRect().top - top) - 8));
   if (Math.abs(avail - planGridAvail) >= 2) {
