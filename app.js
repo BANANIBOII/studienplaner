@@ -1227,7 +1227,7 @@ function weekColsHTML(mon, dayCount, today) {
 function dayCountOf(k) {
   return state.events.filter((e) => e.date === k).length + todosOn(k).filter((t) => !t.done).length;
 }
-function weekHeadHTML(mon, dayCount, today, compact = "") {
+function weekHeadHTML(mon, dayCount, today, compact = "", corner = "") {
   const todayK = iso(today);
   const cellsOf = (m) => {
     let cells = "";
@@ -1239,7 +1239,7 @@ function weekHeadHTML(mon, dayCount, today, compact = "") {
     }
     return cells;
   };
-  return `<div class="plan-days plan-days-week${compact}"><div class="plan-topspacer"></div><div class="plan-dwrap">${pagesGroup((k) => `<div class="plan-dheads" style="grid-template-columns:repeat(${dayCount}, minmax(0, 1fr));">${cellsOf(addDays(mon, k * 7))}</div>`)}</div></div>`;
+  return `<div class="plan-days plan-days-week${compact}"><div class="plan-topspacer">${corner}</div><div class="plan-dwrap">${pagesGroup((k) => `<div class="plan-dheads" style="grid-template-columns:repeat(${dayCount}, minmax(0, 1fr));">${cellsOf(addDays(mon, k * 7))}</div>`)}</div></div>`;
 }
 // Ein Knopf für die Stundenplan-Einstellungen, außerhalb des Bereichs, der beim Wischen verschoben wird
 function syncPlanFab() {
@@ -1351,11 +1351,12 @@ function viewPlan() {
   // Aufgaben-Streifen: steht oben und wischt mit den Wochen mit (Spalte für die Zeitachse daneben)
   const tasksOpen = ui.planTasksOpen !== false;
   const weekTasks = state.todos.filter((t) => !t.done && t.date && t.date >= iso(mon) && t.date <= iso(addDays(mon, 6))).length;
-  const tbar = `<div class="plan-tbar"><button class="plan-tbtn" data-act="planTasks">Aufgaben (${weekTasks}) ${tasksOpen ? "▴" : "▾"}</button></div>`;
-  const topHTML = tbar + (tasksOpen ? `<div class="plan-top"><div class="plan-topspacer"></div><div class="plan-stripwrap">${pagesGroup((k) => alldayStripHTML(addDays(mon, k * 7), dayCount, true))}</div></div>` : "");
+  // Der Aufklapp-Knopf sitzt in der leeren Ecke über der Zeitspalte, oben stehen nur die Wochentage
+  const corner = `<button class="plan-corner${tasksOpen ? " on" : ""}" data-act="planTasks" aria-label="Aufgaben ein- und ausblenden"><span>${tasksOpen ? "▴" : "▾"}</span><small>${weekTasks}</small></button>`;
+  const topHTML = (tasksOpen ?`<div class="plan-top"><div class="plan-topspacer"></div><div class="plan-stripwrap">${pagesGroup((k) => alldayStripHTML(addDays(mon, k * 7), dayCount, true))}</div></div>` : "");
   const compact = state.settings.planHead === "kompakt" ? " compact" : "";
   // Oben fest: Wochentage, dann Aufgaben-Streifen. Nur das Raster darunter scrollt.
-  const head = weekHeadHTML(mon, dayCount, today, compact);
+  const head = weekHeadHTML(mon, dayCount, today, compact, corner);
   // Zeitachse und Kopf stehen fest, nur die Modul-Spalten (plan-track) wischen
   h += `<div class="${animCls}">${planLaid(`<div class="plan-screen${planLinesCls()}${ui.planDense ? " dense" : ""}" style="${stepStyle()}">${head}${topHTML}<div class="week${compact}"><div class="plan-rows"><div class="axis" style="height:${mpx(END_MIN - START_MIN)}">${axisHTML(0)}</div><div class="plan-track" style="height:${mpx(END_MIN - START_MIN)}">${colsGroup}</div></div></div></div>`)}</div>${emptyPlanHint()}`;
   return h;

@@ -899,3 +899,10 @@ html.no-scrollbars::-webkit-scrollbar { display: none; width: 0; height: 0; }
 .strip-today { background: var(--accent-soft); border-radius: 8px; opacity: .55; pointer-events: none; }
 /* Kompakt: kleinere Termine */
 .plan-screen.dense .ev { padding: 1px 3px !important; font-size: 10px !important; line-height: 1.15 !important; }
+
+/* Aufgaben-Knopf in der leeren Ecke über der Zeitspalte (oben stehen nur die Wochentage) */
+.plan-topspacer { display: flex; align-items: stretch; }
+.plan-corner { flex: 1 1 auto; width: 100%; min-width: 0; padding: 0; margin: 0 2px 0 0; border: 1px solid var(--line); border-radius: 8px; background: transparent; color: var(--muted); font: inherit; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0; line-height: 1; }
+.plan-corner span { font-size: 11px; }
+.plan-corner small { font-size: 10px; font-weight: 700; color: var(--accent); }
+.plan-corner.on { border-color: var(--accent); }
