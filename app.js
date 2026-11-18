@@ -57,12 +57,18 @@ function applyDayRange(dates = visibleDates()) {
   END_MIN = end;
   // Stundenplan: feste Höhe pro Stunde (nur durch Zoom oder Einstellung verändert), nicht nach Bildschirm berechnet
   // Wochenansicht: das Raster hat immer dieselbe Höhe, der sichtbare Zeitbereich wird darauf verteilt
-  HOUR_PX = ui.tab === "stundenplan"
-    ? Math.max(20, Math.floor(planGridAvail / Math.max(1, (END_MIN - START_MIN) / 60))) * (s.zoomY || 1)
-    : 42 * (s.zoomY || 1);
+  HOUR_PX = ui.tab === "stundenplan" ? planHourPx(s.zoomY) : 42 * (s.zoomY || 1);
   PX_PER_MIN = HOUR_PX / 60;
   document.documentElement.style.setProperty("--hour-px", HOUR_PX + "px");
+  // Stundenplan-Positionen rechnen über diese Variable (CSS): beim Strecken genügt es, sie zu ändern
+  document.documentElement.style.setProperty("--ppm", String(PX_PER_MIN));
 }
+// Stundenhöhe im Stundenplan (gleiche Formel wie bisher, nur ausgelagert)
+function planHourPx(z) {
+  return Math.max(20, Math.floor(planGridAvail / Math.max(1, (END_MIN - START_MIN) / 60))) * Math.max(1, z || 1);
+}
+// Länge in Minuten als CSS-Ausdruck, der sich beim Strecken über --ppm mitändert
+const mpx = (mins) => `calc(${mins} * var(--ppm))`;
 const gridHeight = () => (END_MIN - START_MIN) * PX_PER_MIN;
 // Schriftfarbe, die auf dem Hintergrund gut lesbar ist (hell oder dunkel)
 function textOn(hex) {
@@ -1106,13 +1112,13 @@ function marksHTML() {
     const from = Math.max(s, START_MIN);
     const to = Math.min(band ? e : s, END_MIN);
     if (to < START_MIN || from > END_MIN || (band && to <= from)) return;
-    const top = (from - START_MIN) * PX_PER_MIN;
-    const h = band ? (to - from) * PX_PER_MIN : 0;
-    out += `<div class="pmark${band ? " band" : ""}" style="top:${top}px;${band ? `height:${h}px;` : ""}">${mk.label ? `<span>${esc(mk.label)}</span>` : ""}</div>`;
+    const top = mpx(from - START_MIN);
+    const h = band ? mpx(to - from) : "0px";
+    out += `<div class="pmark${band ? " band" : ""}" style="top:${top};${band ? `height:${h};` : ""}">${mk.label ? `<span>${esc(mk.label)}</span>` : ""}</div>`;
   });
   return out;
 }
-const stepStyle = () => `--step-px:${planStepMin() * PX_PER_MIN}px;`;
+const stepStyle = () => `--step-px:${mpx(planStepMin())};`;
 function axisHTML(offset = 50) {
   const step = planStepMin();
   // Beschriftung nur so oft, dass zwischen zwei Zeiten mindestens ca. 14 px Platz bleiben
@@ -1123,8 +1129,8 @@ function axisHTML(offset = 50) {
   for (let m = Math.ceil(START_MIN / step) * step; m <= END_MIN; m += step, i++) {
     if (i % every) continue;
     const half = m % 60 !== 0;
-    const top = offset + (m - START_MIN) * PX_PER_MIN - (half ? 4 : 8);
-    out += `<div class="axis-h${half ? " half" : ""}" style="top:${top}px">${pad(Math.floor(m / 60))}:${pad(m % 60)}</div>`;
+    const top = `calc(${offset}px + ${mpx(m - START_MIN)} - ${half ? 4 : 8}px)`;
+    out += `<div class="axis-h${half ? " half" : ""}" style="top:${top}">${pad(Math.floor(m / 60))}:${pad(m % 60)}</div>`;
   }
   return out;
 }
@@ -1277,7 +1283,7 @@ function dayColumn(k, label, wide, today, noNav = false, chips = "") {
   const plan = PLAN_OVERRIDE || state.settings.plan;
   const blocks = items.map((it) => {
     const w = 100 / it._cols;
-    const pos = `top:${(it.start - START_MIN) * PX_PER_MIN}px;height:${Math.max(26, (it.end - it.start) * PX_PER_MIN) - 2}px;left:calc(${it._col * w}% + 2px);width:calc(${w}% - 4px);`;
+    const pos = `top:${mpx(it.start - START_MIN)};height:calc(max(26px, ${mpx(it.end - it.start)}) - 2px);left:calc(${it._col * w}% + 2px);width:calc(${w}% - 4px);`;
     if (it.kind === "event") {
       // Block zeigt Kürzel (falls gesetzt), Dozent statt Uhrzeit und einen dunkleren Rahmen
       const ec = colorOf(it.name);
@@ -1303,10 +1309,10 @@ function dayColumn(k, label, wide, today, noNav = false, chips = "") {
     const t = new Date();
     const m = t.getHours() * 60 + t.getMinutes();
     if (m >= START_MIN && m <= END_MIN) {
-      now = `<div class="nowline" style="top:${(m - START_MIN) * PX_PER_MIN}px;${plan.now ? `background:${plan.now};` : ""}"></div>`;
+      now = `<div class="nowline" style="top:${mpx(m - START_MIN)};${plan.now ? `background:${plan.now};` : ""}"></div>`;
     }
   }
-  const gridStyle = ` style="height:${gridHeight()}px;${plan.grid ? `background-color:${plan.grid};` : ""}"`;
+  const gridStyle = ` style="height:${mpx(END_MIN - START_MIN)};${plan.grid ? `background-color:${plan.grid};` : ""}"`;
   const headAct = noNav ? "" : (wide ? "toweek" : "dayopen");
   const marks = ui.tab === "stundenplan" ? marksHTML() : "";
   return `<div class="daycol${wide ? " wide" : ""}">
@@ -1330,7 +1336,7 @@ function viewPlan() {
     applyDayRange(pagesDates());
     const dayGroup = pagesGroup((k) => `<div class="plan-cols">${dayColumn(iso(addDays(d, k)), "", true, today, false, "")}</div>`);
     return `${planNavHTML(`KW ${kwOf(d)} · ${fmtD(d)}`, "day")}
-    <div class="${animCls}">${planLaid(`<div class="plan-screen${planLinesCls()}" style="--grid-h:${gridHeight()}px;${stepStyle()}"><div class="plan-top"><div class="plan-topspacer"></div><div class="plan-stripwrap"><div class="plan-dchips">${dayChips || ""}</div></div></div><div class="plan-days" style="grid-template-columns:var(--axis-w, 28px) minmax(0,1fr);"><div></div><div class="dayhead${iso(d) === iso(today) ? " today" : ""}" data-act="toweek" title="Zur Wochenansicht"><b class="daytitle">${wd}</b><span class="dd">${pad(d.getDate())}.${pad(d.getMonth() + 1)}.</span></div></div><div class="week day-week"><div class="plan-rows"><div class="axis" style="height:${gridHeight()}px">${axisHTML(0)}</div><div class="plan-track" style="height:${gridHeight()}px">${dayGroup}</div></div></div></div>`)}</div>${emptyPlanHint()}${planFabHTML()}`;
+    <div class="${animCls}">${planLaid(`<div class="plan-screen${planLinesCls()}" style="--grid-h:${mpx(END_MIN - START_MIN)};${stepStyle()}"><div class="plan-top"><div class="plan-topspacer"></div><div class="plan-stripwrap"><div class="plan-dchips">${dayChips || ""}</div></div></div><div class="plan-days" style="grid-template-columns:var(--axis-w, 28px) minmax(0,1fr);"><div></div><div class="dayhead${iso(d) === iso(today) ? " today" : ""}" data-act="toweek" title="Zur Wochenansicht"><b class="daytitle">${wd}</b><span class="dd">${pad(d.getDate())}.${pad(d.getMonth() + 1)}.</span></div></div><div class="week day-week"><div class="plan-rows"><div class="axis" style="height:${mpx(END_MIN - START_MIN)}">${axisHTML(0)}</div><div class="plan-track" style="height:${mpx(END_MIN - START_MIN)}">${dayGroup}</div></div></div></div>`)}</div>${emptyPlanHint()}${planFabHTML()}`;
   }
 
   const mon = addDays(mondayOf(today), ui.weekOffset * 7);
@@ -1351,7 +1357,7 @@ function viewPlan() {
   // Oben fest: Wochentage, dann Aufgaben-Streifen. Nur das Raster darunter scrollt.
   const head = weekHeadHTML(mon, dayCount, today, compact);
   // Zeitachse und Kopf stehen fest, nur die Modul-Spalten (plan-track) wischen
-  h += `<div class="${animCls}">${planLaid(`<div class="plan-screen${planLinesCls()}${ui.planDense ? " dense" : ""}" style="${stepStyle()}">${topHTML}${head}<div class="week${compact}"><div class="plan-rows"><div class="axis" style="height:${gridHeight()}px">${axisHTML(0)}</div><div class="plan-track" style="height:${gridHeight()}px">${colsGroup}</div></div></div></div>`)}</div>${emptyPlanHint()}`;
+  h += `<div class="${animCls}">${planLaid(`<div class="plan-screen${planLinesCls()}${ui.planDense ? " dense" : ""}" style="${stepStyle()}">${topHTML}${head}<div class="week${compact}"><div class="plan-rows"><div class="axis" style="height:${mpx(END_MIN - START_MIN)}">${axisHTML(0)}</div><div class="plan-track" style="height:${mpx(END_MIN - START_MIN)}">${colsGroup}</div></div></div></div>`)}</div>${emptyPlanHint()}`;
   return h;
 }
 
@@ -3036,25 +3042,26 @@ function setZoom(scope, z) {
   const v = Math.round(Math.min(2, Math.max(zoomMin(scope), z)) * 100) / 100;
   if (scope === "dash") state.settings.dash.zoomY = v; else state.settings.zoomY = v;
 }
-// Stundenplan live: beim Zwei-Finger-Zoom wird das Raster neu aufgebaut, höchstens einmal pro Bild.
-// Die Oberkante bleibt unter den Wochentagen, und die Uhrzeit unter dem Fingermittelpunkt bleibt an derselben Stelle.
-function livePlanZoom(z, fingerY) {
-  const oldWk = document.querySelector(".plan-screen > .week");
-  if (!oldWk) return;
-  const anchorMin = START_MIN + (oldWk.scrollTop + (fingerY - oldWk.getBoundingClientRect().top)) / PX_PER_MIN;
-  state.settings.zoomY = z;
-  render();
+// Stundenplan live: beim Zwei-Finger-Zoom ändern sich nur die Variablen (--hour-px, --ppm).
+// Das DOM wird dabei NICHT neu aufgebaut: sonst verliert der Browser das Element unter den Fingern
+// und Wischen sowie Zoomen hängen sich auf. Oben bleibt das Raster stehen, nach unten wächst es.
+function livePlanZoom(z) {
   const wk = document.querySelector(".plan-screen > .week");
   if (!wk) return;
-  const want = (anchorMin - START_MIN) * PX_PER_MIN - (fingerY - wk.getBoundingClientRect().top);
-  wk.scrollTop = Math.max(0, Math.min(want, wk.scrollHeight - wk.clientHeight));
+  state.settings.zoomY = z;
+  HOUR_PX = planHourPx(z);
+  PX_PER_MIN = HOUR_PX / 60;
+  const st = document.documentElement.style;
+  st.setProperty("--hour-px", HOUR_PX + "px");
+  st.setProperty("--ppm", String(PX_PER_MIN));
+  wk.scrollTop = Math.min(wk.scrollTop, Math.max(0, wk.scrollHeight - wk.clientHeight));
 }
 function livePinchFrame() {
   if (!pinch) return;
   pinch.raf = 0;
   if (pinch.zShown === pinch.zNow) return;
   pinch.zShown = pinch.zNow;
-  livePlanZoom(pinch.zNow, pinch.midY);
+  livePlanZoom(pinch.zNow);
 }
 document.addEventListener("touchstart", (e) => {
   if (e.touches.length !== 2) return;
@@ -3087,21 +3094,28 @@ document.addEventListener("touchmove", (e) => {
     pinch.el.style.transform = `scaleY(${z / pinch.z0})`;
   }
 }, { passive: false });
-const endPinch = () => {
-  if (pinch && pinch.raf) cancelAnimationFrame(pinch.raf);
-  if (pinch && pinch.moved) { setZoom(pinch.scope, pinch.zNow); commit(); }
+// Zoomwert merken; gespeichert (und neu gezeichnet) wird erst, wenn alle Finger weg sind
+let pinchSavePending = false;
+function finishPinch() {
+  if (!pinch) return false;
+  if (pinch.raf) cancelAnimationFrame(pinch.raf);
+  if (pinch.moved) { setZoom(pinch.scope, pinch.zNow); pinchSavePending = true; }
   pinch = null;
-};
+  return true;
+}
 document.addEventListener("touchend", (e) => {
-  const wasPinch = !!pinch;
-  endPinch();
-  // Bleibt nach dem Zoomen ein Finger liegen, kann er sofort weiter wischen
+  const wasPinch = finishPinch();
+  // Bleibt ein Finger liegen, startet das Wischen sofort (ohne Neuzeichnen, sonst ginge sein Ziel verloren)
   if (wasPinch && e.touches.length === 1) {
     const t = e.touches[0];
     startSwipe(t, document.elementFromPoint(t.clientX, t.clientY));
   }
+  if (pinchSavePending && e.touches.length === 0) { pinchSavePending = false; commit(); }
 }, { passive: true });
-document.addEventListener("touchcancel", endPinch, { passive: true });
+document.addEventListener("touchcancel", (e) => {
+  finishPinch();
+  if (pinchSavePending && e.touches.length === 0) { pinchSavePending = false; commit(); }
+}, { passive: true });
 document.addEventListener("wheel", (e) => {
   if (!e.ctrlKey) return;
   const el = e.target.closest(".week, .excerpt");
