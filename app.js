@@ -2967,16 +2967,20 @@ function abortSwipe() {
   swipe = null;
 }
 // Wischen: die vorgeladenen Gruppen werden verschoben, Zeitachse und Kopf bleiben stehen
-document.addEventListener("touchstart", (e) => {
-  if (swipe) { abortSwipe(); if (e.touches.length !== 1) return; }
-  if (ui.tab !== "stundenplan" || ui.layEdit || ui.planEdit || document.querySelector(".modal") || e.touches.length !== 1) { swipe = null; return; }
-  if (!e.target.closest || !e.target.closest(".plan-screen")) { swipe = null; return; }
+// Wischen beginnen, an der Stelle, an der der Finger gerade liegt
+function startSwipe(t, target) {
+  if (swipe) abortSwipe();
+  if (ui.tab !== "stundenplan" || ui.layEdit || ui.planEdit || document.querySelector(".modal")) { swipe = null; return; }
+  if (!target || !target.closest || !target.closest(".plan-screen")) { swipe = null; return; }
   const track = document.querySelector(".plan-screen .plan-track");
   const groups = [...document.querySelectorAll(".plan-screen .plan-group")];
   if (!track || !groups.length) { swipe = null; return; }
-  const t = e.touches[0];
   document.body.classList.add("swiping");
   swipe = { x: t.clientX, y: t.clientY, t: Date.now(), dx: 0, mode: null, dir: 0, track, groups };
+}
+document.addEventListener("touchstart", (e) => {
+  if (e.touches.length !== 1) { abortSwipe(); return; }
+  startSwipe(e.touches[0], e.target);
 }, { passive: true });
 document.addEventListener("touchmove", (e) => {
   if (!swipe) return;
@@ -3088,7 +3092,15 @@ const endPinch = () => {
   if (pinch && pinch.moved) { setZoom(pinch.scope, pinch.zNow); commit(); }
   pinch = null;
 };
-document.addEventListener("touchend", endPinch, { passive: true });
+document.addEventListener("touchend", (e) => {
+  const wasPinch = !!pinch;
+  endPinch();
+  // Bleibt nach dem Zoomen ein Finger liegen, kann er sofort weiter wischen
+  if (wasPinch && e.touches.length === 1) {
+    const t = e.touches[0];
+    startSwipe(t, document.elementFromPoint(t.clientX, t.clientY));
+  }
+}, { passive: true });
 document.addEventListener("touchcancel", endPinch, { passive: true });
 document.addEventListener("wheel", (e) => {
   if (!e.ctrlKey) return;
