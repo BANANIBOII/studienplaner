@@ -1,5 +1,5 @@
 // Offline-Unterstützung: lädt immer aus dem Netz, nutzt den Cache nur wenn offline.
-const CACHE = "studienplaner-v14";
+const CACHE = "studienplaner-v15";
 const FILES = ["./", "index.html", "styles.css", "features.css", "app.js", "config.js", "manifest.json", "icon.svg"];
 
 self.addEventListener("install", (e) => {

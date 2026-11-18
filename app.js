@@ -58,7 +58,7 @@ function applyDayRange(dates = visibleDates()) {
   // Stundenplan: feste Höhe pro Stunde (nur durch Zoom oder Einstellung verändert), nicht nach Bildschirm berechnet
   // Wochenansicht: das Raster hat immer dieselbe Höhe, der sichtbare Zeitbereich wird darauf verteilt
   HOUR_PX = ui.tab === "stundenplan"
-    ? Math.max(20, planGridAvail / Math.max(1, (END_MIN - START_MIN) / 60)) * Math.max(1, s.zoomY || 1)
+    ? Math.max(20, Math.floor(planGridAvail / Math.max(1, (END_MIN - START_MIN) / 60))) * (s.zoomY || 1)
     : 42 * (s.zoomY || 1);
   PX_PER_MIN = HOUR_PX / 60;
   document.documentElement.style.setProperty("--hour-px", HOUR_PX + "px");
@@ -711,8 +711,7 @@ function render() {
   const dir = tabOrder.indexOf(ui.tab) >= tabOrder.indexOf(prevTab) ? "dir-fwd" : "dir-back";
   // Scroll-Position des Rasters merken, damit es nach dem Wischen nicht nach oben springt
   const oldWeek = appEl.querySelector(".plan-screen > .week");
-  const keepScroll = !tabChanged && oldWeek ? (fitting && planScrollMem != null ? planScrollMem : oldWeek.scrollTop) : null;
-  if (keepScroll != null) planScrollMem = keepScroll;
+  const keepScroll = !tabChanged && oldWeek ? oldWeek.scrollTop : null;
   appEl.innerHTML = (ui.layEdit ? layBarHTML() : "") + (ui.planEdit && ui.tab === "stundenplan" ? planEditBarHTML() : "") + views[ui.tab]();
   if (keepScroll != null) {
     const newWeek = appEl.querySelector(".plan-screen > .week");
@@ -734,11 +733,6 @@ function render() {
   if (ui.tab === "dashboard") loadMensa(false);
   if (ui.dayPop) openDayModal(ui.dayPop);
   if (ui.tab === "stundenplan" && !ui.layEdit) fitPlan();
-  // Erst nach fitPlan hat das Raster seine feste Höhe: erst jetzt bleibt die Scrollposition erhalten
-  if (keepScroll != null && !fitting) {
-    const w2 = appEl.querySelector(".plan-screen > .week");
-    if (w2) w2.scrollTop = keepScroll;
-  }
   // Stundenplan: Eintragskarte als eigenes Fenster
   if (ui.tab === "stundenplan" && ui.noteFor && ui.noteWindow) openModal(notePanelHTML(ui.noteFor.name, ui.noteFor.date));
   ui.anim = null;
@@ -1351,13 +1345,13 @@ function viewPlan() {
   // Aufgaben-Streifen: steht oben und wischt mit den Wochen mit (Spalte für die Zeitachse daneben)
   const tasksOpen = ui.planTasksOpen !== false;
   const weekTasks = state.todos.filter((t) => !t.done && t.date && t.date >= iso(mon) && t.date <= iso(addDays(mon, 6))).length;
-  const tbar = `<div class="plan-tbar"><button class="plan-tbtn" data-act="planTasks">Aufgaben (${weekTasks}) ${tasksOpen ? "▴" : "▾"}</button></div>`;
+  const tbar = `<div class="plan-tbar"><button class="plan-tbtn" data-act="planTasks">Aufgaben (${weekTasks}) ${tasksOpen ? "▴" : "▾"}</button><button class="plan-tbtn${ui.planDense ? " on" : ""}" data-act="planDense">Kompakt</button></div>`;
   const topHTML = tbar + (tasksOpen ? `<div class="plan-top"><div class="plan-topspacer"></div><div class="plan-stripwrap">${pagesGroup((k) => alldayStripHTML(addDays(mon, k * 7), dayCount, true))}</div></div>` : "");
   const compact = state.settings.planHead === "kompakt" ? " compact" : "";
   // Oben fest: Wochentage, dann Aufgaben-Streifen. Nur das Raster darunter scrollt.
   const head = weekHeadHTML(mon, dayCount, today, compact);
   // Zeitachse und Kopf stehen fest, nur die Modul-Spalten (plan-track) wischen
-  h += `<div class="${animCls}">${planLaid(`<div class="plan-screen${planLinesCls()}" style="${stepStyle()}">${topHTML}${head}<div class="week${compact}"><div class="plan-rows"><div class="axis" style="height:${gridHeight()}px">${axisHTML(0)}</div><div class="plan-track" style="height:${gridHeight()}px">${colsGroup}</div></div></div></div>`)}</div>${emptyPlanHint()}`;
+  h += `<div class="${animCls}">${planLaid(`<div class="plan-screen${planLinesCls()}${ui.planDense ? " dense" : ""}" style="${stepStyle()}">${topHTML}${head}<div class="week${compact}"><div class="plan-rows"><div class="axis" style="height:${gridHeight()}px">${axisHTML(0)}</div><div class="plan-track" style="height:${gridHeight()}px">${colsGroup}</div></div></div></div>`)}</div>${emptyPlanHint()}`;
   return h;
 }
 
@@ -1415,7 +1409,7 @@ function openPlanMenu() {
     <label class="muted">Ende</label>
     <select data-plan-range="dayEnd" ${s.autoRange ? "disabled" : ""}>${opts(14, 23.5, s.dayEnd)}</select>
     <label class="muted">Höhe: ${Math.round(getZoom("plan") * 100)} %</label>
-    <input type="range" min="100" max="200" step="5" value="${Math.round(Math.max(1, getZoom("plan")) * 100)}" data-plan-zoom>
+    <input type="range" min="50" max="200" step="5" value="${Math.round(getZoom("plan") * 100)}" data-plan-zoom>
     <p class="muted">Alternativ mit zwei Fingern zusammenziehen oder auseinanderziehen (am PC: Strg + Mausrad).</p>
     <label class="muted">Hintergrund des Stundenplans</label>
     <input type="color" value="${gridVal}" data-plan="grid">
@@ -2577,7 +2571,6 @@ function layOverlaps(scope, id, p) {
 }
 // Stundenplan füllt den Bildschirm: Stundenhöhe so wählen, dass alle Stunden sichtbar sind (Höhe % = Anteil davon)
 let fitting = false;
-let planScrollMem = null;   // Scrollposition des Rasters über das Neuzeichnen in fitPlan hinweg
 let planFitPx = null;   // zuletzt berechnete Stundenhöhe für den Stundenplan
 function fitPlan() {
   if (fitting) return;
@@ -2599,9 +2592,6 @@ function fitPlan() {
     fitting = true;
     render();
     fitting = false;
-    // Das neu gezeichnete Element hat noch keine feste Höhe: sonst scrollt das Raster nicht mehr
-    const scr2 = document.querySelector(".plan-screen");
-    if (scr2) scr2.style.height = screenH + "px";
   }
 }
 // Leiste oben im Bearbeitungsmodus
@@ -3034,27 +3024,47 @@ document.addEventListener("touchcancel", () => abortSwipe(), { passive: true });
 
 // Streckung in Y-Richtung: zwei Finger auf dem Stundenplan (am PC: Strg + Mausrad)
 let pinch = null;
-let zoomTimer = null;
 const zoomScope = (el) => (el.closest(".excerpt") ? "dash" : "plan");
 const getZoom = (scope) => (scope === "dash" ? state.settings.dash.zoomY : state.settings.zoomY) || 1;
+// Stundenplan: nicht kleiner als 100 %, sonst bleibt unten Platz frei. Dashboard wie bisher bis 50 %.
+const zoomMin = (scope) => (scope === "dash" ? 0.5 : 1);
 function setZoom(scope, z) {
-  const v = Math.round(Math.min(2, Math.max(scope === "dash" ? 0.5 : 1, z)) * 100) / 100;   // Stundenplan: nicht kleiner als der Bildschirm
+  const v = Math.round(Math.min(2, Math.max(zoomMin(scope), z)) * 100) / 100;
   if (scope === "dash") state.settings.dash.zoomY = v; else state.settings.zoomY = v;
 }
-// Beim Zoomen mit dem Finger wird NICHT neu gezeichnet (sonst verliert das Handy die Fingerbewegung).
-// Stattdessen wird das Raster nur optisch gestreckt; beim Loslassen wird der echte Wert gespeichert.
+// Stundenplan live: beim Zwei-Finger-Zoom wird das Raster neu aufgebaut, höchstens einmal pro Bild.
+// Die Oberkante bleibt unter den Wochentagen, und die Uhrzeit unter dem Fingermittelpunkt bleibt an derselben Stelle.
+function livePlanZoom(z, fingerY) {
+  const oldWk = document.querySelector(".plan-screen > .week");
+  if (!oldWk) return;
+  const anchorMin = START_MIN + (oldWk.scrollTop + (fingerY - oldWk.getBoundingClientRect().top)) / PX_PER_MIN;
+  state.settings.zoomY = z;
+  render();
+  const wk = document.querySelector(".plan-screen > .week");
+  if (!wk) return;
+  const want = (anchorMin - START_MIN) * PX_PER_MIN - (fingerY - wk.getBoundingClientRect().top);
+  wk.scrollTop = Math.max(0, Math.min(want, wk.scrollHeight - wk.clientHeight));
+}
+function livePinchFrame() {
+  if (!pinch) return;
+  pinch.raf = 0;
+  if (pinch.zShown === pinch.zNow) return;
+  pinch.zShown = pinch.zNow;
+  livePlanZoom(pinch.zNow, pinch.midY);
+}
 document.addEventListener("touchstart", (e) => {
   if (e.touches.length !== 2) return;
+  // Eine noch laufende Wisch-Geste beenden, sonst bleibt das Raster beim Scrollen hängen
+  abortSwipe();
+  document.body.classList.remove("swiping");
   const el = e.target.closest(".week, .excerpt");
   if (!el || el.classList.contains("excerpt")) { pinch = null; return; }
   const scope = zoomScope(el);
   const [a, b] = e.touches;
-  const tgt = (scope === "plan" && el.querySelector(".plan-rows")) || el;
-  const midY = (a.clientY + b.clientY) / 2;
+  const z0 = getZoom(scope);
   pinch = {
-    el, tgt, scope, d0: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY), z0: getZoom(scope), zNow: getZoom(scope), moved: false,
-    st: el.scrollTop, vy: midY - el.getBoundingClientRect().top,
-    oy: midY - tgt.getBoundingClientRect().top,
+    el, scope, d0: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY), z0,
+    zNow: z0, zShown: z0, midY: (a.clientY + b.clientY) / 2, moved: false, raf: 0,
   };
 }, { passive: true });
 document.addEventListener("touchmove", (e) => {
@@ -3062,28 +3072,21 @@ document.addEventListener("touchmove", (e) => {
   e.preventDefault();
   const [a, b] = e.touches;
   const d = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
-  const z = Math.round(Math.min(2, Math.max(pinch.scope === "dash" ? 0.5 : 1, pinch.z0 * d / pinch.d0)) * 100) / 100;
+  const z = Math.round(Math.min(2, Math.max(zoomMin(pinch.scope), pinch.z0 * d / pinch.d0)) * 100) / 100;
   pinch.zNow = z;
+  pinch.midY = (a.clientY + b.clientY) / 2;
   pinch.moved = true;
-  pinch.tgt.style.transformOrigin = `0 ${pinch.oy}px`;
-  pinch.tgt.style.transform = `scaleY(${z / pinch.z0})`;
+  if (pinch.scope === "plan") {
+    if (!pinch.raf) pinch.raf = requestAnimationFrame(livePinchFrame);
+  } else {
+    pinch.el.style.transformOrigin = "0 0";
+    pinch.el.style.transform = `scaleY(${z / pinch.z0})`;
+  }
 }, { passive: false });
 const endPinch = () => {
-  const pz = pinch;
+  if (pinch && pinch.raf) cancelAnimationFrame(pinch.raf);
+  if (pinch && pinch.moved) { setZoom(pinch.scope, pinch.zNow); commit(); }
   pinch = null;
-  if (!pz) return;
-  pz.tgt.style.transform = "";
-  pz.tgt.style.transformOrigin = "";
-  if (pz.moved) {
-    setZoom(pz.scope, pz.zNow);
-    commit();
-    // Die Stelle zwischen den Fingern bleibt an ihrem Platz
-    if (pz.scope === "plan") {
-      const w = document.querySelector(".plan-screen > .week");
-      const ratio = (getZoom("plan")) / (pz.z0 || 1);
-      if (w) { w.scrollTop = (pz.st + pz.vy) * ratio - pz.vy; planScrollMem = w.scrollTop; }
-    }
-  }
 };
 document.addEventListener("touchend", endPinch, { passive: true });
 document.addEventListener("touchcancel", endPinch, { passive: true });
@@ -3433,7 +3436,7 @@ document.addEventListener("click", async (e) => {
     case "headset": state.settings.planHead = el.dataset.v; commit(); break;
     case "zoomstep": {
       const z = el.dataset.v === "reset" ? 1 : (state.settings.zoomY || 1) + Number(el.dataset.v);
-      state.settings.zoomY = Math.round(Math.min(2, Math.max(1, z)) * 100) / 100;
+      state.settings.zoomY = Math.round(Math.min(2, Math.max(zoomMin("plan"), z)) * 100) / 100;
       commit();
       break;
     }
@@ -3767,7 +3770,7 @@ document.addEventListener("change", async (e) => {
     return;
   }
   if (t.hasAttribute && t.hasAttribute("data-plan-zoom")) {
-    state.settings.zoomY = Math.max(1, Number(t.value) / 100);
+    state.settings.zoomY = Number(t.value) / 100;
     commit();
     return;
   }
