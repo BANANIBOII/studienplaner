@@ -68,7 +68,7 @@ function planHourPx(z) {
   return Math.max(20, Math.floor(planGridAvail / Math.max(1, (END_MIN - START_MIN) / 60))) * Math.max(1, z || 1);
 }
 // Länge in Minuten als CSS-Ausdruck, der sich beim Strecken über --ppm mitändert
-const mpx = (mins) => `calc(${mins} * var(--ppm))`;
+const mpx = (mins) => `calc(${mins}px * var(--ppm))`;
 const gridHeight = () => (END_MIN - START_MIN) * PX_PER_MIN;
 // Schriftfarbe, die auf dem Hintergrund gut lesbar ist (hell oder dunkel)
 function textOn(hex) {
