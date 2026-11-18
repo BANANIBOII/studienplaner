@@ -2989,7 +2989,13 @@ function pagesGroup(build) {
 // Der teure Neuaufbau (render) kommt erst später im Stillen. Bis dahin merkt sich swipePage, um wie viele Seiten die Ansicht verschoben ist.
 var swipePage = 0, swipeFlushTimer = 0;
 // Wie viele Finger liegen gerade auf dem Display (für alles, was nicht unter dem Finger neu aufbauen darf)
-var touchDown = 0, lastTouchEnd = 0;
+var touchDown = 0, lastTouchEnd = 0, lastScrollAt = 0;
+function scrollBusy() { return touchDown || Date.now() - lastScrollAt < 250; }   // Finger liegt, oder die Ansicht läuft noch aus
+// Neuzeichnen von außen (Anmeldung, Sync): erst wenn nichts scrollt, sonst reißt es das Raster unter dem Finger weg
+function safeRender() {
+  if (scrollBusy() || swipe || pinch) { setTimeout(safeRender, 200); return; }
+  render();
+}
 ["touchstart", "touchend", "touchcancel"].forEach((n) => document.addEventListener(n, (e) => {
   touchDown = e.touches.length;
   if (n !== "touchstart") lastTouchEnd = Date.now();
@@ -3011,7 +3017,7 @@ function scheduleSwipeFlush() {
   swipeFlushTimer = setTimeout(function flush() {
     if (!swipePage) return;
     // Nie unter einem Finger neu aufbauen
-    if (touchDown || swipe || pinch) { swipeFlushTimer = setTimeout(flush, 200); return; }
+    if (scrollBusy() || swipe || pinch) { swipeFlushTimer = setTimeout(flush, 200); return; }
     render();
   }, 380);
 }
@@ -3098,7 +3104,7 @@ document.addEventListener("touchcancel", () => abortSwipe(), { passive: true });
 // Stundenplan: das Raster (.plan-rows) bewegt sich, Wochentage und Aufgaben bleiben stehen. Andere Reiter: die ganze Seite (#app).
 const BAND_MAX = 56;
 let band = null;
-const bandShow = (raw) => (raw < 0 ? -1 : 1) * BAND_MAX * (1 - Math.exp(-Math.abs(raw) / 110));
+const bandShow = (raw) => (raw < 0 ? -1 : 1) * BAND_MAX * (1 - Math.exp(-Math.abs(raw) / 70));
 function bandContext(target) {
   if (!target || !target.closest || ui.layEdit || ui.planEdit || document.querySelector(".modal")) return null;
   const wk = target.closest(".plan-screen > .week");
@@ -3113,8 +3119,8 @@ function bandContext(target) {
   }
   return { sc: document.scrollingElement || document.documentElement, el: app };
 }
-const bandAtTop = (sc) => sc.scrollTop <= 0.5;
-const bandAtBottom = (sc) => sc.scrollTop >= sc.scrollHeight - sc.clientHeight - 0.5;
+const bandAtTop = (sc) => sc.scrollTop <= 2;
+const bandAtBottom = (sc) => sc.scrollTop >= sc.scrollHeight - sc.clientHeight - 2;
 function bandRelease() {
   const b = band;
   band = null;
@@ -3153,6 +3159,7 @@ document.addEventListener("touchcancel", () => bandRelease(), { passive: true })
 const flingLast = new WeakMap();
 let bounceUntil = 0;
 document.addEventListener("scroll", (e) => {
+  lastScrollAt = Date.now();
   if (touchDown) { return; }
   const t = e.target;
   const sc = t === document ? (document.scrollingElement || document.documentElement) : t;
@@ -3165,12 +3172,12 @@ document.addEventListener("scroll", (e) => {
   const dt = now - prev.t;
   if (dt < 1 || dt > 120) return;
   const v = (top - prev.top) / dt;            // px pro ms, negativ = nach oben
-  const hitTop = v < -0.5 && bandAtTop(sc);
-  const hitBottom = v > 0.5 && bandAtBottom(sc);
+  const hitTop = v < -0.15 && bandAtTop(sc);
+  const hitBottom = v > 0.15 && bandAtBottom(sc);
   if (!hitTop && !hitBottom) return;
   const ctx = bandContext(t === document ? document.getElementById("app") : t);
   if (!ctx || ctx.sc !== sc || !ctx.el.animate) return;
-  const amp = Math.min(BAND_MAX, 10 + Math.abs(v) * 18) * (hitTop ? 1 : -1);
+  const amp = Math.min(BAND_MAX, 14 + Math.abs(v) * 24) * (hitTop ? 1 : -1);
   bounceUntil = now + 560;
   ctx.el.animate(
     [{ transform: "translateY(0)" }, { transform: `translateY(${amp}px)`, offset: 0.32 }, { transform: "translateY(0)" }],
@@ -4322,13 +4329,13 @@ function initCloud() {
   sb.auth.onAuthStateChange((_event, s) => {
     session = s;
     authChecked = true;
-    render();
+    safeRender();
     if (s) cloudPull(); else setStatus("lokal");
   });
   sb.auth.getSession().then(({ data }) => {
     session = data.session;
     authChecked = true;
-    render();
+    safeRender();
     if (session) cloudPull(); else setStatus("lokal");
   });
 }
@@ -4357,7 +4364,7 @@ async function cloudPull() {
     saveLocal();
     saveDevice();
     setStatus("synchron");
-    render();
+    safeRender();
   } else {
     await cloudPush();
   }
@@ -4471,7 +4478,7 @@ window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () 
 });
 // Der Neuaufbau tauscht die Elemente aus: liegt gerade ein Finger darauf, bricht das Scrollen ab und hängt, bis man neu ansetzt.
 function tickPlan() {
-  if (touchDown || Date.now() - lastTouchEnd < 1500 || swipe || pinch || document.body.classList.contains("swiping")) { setTimeout(tickPlan, 1600); return; }
+  if (scrollBusy() || Date.now() - lastTouchEnd < 1500 || swipe || pinch || document.body.classList.contains("swiping")) { setTimeout(tickPlan, 1600); return; }
   if (ui.tab === "stundenplan" && !document.querySelector(".modal")) render();
 }
 setInterval(tickPlan, 60000);
@@ -5073,7 +5080,8 @@ document.addEventListener("submit", () => showToast("✓ Gespeichert"));
 let pull = null;
 document.addEventListener("touchstart", (e) => {
   pull = null;
-  if (window.scrollY > 0 || e.touches.length !== 1 || document.querySelector(".modal") || ui.layEdit) return;
+  // Im Stundenplan scrollt nur das Raster (die Seite selbst nie): dort würde jeder Wisch nach unten als „Ziehen zum Aktualisieren“ zählen
+  if (window.scrollY > 0 || e.touches.length !== 1 || document.querySelector(".modal") || ui.layEdit || ui.tab === "stundenplan") return;
   pull = { y: e.touches[0].clientY, dy: 0 };
 }, { passive: true });
 document.addEventListener("touchmove", (e) => { if (pull) pull.dy = e.touches[0].clientY - pull.y; }, { passive: true });
@@ -5084,7 +5092,9 @@ document.addEventListener("touchend", async () => {
   if (dy < 90 || !session) return;
   hapt(10);
   await cloudPull();
-  render();
+  // Neu zeichnen erst, wenn nichts mehr scrollt oder unter dem Finger liegt
+  const redraw = () => { if (scrollBusy()) setTimeout(redraw, 200); else render(); };
+  redraw();
 }, { passive: true });
 
 // 7) Enter springt zum nächsten Feld; das Feld rutscht über die Tastatur in die Mitte
