@@ -689,6 +689,7 @@ function seriesDates(first, repeat, until) {
 
 // ---------- Render ----------
 function render() {
+  applyPendingSwipe();
   syncHistoryNav();
   requestAnimationFrame(fitEventNames);
   applyTheme();
@@ -2984,10 +2985,41 @@ function pagesGroup(build) {
   for (let k = -PRELOAD; k <= PRELOAD; k++) s += build(k);
   return `<div class="plan-group">${s}</div>`;
 }
+// Wochenwechsel ohne Ruckeln: Die Seiten sind vorgeladen, beim Wischen gleitet nur die Gruppe.
+// Der teure Neuaufbau (render) kommt erst später im Stillen. Bis dahin merkt sich swipePage, um wie viele Seiten die Ansicht verschoben ist.
+var swipePage = 0, swipeFlushTimer = 0;
+// Wie viele Finger liegen gerade auf dem Display (für alles, was nicht unter dem Finger neu aufbauen darf)
+var touchDown = 0, lastTouchEnd = 0;
+["touchstart", "touchend", "touchcancel"].forEach((n) => document.addEventListener(n, (e) => {
+  touchDown = e.touches.length;
+  if (n !== "touchstart") lastTouchEnd = Date.now();
+}, { passive: true, capture: true }));
+function swipeRestPx() {
+  if (!swipePage) return 0;
+  const tr = document.querySelector(".plan-screen .plan-track");
+  return tr ? -swipePage * tr.offsetWidth : 0;
+}
+function applyPendingSwipe() {
+  if (!swipePage) return;
+  if (ui.view === "day") ui.dayDate = iso(addDays(parseIso(ui.dayDate), swipePage));
+  else ui.weekOffset += swipePage;
+  swipePage = 0;
+  clearTimeout(swipeFlushTimer);
+}
+function scheduleSwipeFlush() {
+  clearTimeout(swipeFlushTimer);
+  swipeFlushTimer = setTimeout(function flush() {
+    if (!swipePage) return;
+    // Nie unter einem Finger neu aufbauen
+    if (touchDown || swipe || pinch) { swipeFlushTimer = setTimeout(flush, 200); return; }
+    render();
+  }, 380);
+}
 let swipeAnim = 0;   // Nummer der laufenden Auslauf-Animation; ein neuer Finger macht ältere Aufräum-Timer ungültig
 function resetSwipeTrack(app) {
   document.body.classList.remove("swiping");
-  document.querySelectorAll(".plan-screen .plan-group").forEach((g) => { g.style.transition = ""; g.style.transform = ""; });
+  const rest = swipeRestPx();
+  document.querySelectorAll(".plan-screen .plan-group").forEach((g) => { g.style.transition = ""; g.style.transform = rest ? `translateX(${rest}px)` : ""; });
   if (!app) return;
   app.style.transition = "";
   app.style.transform = "";
@@ -3046,79 +3078,105 @@ document.addEventListener("touchend", () => {
   if (sw.raf) cancelAnimationFrame(sw.raf);
   const app = document.getElementById("app");
   if (!sw.mode || longFired) { resetSwipeTrack(app); return; }
-  const total = sw.base + sw.dx;                      // so weit ist die Ansicht gerade verschoben
   const W = sw.track.offsetWidth;
+  const rel = sw.base + sw.dx + swipePage * W;         // Abstand von der aktuellen Ruheseite
   const quick = Date.now() - sw.t < 300 && Math.abs(sw.dx) > W * 0.12;
-  const commit = Math.abs(total) > W * 0.3 || quick;
-  const dir = (quick ? sw.dx : total) < 0 ? 1 : -1;   // nach links = nächste Woche/Tag
+  const commit = Math.abs(rel) > W * 0.3 || quick;
+  const dir = (quick ? sw.dx : rel) < 0 ? 1 : -1;      // nach links = nächste Woche/Tag
+  if (commit) swipePage = Math.max(-PRELOAD, Math.min(PRELOAD, swipePage + dir));
   const ease = "transform .32s cubic-bezier(.2,.8,.2,1)";
-  if (!commit) {
-    sw.groups.forEach((g) => { g.style.transition = ease; g.style.transform = "translateX(0)"; });
-    const id = ++swipeAnim;
-    setTimeout(() => { if (id === swipeAnim) resetSwipeTrack(document.getElementById("app")); }, 340);
-    return;
-  }
-  // Sofort umschalten (nicht erst nach der Animation): ein neuer Finger trifft dann schon die neue Ansicht.
-  // Die neue Ansicht startet genau dort, wo die alte gerade stand, und gleitet in die Mitte.
-  resetSwipeTrack(app);
-  if (ui.view === "day") ui.dayDate = iso(addDays(parseIso(ui.dayDate), dir));
-  else ui.weekOffset += dir;
-  ui.anim = null;
-  render();
-  const gs = [...document.querySelectorAll(".plan-screen .plan-group")];
-  const from = total + dir * W;
-  gs.forEach((g) => { g.style.transition = "none"; g.style.transform = `translateX(${from}px)`; });
-  void document.body.offsetWidth;
-  gs.forEach((g) => { g.style.transition = ease; g.style.transform = "translateX(0)"; });
+  sw.groups.forEach((g) => { g.style.transition = ease; g.style.transform = `translateX(${-swipePage * W}px)`; });
+  document.body.classList.remove("swiping");
   const id = ++swipeAnim;
-  setTimeout(() => {
-    if (id !== swipeAnim) return;
-    gs.forEach((g) => { g.style.transition = ""; g.style.transform = ""; });
-  }, 340);
+  if (swipePage) scheduleSwipeFlush();
+  else setTimeout(() => { if (id === swipeAnim) resetSwipeTrack(document.getElementById("app")); }, 340);
 }, { passive: true });
 document.addEventListener("touchcancel", () => abortSwipe(), { passive: true });
 
-// Gummiband: am oberen/unteren Ende des Rasters gibt das Raster beim Weiterziehen kurz nach und federt zurück.
-// Nur optisch (transform auf .plan-rows), die Scrollposition und das Wischen bleiben unberührt.
+// Gummiband (überall, wo etwas scrollt): am oberen/unteren Ende gibt der Inhalt beim Weiterziehen kurz nach
+// und federt zurück; auch wenn ein schneller Wisch (Schwung) am Ende anstößt. Nur optisch, die Scrollposition bleibt unberührt.
+// Stundenplan: das Raster (.plan-rows) bewegt sich, Wochentage und Aufgaben bleiben stehen. Andere Reiter: die ganze Seite (#app).
+const BAND_MAX = 56;
 let band = null;
-const bandShow = (raw) => (raw < 0 ? -1 : 1) * 56 * (1 - Math.exp(-Math.abs(raw) / 110));
+const bandShow = (raw) => (raw < 0 ? -1 : 1) * BAND_MAX * (1 - Math.exp(-Math.abs(raw) / 110));
+function bandContext(target) {
+  if (!target || !target.closest || ui.layEdit || ui.planEdit || document.querySelector(".modal")) return null;
+  const wk = target.closest(".plan-screen > .week");
+  if (wk) { const rows = wk.querySelector(".plan-rows"); return rows ? { sc: wk, el: rows } : null; }
+  if (ui.tab === "stundenplan") return null;
+  const app = document.getElementById("app");
+  if (!app || !app.contains(target)) return null;
+  // Liegt der Finger in einem eigenen scrollbaren Feld (Liste, Textfeld), bewegt sich die Seite nicht
+  for (let n = target; n && n !== app; n = n.parentElement) {
+    const oy = getComputedStyle(n).overflowY;
+    if ((oy === "auto" || oy === "scroll") && n.scrollHeight > n.clientHeight + 1) return null;
+  }
+  return { sc: document.scrollingElement || document.documentElement, el: app };
+}
+const bandAtTop = (sc) => sc.scrollTop <= 0.5;
+const bandAtBottom = (sc) => sc.scrollTop >= sc.scrollHeight - sc.clientHeight - 0.5;
 function bandRelease() {
   const b = band;
   band = null;
-  if (!b || !b.raw || !b.rows) return;
-  const rows = b.rows;
-  rows.style.transition = "transform .38s cubic-bezier(.2,.9,.3,1.2)";
-  rows.style.transform = "";
-  setTimeout(() => { rows.style.transition = ""; }, 400);
+  if (!b || !b.raw || !b.el) return;
+  const el = b.el;
+  el.style.transition = "transform .38s cubic-bezier(.2,.9,.3,1.2)";
+  el.style.transform = "";
+  setTimeout(() => { el.style.transition = ""; }, 400);
 }
 document.addEventListener("touchstart", (e) => {
   if (band) bandRelease();
-  if (e.touches.length !== 1 || ui.tab !== "stundenplan" || ui.layEdit || ui.planEdit || document.querySelector(".modal")) return;
-  const wk = e.target.closest && e.target.closest(".plan-screen > .week");
-  const rows = wk && wk.querySelector(".plan-rows");
-  if (!rows) return;
-  rows.style.transition = "none";
-  band = { wk, rows, last: e.touches[0].clientY, raw: 0 };
+  if (e.touches.length !== 1) return;
+  const ctx = bandContext(e.target);
+  if (!ctx) return;
+  ctx.el.style.transition = "none";
+  band = { sc: ctx.sc, el: ctx.el, last: e.touches[0].clientY, raw: 0 };
 }, { passive: true });
 document.addEventListener("touchmove", (e) => {
   if (!band) return;
-  if (e.touches.length !== 1 || (swipe && swipe.mode === "h") || pinch) { band.raw = 0; band.rows.style.transform = ""; band = null; return; }
+  if (e.touches.length !== 1 || (swipe && swipe.mode === "h") || pinch) { band.el.style.transform = ""; band = null; return; }
   const y = e.touches[0].clientY;
   const d = y - band.last;
   band.last = y;
-  const wk = band.wk;
-  const atTop = wk.scrollTop <= 0.5;
-  const atBottom = wk.scrollTop >= wk.scrollHeight - wk.clientHeight - 0.5;
   if (band.raw === 0) {
     // erst ab dem Rand: nach unten ziehen am Anfang, nach oben ziehen am Ende
-    if (!((atTop && d > 0) || (atBottom && d < 0))) return;
+    if (!((bandAtTop(band.sc) && d > 0) || (bandAtBottom(band.sc) && d < 0))) return;
   }
   const next = band.raw + d;
   band.raw = (band.raw !== 0 && Math.sign(next) !== Math.sign(band.raw)) ? 0 : next;
-  band.rows.style.transform = band.raw ? `translateY(${bandShow(band.raw)}px)` : "";
+  band.el.style.transform = band.raw ? `translateY(${bandShow(band.raw)}px)` : "";
 }, { passive: true });
 document.addEventListener("touchend", () => bandRelease(), { passive: true });
 document.addEventListener("touchcancel", () => bandRelease(), { passive: true });
+
+// Schwung: stößt ein schneller Wisch am Ende an (Finger ist schon oben), federt der Inhalt kurz mit.
+const flingLast = new WeakMap();
+let bounceUntil = 0;
+document.addEventListener("scroll", (e) => {
+  if (touchDown) { return; }
+  const t = e.target;
+  const sc = t === document ? (document.scrollingElement || document.documentElement) : t;
+  if (!sc || sc.scrollTop === undefined) return;
+  const now = performance.now();
+  const prev = flingLast.get(sc);
+  const top = sc.scrollTop;
+  flingLast.set(sc, { top, t: now });
+  if (!prev || now < bounceUntil) return;
+  const dt = now - prev.t;
+  if (dt < 1 || dt > 120) return;
+  const v = (top - prev.top) / dt;            // px pro ms, negativ = nach oben
+  const hitTop = v < -0.5 && bandAtTop(sc);
+  const hitBottom = v > 0.5 && bandAtBottom(sc);
+  if (!hitTop && !hitBottom) return;
+  const ctx = bandContext(t === document ? document.getElementById("app") : t);
+  if (!ctx || ctx.sc !== sc || !ctx.el.animate) return;
+  const amp = Math.min(BAND_MAX, 10 + Math.abs(v) * 18) * (hitTop ? 1 : -1);
+  bounceUntil = now + 560;
+  ctx.el.animate(
+    [{ transform: "translateY(0)" }, { transform: `translateY(${amp}px)`, offset: 0.32 }, { transform: "translateY(0)" }],
+    { duration: 520, easing: "cubic-bezier(.2,.8,.3,1)" }
+  );
+}, { capture: true, passive: true });
 
 // Streckung in Y-Richtung: zwei Finger auf dem Stundenplan (am PC: Strg + Mausrad)
 let pinch = null;
@@ -4412,11 +4470,6 @@ window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () 
   if (state.settings.themeMode === "system") render();
 });
 // Der Neuaufbau tauscht die Elemente aus: liegt gerade ein Finger darauf, bricht das Scrollen ab und hängt, bis man neu ansetzt.
-let touchDown = 0, lastTouchEnd = 0;
-["touchstart", "touchend", "touchcancel"].forEach((n) => document.addEventListener(n, (e) => {
-  touchDown = e.touches.length;
-  if (n !== "touchstart") lastTouchEnd = Date.now();
-}, { passive: true, capture: true }));
 function tickPlan() {
   if (touchDown || Date.now() - lastTouchEnd < 1500 || swipe || pinch || document.body.classList.contains("swiping")) { setTimeout(tickPlan, 1600); return; }
   if (ui.tab === "stundenplan" && !document.querySelector(".modal")) render();
