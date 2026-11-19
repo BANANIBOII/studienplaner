@@ -2869,6 +2869,10 @@ function openTodoModal(id, date) {
 }
 
 // ---------- Langes Drücken & Wischen ----------
+// Gedrückthalten öffnet kein Browser-Menü (Kopieren, Suchen …), außer in Eingabefeldern
+document.addEventListener("contextmenu", (e) => {
+  if (!e.target.closest || !e.target.closest("input, textarea, [contenteditable='true']")) e.preventDefault();
+});
 let pressTimer = null;
 let pressStart = null;
 let longFired = false;
