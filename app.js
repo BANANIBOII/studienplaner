@@ -1303,7 +1303,7 @@ function dayColumn(k, label, wide, today, noNav = false, chips = "") {
       // Block zeigt Kürzel (falls gesetzt), Dozent statt Uhrzeit und einen dunkleren Rahmen
       const ec = colorOf(it.name);
       const who = dozentOf(it);
-      return `<div class="ev" data-act="note" data-kind="event" data-id="${it.id}"${ui.planEdit ? ` data-drag="${it.id}"` : ""} style="${pos}background:${ec};color:${textOn(ec)};border:2px solid color-mix(in srgb, ${ec} 55%, #000)">
+      return `<div class="ev${it.cancelled ? " is-cancelled" : ""}" data-act="note" data-kind="event" data-id="${it.id}"${ui.planEdit ? ` data-drag="${it.id}"` : ""} style="${pos}background:${ec};color:${textOn(ec)};border:2px solid color-mix(in srgb, ${ec} 55%, #000)">
         <b class="ev-name" data-long="${esc(it.name)}" data-short="${esc(it.short || "")}">${esc(it.name)}</b><small>${esc(who || `${fmtMin(it.start)}–${fmtMin(it.end)}`)}</small><small>${esc(it.room)}</small></div>`;
     }
     const c = catColor(it.kind);
@@ -1579,6 +1579,7 @@ function openEventEdit(id) {
         <div><label class="muted">Beginn</label><input type="time" name="start" required value="${fmtMin(ev.start)}"></div>
         <div><label class="muted">Ende</label><input type="time" name="end" required value="${fmtMin(ev.end)}"></div>
       </div>
+      <label class="row" style="margin:12px 0"><input type="checkbox" name="cancelled" ${ev.cancelled ? "checked" : ""}> Diese Stunde fällt aus</label>
       <label class="muted">Farbe</label>
       <input type="hidden" name="color" value="${color}">
       <div class="row" style="margin-bottom:8px"><span class="muted">Farbe wählen:</span><input type="color" id="evColorPick" value="${color}"></div>
@@ -4138,6 +4139,8 @@ document.addEventListener("submit", async (e) => {
       ev.start = start;
       ev.end = end;
       ev.room = (data.room || "").trim();
+      // Nur diese Stunde fällt aus (gilt nicht für die anderen Termine der Vorlesung)
+      ev.cancelled = !!data.cancelled;
       // Kürzel gilt für alle Termine dieser Vorlesung (wie der Titel)
       const short = (data.short || "").trim();
       const doz = (data.dozent || "").trim();

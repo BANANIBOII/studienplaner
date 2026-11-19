@@ -941,3 +941,7 @@ html.no-scrollbars::-webkit-scrollbar { display: none; width: 0; height: 0; }
   .dash-main .listrow { flex-wrap: wrap; gap: 2px 8px; }
   .dash-main .item .muted, .dash-main .listrow .muted { font-size: 11px; }
 }
+
+/* Ausgefallene Stunde: transparent, rot umrandet, rote Diagonale von links unten nach rechts oben */
+.ev.is-cancelled { opacity: .45; border: 2px solid #ef4444 !important; }
+.ev.is-cancelled::after { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; background: linear-gradient(to bottom right, transparent calc(50% - 1.2px), #ef4444 calc(50% - 1px), #ef4444 calc(50% + 1px), transparent calc(50% + 1.2px)); }
