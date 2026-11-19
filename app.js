@@ -3110,7 +3110,7 @@ document.addEventListener("touchcancel", () => abortSwipe(), { passive: true });
 // Gummiband (überall, wo etwas scrollt): am oberen/unteren Ende gibt der Inhalt beim Weiterziehen kurz nach
 // und federt zurück; auch wenn ein schneller Wisch (Schwung) am Ende anstößt. Nur optisch, die Scrollposition bleibt unberührt.
 // Stundenplan: das Raster (.plan-rows) bewegt sich, Wochentage und Aufgaben bleiben stehen. Andere Reiter: die ganze Seite (#app).
-const BAND_MAX = 56;
+const BAND_MAX = 48;
 let band = null;
 const bandShow = (raw) => (raw < 0 ? -1 : 1) * BAND_MAX * (1 - Math.exp(-Math.abs(raw) / 70));
 function bandContext(target) {
@@ -3134,15 +3134,17 @@ function bandRelease() {
   band = null;
   if (!b || !b.raw || !b.el) return;
   const el = b.el;
-  el.style.transition = "transform .38s cubic-bezier(.2,.9,.3,1.2)";
+  el.style.transition = "transform .6s cubic-bezier(.22,.7,.28,1)";
   el.style.transform = "";
-  setTimeout(() => { el.style.transition = ""; }, 400);
+  setTimeout(() => { el.style.transition = ""; }, 620);
 }
 document.addEventListener("touchstart", (e) => {
   if (band) bandRelease();
   if (e.touches.length !== 1) return;
   const ctx = bandContext(e.target);
   if (!ctx) return;
+  const run = bounceAnim.get(ctx.el);
+  if (run) { run.cancel(); bounceAnim.delete(ctx.el); }
   ctx.el.style.transition = "none";
   band = { sc: ctx.sc, el: ctx.el, last: e.touches[0].clientY, raw: 0 };
 }, { passive: true });
@@ -3163,9 +3165,10 @@ document.addEventListener("touchmove", (e) => {
 document.addEventListener("touchend", () => bandRelease(), { passive: true });
 document.addEventListener("touchcancel", () => bandRelease(), { passive: true });
 
-// Schwung: stößt ein schneller Wisch am Ende an (Finger ist schon oben), federt der Inhalt kurz mit.
+// Schwung: stößt ein schneller Wisch am Ende an (Finger ist schon oben), gibt der Inhalt weich nach und kommt langsam zurück.
+// Stärke und Dauer hängen von der Geschwindigkeit ab. Stößt man währenddessen am anderen Ende an, geht es von der aktuellen Stelle aus weiter.
 const flingLast = new WeakMap();
-let bounceUntil = 0;
+const bounceAnim = new WeakMap();
 document.addEventListener("scroll", (e) => {
   lastScrollAt = Date.now();
   if (touchDown) { return; }
@@ -3176,7 +3179,7 @@ document.addEventListener("scroll", (e) => {
   const prev = flingLast.get(sc);
   const top = sc.scrollTop;
   flingLast.set(sc, { top, t: now });
-  if (!prev || now < bounceUntil) return;
+  if (!prev) return;
   const dt = now - prev.t;
   if (dt < 1 || dt > 120) return;
   const v = (top - prev.top) / dt;            // px pro ms, negativ = nach oben
@@ -3185,12 +3188,28 @@ document.addEventListener("scroll", (e) => {
   if (!hitTop && !hitBottom) return;
   const ctx = bandContext(t === document ? document.getElementById("app") : t);
   if (!ctx || ctx.sc !== sc || !ctx.el.animate) return;
-  const amp = Math.min(BAND_MAX, 14 + Math.abs(v) * 24) * (hitTop ? 1 : -1);
-  bounceUntil = now + 560;
-  ctx.el.animate(
-    [{ transform: "translateY(0)" }, { transform: `translateY(${amp}px)`, offset: 0.32 }, { transform: "translateY(0)" }],
-    { duration: 520, easing: "cubic-bezier(.2,.8,.3,1)" }
+  const el = ctx.el;
+  const speed = Math.abs(v);
+  const peak = Math.min(36, 4 + speed * 9) * (hitTop ? 1 : -1);      // langsam: kaum zu sehen, schnell: bis ca. 36 px
+  const dur = Math.round(Math.min(1100, 600 + Math.abs(peak) * 10));  // 600–1000 ms
+  // Läuft noch eine Animation: von der aktuellen Stelle weitermachen statt neu bei 0
+  let y0 = 0;
+  const run = bounceAnim.get(el);
+  if (run) {
+    try { y0 = new DOMMatrix(getComputedStyle(el).transform).m42 || 0; } catch (_) {}
+    run.cancel();
+  }
+  const anim = el.animate(
+    [
+      { transform: `translateY(${y0}px)`, easing: "cubic-bezier(.2,.6,.3,1)" },
+      { transform: `translateY(${peak}px)`, offset: 0.34, easing: "cubic-bezier(.4,0,.2,1)" },
+      { transform: `translateY(${-peak * 0.08}px)`, offset: 0.74, easing: "cubic-bezier(.4,0,.2,1)" },
+      { transform: "translateY(0)" },
+    ],
+    { duration: dur }
   );
+  bounceAnim.set(el, anim);
+  anim.onfinish = anim.oncancel = () => { if (bounceAnim.get(el) === anim) bounceAnim.delete(el); };
 }, { capture: true, passive: true });
 
 // Streckung in Y-Richtung: zwei Finger auf dem Stundenplan (am PC: Strg + Mausrad)
