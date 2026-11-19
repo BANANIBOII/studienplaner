@@ -703,7 +703,9 @@ button, .btn { min-height: 40px; }
 
 /* Ziehen von Terminen und Aufgaben im Stundenplan: der Finger darf die Seite nicht wegscrollen,
    sonst bricht der Browser das Ziehen ab (pointercancel) */
-.week [data-drag] { touch-action: none; }
+/* Nur im Bearbeiten-Modus: sonst blockiert die Sperre das Scrollen und Wischen, sobald der Finger auf einer Aufgabe liegt.
+   Das Ziehen per Gedrückthalten (Handy) fängt die App selbst ab (touchmove + preventDefault). */
+.plan-screen.editing .week [data-drag] { touch-action: none; }
 
 /* ---------- Stundenplan-Kopf (neu) ---------- */
 /* Spalten als Container: der Wochentag wird ausgeschrieben, sobald die Spalte breit genug ist */
