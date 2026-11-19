@@ -952,3 +952,33 @@ html, body, body *:not(input):not(textarea):not(select):not([contenteditable="tr
 input, textarea, select, [contenteditable="true"] { -webkit-user-select: text; user-select: text; -webkit-touch-callout: default; }
 ::selection { background: transparent; }
 img { -webkit-user-drag: none; user-drag: none; }
+
+/* ---------- Untere Navigation: schwebende Leiste mit gleitender Markierung ---------- */
+.tabbar {
+  left: 12px; right: 12px; bottom: calc(10px + env(safe-area-inset-bottom));
+  padding: 6px; border: 1px solid var(--line); border-radius: 26px;
+  background: color-mix(in srgb, var(--card) 86%, transparent);
+  -webkit-backdrop-filter: blur(16px) saturate(1.5); backdrop-filter: blur(16px) saturate(1.5);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, .3), 0 1px 0 rgba(255, 255, 255, .04) inset;
+}
+.tab-pill {
+  position: absolute; top: 6px; bottom: 6px; left: 0; width: 0;
+  border-radius: 20px; background: var(--accent-soft);
+  pointer-events: none; z-index: 0;
+  transition: transform .5s cubic-bezier(.2, .9, .3, 1.12), width .5s cubic-bezier(.2, .9, .3, 1.12);
+}
+.tabbar button {
+  position: relative; z-index: 1; background: none !important; border-radius: 20px;
+  padding: 8px 0 7px; color: var(--muted); opacity: .8;
+  transition: color .35s ease, opacity .35s ease;
+}
+.tabbar button .ic { transition: transform .45s cubic-bezier(.2, .9, .3, 1.2); }
+.tabbar button span { transition: opacity .3s ease; }
+.tabbar button.active { color: var(--accent); font-weight: 700; opacity: 1; background: none !important; }
+.tabbar button.active .ic { transform: translateY(-2px) scale(1.12); }
+.tabbar button:active { transform: scale(.92); }
+/* Bewegung verringern: keine Gleit- und Skalierungs-Animation */
+@media (prefers-reduced-motion: reduce) {
+  .tab-pill, .tabbar button, .tabbar button .ic { transition: none !important; }
+}
+body.nav-bottom:not(.locked) { padding-bottom: calc(92px + env(safe-area-inset-bottom)) !important; }

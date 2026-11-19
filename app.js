@@ -719,6 +719,7 @@ function render() {
     return;
   }
   document.querySelectorAll("[data-tab]").forEach((b) => b.classList.toggle("active", b.dataset.tab === ui.tab));
+  placeTabPill();
   document.querySelectorAll('[data-act="undo"]').forEach((b) => (b.disabled = !((state.history || []).length || layHist.length)));
   document.querySelectorAll('[data-act="redo"]').forEach((b) => (b.disabled = !(state.future || []).length));
   const views = {
@@ -2625,7 +2626,7 @@ function fitPlan() {
   if (!wk) return;
   const screen = document.querySelector(".plan-screen");
   const tb = document.querySelector(".tabbar");
-  const tbH = tb && getComputedStyle(tb).display !== "none" ? tb.offsetHeight : 0;
+  const tbH = tb && getComputedStyle(tb).display !== "none" ? tb.offsetHeight + 12 : 0; // +12: schwebende Leiste hat Abstand unten
   const top = (screen || wk).getBoundingClientRect().top;
   // Die Stundenhöhe bleibt fest (Zoom/Einstellung). Der Bereich füllt nur den Bildschirm,
   // oben bleiben Wochentage und Aufgaben stehen, das Raster scrollt bei Bedarf.
@@ -3329,6 +3330,16 @@ document.addEventListener("wheel", (e) => {
 // Doppeltippen (Handy) bzw. Doppelklick (PC) auf einen Kalendertag öffnet ihn in der Tagesansicht
 let lastDayTap = { d: "", t: 0 };
 let lastTabTap = { k: "", t: 0 };
+
+// Gleitende Markierung unter dem aktiven Reiter (untere Leiste)
+function placeTabPill() {
+  const pill = document.querySelector(".tab-pill");
+  const act = document.querySelector(".tabbar button.active");
+  if (!pill || !act) return;
+  pill.style.width = act.offsetWidth + "px";
+  pill.style.transform = `translateX(${act.offsetLeft}px)`;
+}
+window.addEventListener("resize", placeTabPill);
 
 // ---------- Schnellmenü am Reiter und globale Suche ----------
 let tabPressTimer = null;
