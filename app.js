@@ -752,11 +752,12 @@ function render() {
   syncLayFab();
   syncTabBadge();
   // Einblenden nur beim Wechsel des Reiters, nicht bei jedem Haken oder Klick
-  if (tabChanged) {
+  if (tabChanged && !document.body.classList.contains("tab-scrub")) {
     appEl.classList.remove("dir-fwd", "dir-back");
     appEl.classList.add("tab-in", dir);
     clearTimeout(appEl._tabIn);
-    appEl._tabIn = setTimeout(() => appEl.classList.remove("tab-in", "dir-fwd", "dir-back"), 480);
+    // Erst nach dem längsten Einblenden (Karten mit Verzögerung) wieder entfernen, sonst springt der Inhalt am Ende
+    appEl._tabIn = setTimeout(() => appEl.classList.remove("tab-in", "dir-fwd", "dir-back"), 1000);
   }
   document.querySelectorAll(".lay-btn").forEach((b) => b.classList.toggle("on", ui.layEdit));
   if (ui.tab === "dashboard") loadMensa(false);
@@ -3351,6 +3352,58 @@ function placeTabPill() {
   pill.style.transform = `translateX(${act.offsetLeft}px)`;
 }
 window.addEventListener("resize", placeTabPill);
+
+// Wischen über die untere Leiste: Finger bleibt drauf und zieht seitlich, die Seite zeigt den Reiter unter dem Finger.
+// Bleibt der Finger still, öffnet sich wie bisher das Schnellmenü (siehe oben).
+let tabScrub = null;
+function tabUnderX(x) {
+  const btns = [...document.querySelectorAll(".tabbar button[data-tab]")];
+  let best = null, dist = Infinity;
+  for (const b of btns) {
+    const r = b.getBoundingClientRect();
+    if (x >= r.left && x <= r.right) return b;
+    const d = Math.min(Math.abs(x - r.left), Math.abs(x - r.right));
+    if (d < dist) { dist = d; best = b; }
+  }
+  return best;
+}
+document.addEventListener("pointerdown", (e) => {
+  if (e.button > 0 || !(e.target.closest && e.target.closest(".tabbar"))) return;
+  tabScrub = { id: e.pointerId, x0: e.clientX, y0: e.clientY, on: false };
+}, true);
+document.addEventListener("pointermove", (e) => {
+  if (!tabScrub || e.pointerId !== tabScrub.id) return;
+  const dx = e.clientX - tabScrub.x0, dy = e.clientY - tabScrub.y0;
+  if (!tabScrub.on) {
+    if (Math.abs(dx) < 10 || Math.abs(dx) < Math.abs(dy)) return;   // noch kein seitliches Wischen
+    tabScrub.on = true;
+    clearTimeout(tabPressTimer);     // Gedrückthalten zählt nicht mehr: es ist ein Wischen
+    document.body.classList.add("tab-scrub");
+  }
+  const btn = tabUnderX(e.clientX);
+  if (btn && btn.dataset.tab !== ui.tab) {
+    ui.tab = btn.dataset.tab;
+    ui.modOpen = null;
+    ui.topicOpen = null;
+    if (navigator.vibrate) navigator.vibrate(4);
+    render();
+  }
+}, true);
+function endTabScrub(e) {
+  if (!tabScrub || (e && e.pointerId !== tabScrub.id)) return;
+  const wasOn = tabScrub.on;
+  tabScrub = null;
+  if (!wasOn) return;
+  document.body.classList.remove("tab-scrub");
+  tabPressFired = true;              // der Klick nach dem Loslassen darf nicht noch einmal umschalten
+  setTimeout(() => { tabPressFired = false; }, 300);
+  window.scrollTo(0, 0);
+  // Nach dem Wischen einmal sanft einblenden, damit der neue Reiter nicht einfach „da“ ist
+  const appEl = document.getElementById("app");
+  if (appEl) { appEl.classList.remove("dir-fwd", "dir-back"); void appEl.offsetWidth; appEl.classList.add("tab-in", "dir-fwd"); clearTimeout(appEl._tabIn); appEl._tabIn = setTimeout(() => appEl.classList.remove("tab-in", "dir-fwd", "dir-back"), 1000); }
+}
+document.addEventListener("pointerup", endTabScrub, true);
+document.addEventListener("pointercancel", endTabScrub, true);
 
 // ---------- Schnellmenü am Reiter und globale Suche ----------
 let tabPressTimer = null;
