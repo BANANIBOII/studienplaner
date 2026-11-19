@@ -103,7 +103,7 @@ const DEVICE_DEFAULTS = {
   checkSide: "left",
   nfDev: { vib: "std", sound: true },
   layouts: {},
-  cal: { style: "bar", w: 100, h: 100 },
+  cal: { style: "bar", w: 100, h: 100, fold: false },
 };
 const DEVICE_KEYS = Object.keys(DEVICE_DEFAULTS);
 
@@ -1765,9 +1765,16 @@ function viewCal() {
 
   // Links: Monat. Rechts: Tagesliste und Übersicht. Am Handy untereinander.
   const m = ui.month;
-  const grid0 = mondayOf(new Date(m.getFullYear(), m.getMonth(), 1));
+  // Eingeklappt: nur die Woche des gewählten Tages. Aufgeklappt: ganzer Monat.
+  const fold = !!cal.fold;
+  const grid0 = mondayOf(fold ? parseIso(ui.selDate || today) : new Date(m.getFullYear(), m.getMonth(), 1));
+  const weekEnd = addDays(grid0, 6);
+  const monthTitle = fold
+    ? `${grid0.getDate()}. ${MONTHS[grid0.getMonth()].slice(0, 3)} – ${weekEnd.getDate()}. ${MONTHS[weekEnd.getMonth()].slice(0, 3)} ${weekEnd.getFullYear()}`
+    : `${MONTHS[m.getMonth()]} ${m.getFullYear()}`;
+  const animCls = ui.anim === "fold" || ui.anim === "week" ? " anim-fold" : "";
   let cells = WEEKDAYS.map((w) => `<div class="mwd">${w}</div>`).join("");
-  for (let i = 0; i < 42; i++) {
+  for (let i = 0; i < (fold ? 7 : 42); i++) {
     const d = addDays(grid0, i);
     const k = iso(d);
     const dayT = todosOn(k).sort((a, b) => Number(a.done) - Number(b.done));
@@ -1794,19 +1801,23 @@ function viewCal() {
       border += `background-color:${tint};`;
     }
     const cls = ["mday", `style-${cal.style}`, d.getMonth() !== m.getMonth() ? "other" : "", k === today ? "today" : "", k === ui.selDate ? "sel" : "", spans0.length ? "has-span" : ""].join(" ");
-    cells += `<div class="${cls}" data-act="sel" data-d="${k}" style="${border}">${calCellInner(cal.style, d, dayT, evCount)}${overlays}</div>`;
+    cells += `<div class="${cls}" data-act="sel" data-d="${k}" style="--i:${i};${border}">${calCellInner(cal.style, d, dayT, evCount)}${overlays}</div>`;
   }
+  const navAct = fold ? "calweek" : "mon";
   const monthCard = `<div class="card">
     <div class="row" style="justify-content:space-between;margin-bottom:10px">
-      <button class="btn ghost" data-act="mon" data-v="-1">‹</button>
-      <b>${MONTHS[m.getMonth()]} ${m.getFullYear()}</b>
-      <button class="btn ghost" data-act="mon" data-v="1">›</button>
+      <button class="btn ghost" data-act="${navAct}" data-v="-1">‹</button>
+      <b class="calTitle">${monthTitle}</b>
+      <button class="btn ghost" data-act="${navAct}" data-v="1">›</button>
     </div>
     <div class="row" style="justify-content:space-between;margin-bottom:10px">
       <button class="btn ghost" data-act="calToday">Heute</button>
-      <button class="btn ghost menu-btn" data-act="calmenu" title="Darstellung">⋮</button>
+      <div class="row" style="gap:6px">
+        <button class="btn ghost calfold${fold ? "" : " is-open"}" data-act="calfold" title="${fold ? "Monat anzeigen" : "Nur diese Woche zeigen"}" aria-label="${fold ? "Ausklappen" : "Einklappen"}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg></button>
+        <button class="btn ghost menu-btn" data-act="calmenu" title="Darstellung">⋮</button>
+      </div>
     </div>
-    <div class="month">${cells}</div>
+    <div class="month${animCls}">${cells}</div>
     <div class="muted" style="margin-top:10px">To-Do auf einen Tag ziehen, um das Datum zu ändern (Handy: kurz gedrückt halten)</div>
   </div>`;
 
@@ -3666,6 +3677,19 @@ document.addEventListener("click", async (e) => {
     case "mon":
       ui.month = new Date(ui.month.getFullYear(), ui.month.getMonth() + Number(el.dataset.v), 1);
       render(); break;
+    case "calfold": {
+      const c = calSet();
+      state.settings.cal = { ...c, fold: !c.fold };
+      ui.anim = "fold";
+      commit(); break;
+    }
+    case "calweek": {
+      const d = addDays(parseIso(ui.selDate || iso(new Date())), 7 * Number(el.dataset.v));
+      ui.selDate = iso(d);
+      ui.month = new Date(d.getFullYear(), d.getMonth(), 1);
+      ui.anim = "week";
+      render(); break;
+    }
     case "calToday":
       ui.month = new Date();
       ui.selDate = iso(new Date());

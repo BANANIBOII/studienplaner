@@ -982,3 +982,14 @@ img { -webkit-user-drag: none; user-drag: none; }
   .tab-pill, .tabbar button, .tabbar button .ic { transition: none !important; }
 }
 body.nav-bottom:not(.locked) { padding-bottom: calc(92px + env(safe-area-inset-bottom)) !important; }
+
+/* ---------- Kalender: Ein- und Ausklappen (nur diese Woche / ganzer Monat) ---------- */
+.calfold svg { transition: transform .45s cubic-bezier(.2, .9, .3, 1.2); }
+.calfold.is-open svg { transform: rotate(180deg); }
+.calTitle { transition: opacity .25s ease; }
+.month .mday { transition: background-color .25s ease, border-color .25s ease, opacity .25s ease; }
+.month.anim-fold .mday { animation: calDayIn .4s cubic-bezier(.2, .8, .2, 1) both; animation-delay: calc(min(var(--i, 0), 13) * 16ms); }
+@keyframes calDayIn { from { opacity: 0; transform: translateY(-8px) scale(.94); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .calfold svg, .month .mday, .month.anim-fold .mday { transition: none !important; animation: none !important; }
+}
