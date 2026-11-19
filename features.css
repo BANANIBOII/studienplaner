@@ -1014,3 +1014,19 @@ main { padding: 18px 16px 8px; }
   .dash-grid { gap: 14px; }
   .hero { padding: 20px; border-radius: 22px; }
 }
+
+/* ---------- Animationen (zusammengefasst, eine Quelle) ----------
+   Reiterwechsel: Inhalt gleitet in Wischrichtung ein, Karten folgen nacheinander.
+   Fenster: gleiten von unten mit leichtem Schwung. Die Werte hier gelten, weil sie zuletzt stehen. */
+@keyframes tabFwd { from { opacity: 0; transform: translateX(18px); } to { opacity: 1; transform: none; } }
+@keyframes tabBack { from { opacity: 0; transform: translateX(-18px); } to { opacity: 1; transform: none; } }
+@keyframes riseIn { from { opacity: 0; transform: translateY(12px) scale(.985); } to { opacity: 1; transform: none; } }
+@keyframes sheetUp { from { opacity: 0; transform: translateY(28px) scale(.98); } to { opacity: 1; transform: none; } }
+#app.tab-in.dir-fwd > * { animation: tabFwd .32s cubic-bezier(.2, .8, .2, 1) both; }
+#app.tab-in.dir-back > * { animation: tabBack .32s cubic-bezier(.2, .8, .2, 1) both; }
+#app.tab-in .card, #app.tab-in .listrow { animation: riseIn .42s cubic-bezier(.2, .8, .2, 1) both; }
+#app.tab-in .card:nth-child(2) { animation-delay: .04s; }
+#app.tab-in .card:nth-child(3) { animation-delay: .08s; }
+#app.tab-in .card:nth-child(n+4) { animation-delay: .12s; }
+.modal { animation: fadeBg .2s ease-out; }
+.modal .sheet { animation: sheetUp .3s cubic-bezier(.2, .9, .3, 1.05); }
