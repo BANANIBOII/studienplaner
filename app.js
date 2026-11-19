@@ -101,6 +101,7 @@ const DEVICE_DEFAULTS = {
   planLook: { grid: "", now: "" },
   navSide: "",
   checkSide: "left",
+  nfDev: { vib: "std", sound: true },
   layouts: {},
   cal: { style: "bar", w: 100, h: 100 },
 };
@@ -309,12 +310,27 @@ function applyDevice(settings) {
 function deviceFromSettings(s) {
   return {
     dark: s.dark, weekend: s.weekend, colors: s.colors, zoomY: s.zoomY, autoRange: s.autoRange,
-    dayStart: s.dayStart, dayEnd: s.dayEnd, planStep: s.planStep || 30, planLines: !!s.planLines, dash: s.dash, navSide: s.navSide || "", checkSide: s.checkSide || "left", scrollbars: s.scrollbars !== false, themeMode: s.themeMode || "", fontScale: s.fontScale || 100, startTab: s.startTab || "dashboard", layouts: s.layouts || {}, cal: s.cal || DEVICE_DEFAULTS.cal,
+    dayStart: s.dayStart, dayEnd: s.dayEnd, planStep: s.planStep || 30, planLines: !!s.planLines, dash: s.dash, navSide: s.navSide || "", checkSide: s.checkSide || "left", scrollbars: s.scrollbars !== false, themeMode: s.themeMode || "", fontScale: s.fontScale || 100, startTab: s.startTab || "dashboard", layouts: s.layouts || {}, cal: s.cal || DEVICE_DEFAULTS.cal, nfDev: { ...DEVICE_DEFAULTS.nfDev, ...(s.nfDev || {}) },
     planLook: { grid: (s.plan && s.plan.grid) || "", now: (s.plan && s.plan.now) || "" },
   };
 }
 function saveDevice() {
-  try { localStorage.setItem(DEVICE_LS, JSON.stringify(deviceFromSettings(state.settings))); } catch {}
+  const d = deviceFromSettings(state.settings);
+  try { localStorage.setItem(DEVICE_LS, JSON.stringify(d)); } catch {}
+  nfPrefsToDb(d.nfDev);
+}
+// Der Service Worker kann localStorage nicht lesen, daher liegt die Einstellung zusätzlich in IndexedDB (gleiche Datenbank wie in sw.js)
+function nfPrefsToDb(v) {
+  try {
+    const req = indexedDB.open("studienplaner-device", 1);
+    req.onupgradeneeded = () => req.result.createObjectStore("kv");
+    req.onsuccess = () => {
+      const db = req.result;
+      const tx = db.transaction("kv", "readwrite");
+      tx.objectStore("kv").put(v, "nfDev");
+      tx.oncomplete = () => db.close();
+    };
+  } catch (_) {}
 }
 // Nur der Teil, der zwischen Geräten abgeglichen wird
 function syncable(s) {
@@ -2227,6 +2243,7 @@ function settingsPages() {
 // Unterseiten der Benachrichtigungen
 const NF_SUBS = [
   { k: "push", t: "Gerät & Aktivierung", d: "Aktivieren, deaktivieren" },
+  { k: "geraet", t: "Vibration & Ton", d: "Nur auf diesem Gerät" },
   { k: "test", t: "Testnachrichten", d: "Beispiel für jede Art senden" },
   { k: "mod", t: "Modul-Erinnerungen", d: "Vorwarnzeit, Module ein- und ausschalten" },
   { k: "custom", t: "Eigene Erinnerungen", d: "Feste Uhrzeit oder vor einer Vorlesung" },
@@ -2283,7 +2300,7 @@ function viewSettings() {
       return back("Benachrichtigungen", "setback") + `<div class="card" style="padding:0;overflow:hidden">${rows}</div>`;
     }
     const info = NF_SUBS.find((x) => x.k === ui.nfOnly);
-    const body = ui.nfOnly === "push" ? pushCardHTML() : ui.nfOnly === "log" ? notifyLogHTML() : ui.nfOnly === "custom" ? customNotifyHTML() : notifyDetailsHTML();
+    const body = ui.nfOnly === "geraet" ? deviceNotifyHTML() : ui.nfOnly === "push" ? pushCardHTML() : ui.nfOnly === "log" ? notifyLogHTML() : ui.nfOnly === "custom" ? customNotifyHTML() : notifyDetailsHTML();
     return back(info ? info.t : "", "nfback") + body;
   }
   if (ui.setPage && pages[ui.setPage] !== undefined) {
@@ -3335,8 +3352,49 @@ function openQuickSheet() {
     <div style="display:flex;flex-direction:column;gap:8px">
       <button class="btn" data-act="qa" data-v="event">+ Neuer Termin</button>
       <button class="btn" data-act="qa" data-v="todo">+ Neuer Eintrag (To-Do, Abgabe, Klausur)</button>
+      <button class="btn" data-act="qa" data-v="reminder">⏰ Schnell-Erinnerung (z. B. „Fr 7:30 Zirkel mitnehmen“)</button>
       <button class="btn ghost" data-act="qa" data-v="search">🔍 Suchen</button>
     </div>`);
+}
+
+// Schnell-Erinnerung: ein Textfeld, z. B. „Fr 7:30 Zirkel mitnehmen“ oder „Mo Mi 8 Uhr Sport“
+function openQuickReminder() {
+  openModal(`<h3>Schnell-Erinnerung</h3>
+    <form data-form="qkrem">
+      <input name="text" required autocomplete="off" placeholder="Fr 7:30 Zirkel mitnehmen" style="width:100%">
+      <p class="muted" style="font-size:13px;margin:8px 0 0">Erst der Tag (Mo, Di, Mi, Do, Fr, Sa, So, täglich, werktags, mehrere möglich), dann die Uhrzeit, dann der Text.</p>
+      <p class="qkerr" style="color:#ef4444;margin:6px 0 0;min-height:1em;font-size:14px"></p>
+      <div class="sheet-actions">
+        <span></span>
+        <div class="right">
+          <button type="button" class="btn ghost" data-act="mclose">Abbrechen</button>
+          <button class="btn">Speichern</button>
+        </div>
+      </div>
+    </form>`);
+  setTimeout(() => { const i = document.querySelector('[name="text"]'); if (i) i.focus(); }, 0);
+}
+const QK_DAY = {
+  mo: [1], montag: [1], di: [2], dienstag: [2], mi: [3], mittwoch: [3], do: [4], donnerstag: [4],
+  fr: [5], freitag: [5], sa: [6], samstag: [6], sonnabend: [6], so: [0], sonntag: [0],
+  "täglich": [0, 1, 2, 3, 4, 5, 6], taeglich: [0, 1, 2, 3, 4, 5, 6], werktags: [1, 2, 3, 4, 5],
+};
+// Liest „Fr 7:30 Zirkel mitnehmen“: Tage zuerst, dann Uhrzeit, Rest ist der Text
+function parseQuickReminder(text) {
+  const words = text.trim().replace(/,/g, " ").split(/\s+/).filter(Boolean);
+  const days = new Set();
+  let i = 0;
+  while (i < words.length && QK_DAY[words[i].toLowerCase()]) { QK_DAY[words[i].toLowerCase()].forEach((d) => days.add(d)); i++; }
+  if (!days.size) return { error: "Bitte zuerst den Tag schreiben, z. B. „Fr“ oder „Mo Mi“." };
+  const m = (words[i] || "").match(/^(\d{1,2})(?:[:.](\d{2}))?(?:h|uhr)?$/i);
+  if (!m) return { error: "Danach bitte die Uhrzeit schreiben, z. B. „7:30“ oder „8 Uhr“." };
+  i++;
+  if (words[i] && words[i].toLowerCase() === "uhr") i++;
+  const hh = Number(m[1]), mm = Number(m[2] || 0);
+  if (hh > 23 || mm > 59) return { error: "Diese Uhrzeit gibt es nicht." };
+  const title = words.slice(i).join(" ");
+  if (!title) return { error: "Bitte noch den Text schreiben, z. B. „Zirkel mitnehmen“." };
+  return { title, time: `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`, days: DAY_ORDER.filter((d) => days.has(d)) };
 }
 
 function openSearch() {
@@ -3647,6 +3705,7 @@ document.addEventListener("click", async (e) => {
       break;
     }
     case "setback": ui.setPage = null; ui.nfOnly = null; render(); break;
+    case "nfvib": state.settings.nfDev = { ...(state.settings.nfDev || {}), vib: el.dataset.v }; saveDevice(); render(); break;
     case "nfopen":
       ui.nfOnly = el.dataset.k;
       if (ui.nfOnly === "log") ui.nfLog = undefined;
@@ -3724,6 +3783,7 @@ document.addEventListener("click", async (e) => {
     case "qa": {
       const v = el.dataset.v;
       if (v === "search") { openSearch(); break; }
+      if (v === "reminder") { openQuickReminder(); break; }
       const today = iso(new Date());
       const now = new Date();
       if (v === "todo") { openTodoModal(null, today); break; }
@@ -3933,6 +3993,11 @@ document.addEventListener("change", async (e) => {
     commit();
     return;
   }
+  if (t.dataset.change === "nfsound") {
+    state.settings.nfDev = { ...(state.settings.nfDev || {}), sound: t.checked };
+    saveDevice();
+    return;
+  }
   if (t.dataset.change === "fontscale") {
     state.settings.fontScale = Number(t.value);
     saveDevice();
@@ -4047,6 +4112,12 @@ document.addEventListener("submit", async (e) => {
     return;
   }
   switch (f.dataset.form) {
+    case "qkrem": {
+      const r = parseQuickReminder(data.text || "");
+      if (r.error) { const err = f.querySelector(".qkerr"); if (err) err.textContent = r.error; break; }
+      customList().push({ id: uid(), title: r.title, body: "", time: r.time, days: r.days, on: true });
+      closeModal(); commit(); break;
+    }
     case "cnsave": {
       const days = [...f.querySelectorAll('input[name="d"]:checked')].map((x) => Number(x.value));
       if (!days.length) { appAlert("Bitte mindestens einen Tag wählen."); break; }
@@ -4655,6 +4726,19 @@ function eventRules() {
 }
 
 // Liste unter Einstellungen → Benachrichtigungen → Eigene Erinnerungen
+// Vibration und Ton: gelten nur für dieses Gerät (localStorage, zusätzlich IndexedDB für den Service Worker)
+function deviceNotifyHTML() {
+  const p = { vib: "std", sound: true, ...(state.settings.nfDev || {}) };
+  const opt = (v, l) => `<button class="btn ${p.vib === v ? "" : "ghost"}" data-act="nfvib" data-v="${v}">${l}</button>`;
+  return `<div class="card"><h3>Vibration</h3>
+      <p class="muted" style="margin-top:0">Gilt für alle Benachrichtigungen auf diesem Gerät. Die Vibration funktioniert vor allem mit Android und Chrome.</p>
+      <div class="row" style="gap:6px;flex-wrap:wrap">${opt("std", "Standard")}${opt("kurz", "Kurz")}${opt("lang", "Lang")}${opt("aus", "Aus")}</div>
+    </div>
+    <div class="card"><h3>Ton</h3>
+      <label class="row" style="gap:8px"><input type="checkbox" data-change="nfsound" ${p.sound ? "checked" : ""}> Ton bei Benachrichtigungen</label>
+      <p class="muted" style="font-size:13px;margin-bottom:0">Auf Android kann der Ton zusätzlich in den Benachrichtigungs-Einstellungen von Chrome oder des Systems festgelegt werden. Diese haben Vorrang.</p>
+    </div>`;
+}
 function customNotifyHTML() {
   const list = customList();
   const fixed = list.length

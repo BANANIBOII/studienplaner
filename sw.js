@@ -10,19 +10,42 @@ self.addEventListener("activate", (e) => {
   e.waitUntil(self.clients.claim());
 });
 
+// Vibration und Ton pro Gerät: die App legt die Einstellung in IndexedDB ab (localStorage kann der Service Worker nicht lesen)
+const VIB_PATTERN = { kurz: [200], lang: [500, 200, 500, 200, 500], aus: [] };
+function readNfPrefs() {
+  return new Promise((resolve) => {
+    try {
+      const req = indexedDB.open("studienplaner-device", 1);
+      req.onupgradeneeded = () => req.result.createObjectStore("kv");
+      req.onerror = () => resolve({});
+      req.onsuccess = () => {
+        const db = req.result;
+        const get = db.transaction("kv").objectStore("kv").get("nfDev");
+        get.onsuccess = () => { db.close(); resolve(get.result || {}); };
+        get.onerror = () => { db.close(); resolve({}); };
+      };
+    } catch (_) { resolve({}); }
+  });
+}
+
 // Push vom Server: zeigt die Erinnerung an
 self.addEventListener("push", (e) => {
   let data = { title: "Studienplaner", body: "" };
   try { data = { ...data, ...e.data.json() }; } catch (_) {}
   // „Notiz schreiben“ nur bei Modul-Erinnerungen
   const actions = data.noteUrl ? [{ action: "note", title: "Notiz schreiben" }] : [];
-  e.waitUntil(self.registration.showNotification(data.title, {
-    body: data.body,
-    icon: "icon.svg",
-    badge: "icon.svg",
-    tag: data.tag || "studienplaner",
-    actions,
-    data: { url: data.url || "./", noteUrl: data.noteUrl || null },
+  e.waitUntil(readNfPrefs().then((prefs) => {
+    const options = {
+      body: data.body,
+      icon: "icon.svg",
+      badge: "icon.svg",
+      tag: data.tag || "studienplaner",
+      actions,
+      data: { url: data.url || "./", noteUrl: data.noteUrl || null },
+      silent: prefs.sound === false,
+    };
+    if (prefs.vib && VIB_PATTERN[prefs.vib] !== undefined) options.vibrate = VIB_PATTERN[prefs.vib];
+    return self.registration.showNotification(data.title, options);
   }));
 });
 
