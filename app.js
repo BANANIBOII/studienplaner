@@ -926,6 +926,7 @@ function viewDashboard() {
     <div class="date">${WEEKDAYS_LONG[(now.getDay() + 6) % 7]}, ${now.getDate()}. ${MONTHS[now.getMonth()]}</div>
     <h2>${greet.hi} ${greet.title}</h2>
     ${greet.lines.map((l) => `<p>${l}</p>`).join("")}
+    <div class="hero-stats"><span><b>${todays.length}</b> ${todays.length === 1 ? "Termin" : "Termine"} heute</span><span><b>${open.length}</b> offen diese Woche</span></div>
   </div>`;
 
   // Karten: Stundenplan heute, To-Dos, Countdown, Links. Ohne Layout-Bearbeitung wie bisher.
