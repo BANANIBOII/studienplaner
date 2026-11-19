@@ -3359,7 +3359,9 @@ function openQuickSheet() {
 
 // Schnell-Erinnerung: Text antippen, Tage oder Datum wählen, Uhrzeit wählen
 function openQuickReminder() {
-  const today = iso(new Date());
+  // Vorgabe: heute, außer die Uhrzeit (07:30) ist schon vorbei, dann morgen
+  const soon = new Date(); if (soon.getHours() * 60 + soon.getMinutes() >= 450) soon.setDate(soon.getDate() + 1);
+  const today = iso(soon);
   openModal(`<h3>Schnell-Erinnerung</h3>
     <form data-form="qkrem">
       <label class="muted">Was?</label>
