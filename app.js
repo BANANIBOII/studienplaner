@@ -3357,13 +3357,24 @@ function openQuickSheet() {
     </div>`);
 }
 
-// Schnell-Erinnerung: ein Textfeld, z. B. „Fr 7:30 Zirkel mitnehmen“ oder „Mo Mi 8 Uhr Sport“
+// Schnell-Erinnerung: Text, Tage und Uhrzeit antippen, nichts tippen müssen
 function openQuickReminder() {
   openModal(`<h3>Schnell-Erinnerung</h3>
     <form data-form="qkrem">
-      <input name="text" required autocomplete="off" placeholder="Fr 7:30 Zirkel mitnehmen" style="width:100%">
-      <p class="muted" style="font-size:13px;margin:8px 0 0">Erst der Tag (Mo, Di, Mi, Do, Fr, Sa, So, täglich, werktags, mehrere möglich), dann die Uhrzeit, dann der Text.</p>
-      <p class="qkerr" style="color:#ef4444;margin:6px 0 0;min-height:1em;font-size:14px"></p>
+      <label class="muted">Was?</label>
+      <input name="title" required autocomplete="off" placeholder="z. B. Zirkel mitnehmen" style="width:100%">
+      <label class="muted" style="display:block;margin:12px 0 6px">An welchen Tagen?</label>
+      <div class="row" style="gap:6px;flex-wrap:wrap;margin-bottom:8px">
+        <button type="button" class="btn ghost" data-act="qkday" data-v="mf">Mo–Fr</button>
+        <button type="button" class="btn ghost" data-act="qkday" data-v="all">Jeden Tag</button>
+        <button type="button" class="btn ghost" data-act="qkday" data-v="none">Keine</button>
+      </div>
+      <div class="row" style="gap:10px;flex-wrap:wrap;margin-bottom:8px">
+        ${DAY_ORDER.map((d) => `<label class="row" style="gap:4px"><input type="checkbox" name="d" value="${d}"> ${WD_SHORT[d]}</label>`).join("")}
+      </div>
+      <label class="muted" style="display:block;margin:12px 0 6px">Uhrzeit</label>
+      <input type="time" name="time" required value="07:30" style="width:auto">
+      <p class="qkerr" style="color:#ef4444;margin:8px 0 0;min-height:1em;font-size:14px"></p>
       <div class="sheet-actions">
         <span></span>
         <div class="right">
@@ -3372,29 +3383,11 @@ function openQuickReminder() {
         </div>
       </div>
     </form>`);
-  setTimeout(() => { const i = document.querySelector('[name="text"]'); if (i) i.focus(); }, 0);
 }
-const QK_DAY = {
-  mo: [1], montag: [1], di: [2], dienstag: [2], mi: [3], mittwoch: [3], do: [4], donnerstag: [4],
-  fr: [5], freitag: [5], sa: [6], samstag: [6], sonnabend: [6], so: [0], sonntag: [0],
-  "täglich": [0, 1, 2, 3, 4, 5, 6], taeglich: [0, 1, 2, 3, 4, 5, 6], werktags: [1, 2, 3, 4, 5],
-};
-// Liest „Fr 7:30 Zirkel mitnehmen“: Tage zuerst, dann Uhrzeit, Rest ist der Text
-function parseQuickReminder(text) {
-  const words = text.trim().replace(/,/g, " ").split(/\s+/).filter(Boolean);
-  const days = new Set();
-  let i = 0;
-  while (i < words.length && QK_DAY[words[i].toLowerCase()]) { QK_DAY[words[i].toLowerCase()].forEach((d) => days.add(d)); i++; }
-  if (!days.size) return { error: "Bitte zuerst den Tag schreiben, z. B. „Fr“ oder „Mo Mi“." };
-  const m = (words[i] || "").match(/^(\d{1,2})(?:[:.](\d{2}))?(?:h|uhr)?$/i);
-  if (!m) return { error: "Danach bitte die Uhrzeit schreiben, z. B. „7:30“ oder „8 Uhr“." };
-  i++;
-  if (words[i] && words[i].toLowerCase() === "uhr") i++;
-  const hh = Number(m[1]), mm = Number(m[2] || 0);
-  if (hh > 23 || mm > 59) return { error: "Diese Uhrzeit gibt es nicht." };
-  const title = words.slice(i).join(" ");
-  if (!title) return { error: "Bitte noch den Text schreiben, z. B. „Zirkel mitnehmen“." };
-  return { title, time: `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`, days: DAY_ORDER.filter((d) => days.has(d)) };
+// Schnellauswahl der Tage im Schnell-Fenster
+function quickDays(f, v) {
+  const set = v === "mf" ? [1, 2, 3, 4, 5] : v === "all" ? [0, 1, 2, 3, 4, 5, 6] : [];
+  f.querySelectorAll('input[name="d"]').forEach((x) => { x.checked = set.includes(Number(x.value)); });
 }
 
 function openSearch() {
@@ -3705,6 +3698,7 @@ document.addEventListener("click", async (e) => {
       break;
     }
     case "setback": ui.setPage = null; ui.nfOnly = null; render(); break;
+    case "qkday": { const f = document.querySelector('[data-form="qkrem"]'); if (f) quickDays(f, el.dataset.v); break; }
     case "nfvib": state.settings.nfDev = { ...(state.settings.nfDev || {}), vib: el.dataset.v }; saveDevice(); render(); break;
     case "nfopen":
       ui.nfOnly = el.dataset.k;
@@ -4113,9 +4107,10 @@ document.addEventListener("submit", async (e) => {
   }
   switch (f.dataset.form) {
     case "qkrem": {
-      const r = parseQuickReminder(data.text || "");
-      if (r.error) { const err = f.querySelector(".qkerr"); if (err) err.textContent = r.error; break; }
-      customList().push({ id: uid(), title: r.title, body: "", time: r.time, days: r.days, on: true });
+      const days = [...f.querySelectorAll('input[name="d"]:checked')].map((x) => Number(x.value));
+      const err = f.querySelector(".qkerr");
+      if (!days.length) { if (err) err.textContent = "Bitte mindestens einen Tag wählen."; break; }
+      customList().push({ id: uid(), title: (data.title || "").trim(), body: "", time: data.time, days, on: true });
       closeModal(); commit(); break;
     }
     case "cnsave": {
