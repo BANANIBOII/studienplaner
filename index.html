@@ -5,6 +5,26 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
   <title>Studienplaner</title>
   <meta name="theme-color" content="#0a1414">
+  <script>
+  // Vor dem Zeichnen: gespeichertes Farbschema sofort setzen (kein Aufblitzen in der falschen Farbe)
+  (function () {
+    try {
+      var st = (JSON.parse(localStorage.getItem("studienplaner-v1") || "null") || {}).settings || {};
+      var sys = window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches;
+      var mode = st.themeMode === "system" ? (sys ? "dark" : "light") : (st.dark === false ? "light" : "dark");
+      var defs = {
+        dark: { accent: "#2dd4bf", bg: "#0a1414", card: "#111c1d", text: "#e6f4f1" },
+        light: { accent: "#0f9d8a", bg: "#f2f7f6", card: "#ffffff", text: "#10201e" }
+      }[mode];
+      var c = Object.assign({}, defs, ((st.colors || {})[mode]) || {});
+      var r = document.documentElement;
+      r.style.setProperty("--bg", c.bg); r.style.setProperty("--card", c.card);
+      r.style.setProperty("--text", c.text); r.style.setProperty("--accent", c.accent);
+      r.style.background = c.bg; r.style.colorScheme = mode;
+      document.querySelector('meta[name="theme-color"]').setAttribute("content", c.bg);
+    } catch (_) {}
+  })();
+  </script>
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Studium">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
