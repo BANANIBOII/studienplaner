@@ -1888,7 +1888,7 @@ function viewModules() {
   if (ui.modOpen && state.modules[ui.modOpen]) return viewModuleDetail(ui.modOpen);
 
   let h = `<h2 style="margin-bottom:14px">Vorlesungs-Protokolle</h2>
-    <div class="card"><input id="modSearch" placeholder="Module und Mitschriften durchsuchen …" value="${esc(ui.modSearch)}"></div>`;
+    <div class="prot-search"><span aria-hidden="true">🔍</span><input id="modSearch" placeholder="Module und Mitschriften durchsuchen …" value="${esc(ui.modSearch)}"></div>`;
   const q = ui.modSearch.trim().toLowerCase();
   const allNames = Object.keys(state.modules).sort((a, b) => a.localeCompare(b, "de"));
 
@@ -1918,7 +1918,7 @@ function viewModules() {
   const kindOf = modKindOf;
   const kindLabel = { vl: "Vorlesungen", ueb: "Übungen", tut: "Tutorien" };
   const kindChip = (v, label) => `<button class="btn ${kf === v ? "" : "ghost"}" data-act="modkind" data-v="${v}">${label}</button>`;
-  h += `<div class="row" style="gap:6px;flex-wrap:wrap;margin-bottom:10px">${kindChip("alle", "Alle")}${kindChip("vl", "Vorlesungen")}${kindChip("ueb", "Übungen")}${kindChip("tut", "Tutorien")}</div>`;
+  h += `<div class="row chip-row" style="gap:6px;margin-bottom:10px">${kindChip("alle", "Alle")}${kindChip("vl", "Vorlesungen")}${kindChip("ueb", "Übungen")}${kindChip("tut", "Tutorien")}</div>`;
   h += `<div class="row" style="justify-content:flex-end;margin-bottom:10px"><label class="row" style="font-size:14px"><input type="checkbox" data-act="showhidden" ${ui.showHidden ? "checked" : ""}> Ausgeblendete anzeigen</label></div>`;
 
   if (!visible.length && !(ui.showHidden && hidden.length)) {

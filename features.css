@@ -1129,3 +1129,14 @@ body.tab-scrub .tab-pill { transition-duration: .12s; }
 .prof-row span { width: 24px; text-align: center; color: var(--muted); }
 .prof-row.prof-out { color: #ef4444; background: none; }
 .prof-row.prof-out span { color: #ef4444; }
+
+/* ---------- Protokolle: Suche als Pille, Filter in einer wischbaren Reihe ---------- */
+.prot-search {
+  display: flex; align-items: center; gap: 10px; margin: 0 0 14px; padding: 4px 16px;
+  border-radius: 999px; background: var(--card); border: 1px solid color-mix(in srgb, var(--line) 85%, transparent);
+}
+.prot-search span { color: var(--muted); font-size: 15px; }
+.prot-search input { flex: 1; min-width: 0; border: 0; background: transparent; padding: 12px 0; box-shadow: none; }
+.chip-row { flex-wrap: nowrap !important; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+.chip-row::-webkit-scrollbar { display: none; }
+.chip-row > * { flex: none; }
