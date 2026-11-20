@@ -1391,7 +1391,7 @@ function viewPlan() {
     const chipsHtml = dayChips ? `<div class="dchips">${dayChips}</div>` : "";
     // Aufklappbar wie in der Wochenansicht: Knopf in der Ecke, Leiste nur wenn es Aufgaben ohne Uhrzeit gibt
     const dayUntimed = todosOn(ui.dayDate).some((t) => !t.time);
-    const dayOpen = dayUntimed && ui.planTasksOpen !== false;
+    const dayOpen = dayUntimed && ui.planTasksOpen === true;
     const dayAny = untimedInRange(addDays(d, -PRELOAD), addDays(d, PRELOAD));
     const dayCorner = (dayUntimed || dayAny) ? planCornerHTML(todosOn(ui.dayDate).filter((t) => !t.time && !t.done).length, dayOpen) : "";
     const dayTop = dayOpen ? `<div class="plan-top"><div class="plan-topspacer"></div><div class="plan-stripwrap"><div class="plan-dchips">${dayChips || ""}</div></div></div>` : "";
@@ -1413,7 +1413,7 @@ function viewPlan() {
   const colsGroup = pagesGroup((k) => `<div class="plan-cols">${weekColsHTML(addDays(mon, k * 7), dayCount, today)}</div>`);
   // Aufgaben-Streifen: steht oben und wischt mit den Wochen mit (Spalte für die Zeitachse daneben)
   const hasUntimed = untimedInRange(addDays(mon, -7 * PRELOAD), addDays(mon, 7 * (PRELOAD + 1) - 1));
-  const tasksOpen = hasUntimed && ui.planTasksOpen !== false;
+  const tasksOpen = hasUntimed && ui.planTasksOpen === true;
   const weekTasks = state.todos.filter((t) => !t.done && t.date && t.date >= iso(mon) && t.date <= iso(addDays(mon, 6))).length;
   // Der Aufklapp-Knopf sitzt in der leeren Ecke über der Zeitspalte, oben stehen nur die Wochentage
   const corner = hasUntimed ? planCornerHTML(weekTasks, tasksOpen) : "";
@@ -3965,7 +3965,7 @@ document.addEventListener("click", async (e) => {
       else if (k === "set") { ui.tab = "einstellungen"; ui.setPage = key; ui.nfOnly = null; commit(); }
       break;
     }
-    case "planTasks": ui.planTasksOpen = ui.planTasksOpen === false; render(); break;
+    case "planTasks": ui.planTasksOpen = ui.planTasksOpen !== true; render(); break;
     case "planDense": ui.planDense = !ui.planDense; render(); break;
     case "mlnew": openModLinkEdit(m, null); break;
     case "mledit": openModLinkEdit(m, id); break;
