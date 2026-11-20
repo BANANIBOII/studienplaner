@@ -939,6 +939,14 @@ function shiftForDrag(dir) {
   moveDrag(drag.x, drag.y);
 }
 
+// Fortschritt des Tages: wie viele Termine schon vorbei sind
+function dayProgressHTML(todays, now) {
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  const past = todays.filter((e) => e.end != null && e.end <= nowMin).length;
+  const pct = Math.round((past / todays.length) * 100);
+  return `<div class="day-progress"><div class="dp-label"><span>${past} von ${todays.length} Terminen vorbei</span><b>${pct} %</b></div><div class="dp-bar"><div style="width:${pct}%"></div></div></div>`;
+}
+
 function viewDashboard() {
   const now = new Date();
   const today = iso(now);
@@ -953,6 +961,7 @@ function viewDashboard() {
     <h2>${greet.hi} ${greet.title}</h2>
     ${greet.lines.map((l) => `<p>${l}</p>`).join("")}
     <div class="hero-stats"><span><b>${todays.length}</b> ${todays.length === 1 ? "Termin" : "Termine"} heute</span><span><b>${open.length}</b> offen diese Woche</span></div>
+    ${todays.length ? dayProgressHTML(todays, now) : ""}
   </div>`;
 
   // Karten: Stundenplan heute, To-Dos, Countdown, Links. Ohne Layout-Bearbeitung wie bisher.
@@ -1948,7 +1957,7 @@ function viewModules() {
     const list = visible.filter((n) => kindOf(n) === k);
     if (!list.length) return "";
     return (kf === "alle" ? `<h4 style="margin-top:18px">${kindLabel[k]}</h4>` : "") +
-      laid("prot-" + k, list.map((n) => ({ id: n, w: 4, h: 3, html: cardHTML(n, false) })), `<div class="dash-grid">` + list.map((n) => cardHTML(n, false)).join("") + `</div>`);
+      laid("prot-" + k, list.map((n) => ({ id: n, w: 4, h: 3, html: cardHTML(n, false) })), `<div class="dash-grid mod-grid">` + list.map((n) => cardHTML(n, false)).join("") + `</div>`);
   }).join("") || `<div class="card muted">Keine Einträge in dieser Auswahl.</div>`;
   if (ui.showHidden && hidden.length) {
     h += `<h4 style="margin-top:18px">Ausgeblendet (keine Termine im Stundenplan)</h4><div class="dash-grid">` +

@@ -1227,3 +1227,26 @@ body.tab-scrub .tab-pill { transition-duration: .12s; }
   background: color-mix(in srgb, var(--mc, var(--accent)) 16%, var(--card));
   transition: transform .12s ease, background .25s ease;
 }
+
+/* ---------- 3: Tagesfortschritt im Kopf des Dashboards ---------- */
+.day-progress { margin-top: 14px; }
+.dp-label { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+.dp-label b { color: var(--accent); }
+.dp-bar { height: 8px; border-radius: 999px; background: color-mix(in srgb, var(--card) 60%, var(--line)); overflow: hidden; }
+.dp-bar > div { height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 60%, #fff)); transition: width .6s ease; }
+
+/* ---------- 5: Leere Zustände: ruhige Fläche mit Symbol-Kreis ---------- */
+.empty { border-radius: 16px; background: color-mix(in srgb, var(--accent) 6%, transparent); padding: 20px 14px; }
+.empty .ei {
+  width: 46px; height: 46px; margin: 0 auto 8px; border-radius: 50%; display: grid; place-items: center;
+  background: color-mix(in srgb, var(--accent) 14%, var(--card)); font-size: 22px; opacity: 1;
+}
+
+/* ---------- 6: Protokolle am Handy: zwei Spalten ---------- */
+@media (max-width: 480px) {
+  .mod-grid { display: grid !important; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .mod-grid > .modcard { margin-bottom: 0 !important; padding: 14px; }
+  .mod-grid .mod-name { font-size: 15px; display: block; }
+  .mod-grid .modcard .muted { font-size: 12px; line-height: 1.35; }
+  .mod-grid .menu-btn { display: none; }
+}
