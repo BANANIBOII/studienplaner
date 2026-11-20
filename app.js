@@ -9,6 +9,7 @@ const ICON = {
   up: ICON_SVG('<path d="M6 14l6-6 6 6"/>', "ico ico-sm"),
   down: ICON_SVG('<path d="M6 10l6 6 6-6"/>', "ico ico-sm"),
   next: ICON_SVG('<path d="M9 6l6 6-6 6"/>', "ico ico-sm"),
+  back: ICON_SVG('<path d="M15 6l-6 6 6 6"/>'),
   reload: ICON_SVG('<path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/>'),
   external: ICON_SVG('<path d="M14 4h6v6"/><path d="M20 4l-9 9"/><path d="M19 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5"/>', "ico ico-sm"),
   undo: ICON_SVG('<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>'),
@@ -2082,7 +2083,7 @@ function viewModuleDetail(name) {
   const loose = m.notes.filter((x) => !x.topicId).sort(byDateDesc);
   return `<div class="mod-head">
       <div class="row">
-        <button class="btn ghost" data-act="mback">‹</button>
+        <button class="btn ghost back-btn" data-act="mback" title="Zurück">${ICON.back}</button>
         <div class="grow"><div class="mod-title" style="color:${m.color}">${esc(name)}</div>
           <div class="muted">${done} von ${total} Themen fertig</div></div>
         <button class="btn ghost menu-btn" data-act="mmenu" data-m="${n}" title="Optionen">${ICON.more}</button>
@@ -2126,7 +2127,7 @@ function viewTopicDetail(name, tid) {
   const complete = topicComplete(m, t);
   return `<div class="mod-head">
       <div class="row">
-        <button class="btn ghost" data-act="tback">‹</button>
+        <button class="btn ghost back-btn" data-act="tback" title="Zurück">${ICON.back}</button>
         <div class="grow"><div class="mod-title">${esc(t.title)}</div><div class="muted">${esc(name)}</div></div>
         ${complete ? `<span class="pct" style="background:${m.color};color:${textOn(m.color)}">${ICON.check} 100 %</span>` : ""}
         <button class="btn ghost" data-act="ttitle" data-id="${t.id}" data-m="${n}" title="Umbenennen">${ICON.edit}</button>

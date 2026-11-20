@@ -1171,3 +1171,30 @@ body.tab-scrub .tab-pill { transition-duration: .12s; }
 /* ---------- Symbole (eigene Linien-Zeichnungen) ---------- */
 .ico { display: inline-block; vertical-align: -3px; flex: none; }
 .ico-sm { width: 14px !important; height: 14px !important; vertical-align: -2px; }
+
+/* ---------- Protokoll-Detail: Kopf und Themen wie die anderen Karten ---------- */
+.mod-head {
+  margin-bottom: 14px; padding: 16px 16px 14px; border-radius: 20px;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 14%, var(--card)), var(--card));
+  border: 1px solid var(--line); box-shadow: 0 6px 24px rgba(0, 0, 0, .18);
+}
+.mod-head .progress { height: 8px; margin: 12px 0 0; }
+.mod-title { font-size: 21px; line-height: 1.2; }
+.mod-head .muted { font-size: 13px; margin-top: 2px; }
+.topic-card {
+  padding: 14px 14px; margin-bottom: 10px; border-radius: 16px;
+  background: color-mix(in srgb, var(--card) 70%, var(--bg)); border: 1px solid var(--line);
+  transition: transform .15s ease, border-color .2s ease, background .2s ease;
+}
+.topic-card:active { transform: scale(.985); }
+.topic-card:hover { border-color: var(--accent); }
+.topic-card b { font-size: 15px; }
+.topic-card .chev { width: 24px; height: 24px; display: grid; place-items: center; border-radius: 50%; background: var(--line); font-size: 16px; line-height: 1; }
+.pct { display: inline-flex; align-items: center; gap: 4px; }
+.pct .ico { width: 12px; height: 12px; }
+.mod-head .btn.ghost, .mod-head .menu-btn { border-radius: 999px; }
+@media (max-width: 480px) {
+  .mod-head { padding: 14px 14px 12px; border-radius: 18px; }
+  .topic-card { padding: 12px; }
+}
+.back-btn { width: 40px; height: 40px; padding: 0; display: inline-grid; place-items: center; border-radius: 50%; flex: none; }
