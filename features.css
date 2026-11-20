@@ -1206,3 +1206,24 @@ body.tab-scrub .tab-pill { transition-duration: .12s; }
   .axis-h { font-size: 10px; letter-spacing: -0.01em; }
   .axis-h.half { font-size: 9px; }
 }
+
+/* ---------- Dashboard: Karten mit leichtem Glas-Effekt ---------- */
+.dash-main .card {
+  background: color-mix(in srgb, var(--card) 80%, transparent);
+  -webkit-backdrop-filter: blur(12px) saturate(1.15);
+  backdrop-filter: blur(12px) saturate(1.15);
+}
+
+/* ---------- Rückmeldung beim Antippen: Karten und Knöpfe werden kurz kleiner ---------- */
+.card[data-act]:active, .listrow[data-act]:active, .topic-card:active, .modcard:active {
+  transform: scale(.975);
+  transition: transform .12s ease;
+}
+.btn:active { transform: scale(.96); transition: transform .1s ease; }
+.tabbar button:active .ic { transform: scale(.9); }
+
+/* ---------- Modulkarte: kurz in der Modulfarbe aufleuchten ---------- */
+.modcard:active {
+  background: color-mix(in srgb, var(--mc, var(--accent)) 16%, var(--card));
+  transition: transform .12s ease, background .25s ease;
+}
