@@ -1,5 +1,5 @@
 // Offline-Unterstützung: lädt immer aus dem Netz, nutzt den Cache nur wenn offline.
-const CACHE = "studienplaner-v22";
+const CACHE = "studienplaner-v23";
 const FILES = ["./", "index.html", "styles.css", "features.css", "app.js", "config.js", "manifest.json", "icon.svg"];
 
 self.addEventListener("install", (e) => {
@@ -13,19 +13,25 @@ self.addEventListener("activate", (e) => {
 // Vibration und Ton pro Gerät: die App legt die Einstellung in IndexedDB ab (localStorage kann der Service Worker nicht lesen)
 const VIB_PATTERN = { kurz: [200], lang: [500, 200, 500, 200, 500], aus: [] };
 function readNfPrefs() {
-  return new Promise((resolve) => {
+  // Mit Zeitlimit: wenn IndexedDB nicht antwortet, wird die Erinnerung trotzdem angezeigt (ohne Einstellungen)
+  const read = new Promise((resolve) => {
     try {
       const req = indexedDB.open("studienplaner-device", 1);
       req.onupgradeneeded = () => req.result.createObjectStore("kv");
       req.onerror = () => resolve({});
+      req.onblocked = () => resolve({});
       req.onsuccess = () => {
         const db = req.result;
-        const get = db.transaction("kv").objectStore("kv").get("nfDev");
-        get.onsuccess = () => { db.close(); resolve(get.result || {}); };
-        get.onerror = () => { db.close(); resolve({}); };
+        try {
+          const get = db.transaction("kv").objectStore("kv").get("nfDev");
+          get.onsuccess = () => { db.close(); resolve(get.result || {}); };
+          get.onerror = () => { db.close(); resolve({}); };
+        } catch (_) { db.close(); resolve({}); }
       };
     } catch (_) { resolve({}); }
   });
+  const limit = new Promise((resolve) => setTimeout(() => resolve({}), 1500));
+  return Promise.race([read, limit]);
 }
 
 // Push vom Server: zeigt die Erinnerung an
