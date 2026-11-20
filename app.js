@@ -3849,8 +3849,8 @@ document.addEventListener("click", async (e) => {
       break;
     }
     case "setback": ui.setPage = null; ui.nfOnly = null; render(); break;
-    case "qkkind": { const f = document.querySelector('[data-form="qkrem"]'); if (f) quickKind(f, el.dataset.v); break; }
-    case "qkday": { const f = document.querySelector('[data-form="qkrem"]'); if (f) quickDays(f, el.dataset.v); break; }
+    case "qkkind": { const f = el.closest("form"); if (f) quickKind(f, el.dataset.v); break; }
+    case "qkday": { const f = el.closest("form"); if (f) quickDays(f, el.dataset.v); break; }
     case "nfvib": state.settings.nfDev = { ...(state.settings.nfDev || {}), vib: el.dataset.v }; saveDevice(); render(); break;
     case "nfopen":
       ui.nfOnly = el.dataset.k;
@@ -4274,12 +4274,19 @@ document.addEventListener("submit", async (e) => {
       closeModal(); commit(); break;
     }
     case "cnsave": {
-      const days = [...f.querySelectorAll('input[name="d"]:checked')].map((x) => Number(x.value));
-      if (!days.length) { appAlert("Bitte mindestens einen Tag wählen."); break; }
       const list = customList();
       const old = f.dataset.id ? list.find((x) => x.id === f.dataset.id) : null;
-      const item = { id: old ? old.id : uid(), title: (data.title || "").trim(), body: (data.body || "").trim(), time: data.time, days, on: old ? old.on : true };
-      if (old) Object.assign(old, item); else list.push(item);
+      const base = { id: old ? old.id : uid(), title: (data.title || "").trim(), body: (data.body || "").trim(), time: data.time, on: old ? old.on : true };
+      let item;
+      if (data.kind === "once") {
+        if (!data.date) { appAlert("Bitte ein Datum wählen."); break; }
+        item = { ...base, days: [], date: data.date };
+      } else {
+        const days = [...f.querySelectorAll('input[name="d"]:checked')].map((x) => Number(x.value));
+        if (!days.length) { appAlert("Bitte mindestens einen Tag wählen."); break; }
+        item = { ...base, days };
+      }
+      if (old) { delete old.date; Object.assign(old, item); } else list.push(item);
       closeModal(); commit(); break;
     }
     case "modlink": {
@@ -4924,19 +4931,36 @@ function customNotifyHTML() {
 // Fenster für eine feste Erinnerung (neu oder bearbeiten)
 function openCustomEdit(id) {
   const c = id ? customList().find((x) => x.id === id) : null;
+  const once = !!(c && c.date);
   const v = c || { title: "", body: "", time: "07:30", days: [1, 2, 3, 4, 5] };
+  const today = iso(new Date());
   openModal(`<h3>${c ? "Erinnerung bearbeiten" : "Neue Erinnerung"}</h3>
     <form data-form="cnsave" data-id="${c ? c.id : ""}">
       <label class="muted">Titel</label>
       <input name="title" required value="${esc(v.title)}" placeholder="z. B. Losgehen">
       <label class="muted">Text (optional)</label>
       <textarea name="body" rows="2" placeholder="z. B. Bus 7:52 ab Haltestelle">${esc(v.body || "")}</textarea>
-      <label class="muted">Uhrzeit</label>
-      <input type="time" name="time" required value="${v.time}">
-      <label class="muted">Tage</label>
-      <div class="row" style="gap:10px;flex-wrap:wrap;margin-bottom:8px">
-        ${DAY_ORDER.map((d) => `<label class="row" style="gap:4px"><input type="checkbox" name="d" value="${d}" ${v.days.includes(d) ? "checked" : ""}> ${WD_SHORT[d]}</label>`).join("")}
+      <label class="muted" style="display:block;margin:12px 0 6px">Wie oft?</label>
+      <div class="row" style="gap:6px;flex-wrap:wrap;margin-bottom:8px">
+        <button type="button" class="btn ${once ? "" : "ghost"}" data-act="qkkind" data-v="once">Einmal</button>
+        <button type="button" class="btn ${once ? "ghost" : ""}" data-act="qkkind" data-v="weekly">Jede Woche</button>
       </div>
+      <input type="hidden" name="kind" value="${once ? "once" : "weekly"}">
+      <div data-qk="once" ${once ? "" : "hidden"}>
+        <label class="muted" style="display:block;margin:8px 0 6px">Datum</label>
+        <input type="date" name="date" value="${once ? c.date : today}" style="width:auto">
+      </div>
+      <div data-qk="weekly" ${once ? "hidden" : ""}>
+        <div class="row" style="gap:6px;flex-wrap:wrap;margin-bottom:8px">
+          <button type="button" class="btn ghost" data-act="qkday" data-v="mf">Mo–Fr</button>
+          <button type="button" class="btn ghost" data-act="qkday" data-v="all">Jeden Tag</button>
+        </div>
+        <div class="row" style="gap:10px;flex-wrap:wrap;margin-bottom:8px">
+          ${DAY_ORDER.map((d) => `<label class="row" style="gap:4px"><input type="checkbox" name="d" value="${d}" ${!once && v.days.includes(d) ? "checked" : ""}> ${WD_SHORT[d]}</label>`).join("")}
+        </div>
+      </div>
+      <label class="muted" style="display:block;margin:12px 0 6px">Uhrzeit</label>
+      <input type="time" name="time" required value="${v.time}" style="width:auto">
       <div class="sheet-actions">
         ${c ? `<button type="button" class="danger-text" data-act="cndel" data-id="${c.id}">Löschen</button>` : "<span></span>"}
         <div class="right">
