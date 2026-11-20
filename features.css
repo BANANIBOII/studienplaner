@@ -1250,3 +1250,46 @@ body.tab-scrub .tab-pill { transition-duration: .12s; }
   .mod-grid .modcard .muted { font-size: 12px; line-height: 1.35; }
   .mod-grid .menu-btn { display: none; }
 }
+
+/* ---------- Schalter: Glas oder Material 3 (nur dieses Gerät) ---------- */
+.look-toggle { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 4px; border-radius: 14px; background: color-mix(in srgb, var(--text) 6%, transparent); }
+.look-opt { border: 0; background: transparent; color: var(--muted); font: inherit; font-weight: 700; font-size: 14px; padding: 9px 10px; border-radius: 10px; cursor: pointer; transition: background .2s ease, color .2s ease; }
+.look-opt.on { background: var(--accent); color: var(--bg); box-shadow: 0 4px 14px color-mix(in srgb, var(--accent) 35%, transparent); }
+
+/* ---------- Glas-Look: mehr Tiefe, sichtbarer Hintergrund hinter den Karten ---------- */
+body:not(.look-m3) {
+  background:
+    radial-gradient(circle at 12% 0%, color-mix(in srgb, var(--accent) 22%, transparent), transparent 42%),
+    radial-gradient(circle at 92% 100%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 46%),
+    var(--bg);
+  background-attachment: fixed;
+}
+body:not(.look-m3) .card {
+  background: color-mix(in srgb, var(--card) 66%, transparent);
+  -webkit-backdrop-filter: blur(16px) saturate(1.4); backdrop-filter: blur(16px) saturate(1.4);
+  border: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .22), inset 0 1px 0 color-mix(in srgb, var(--text) 7%, transparent);
+}
+body:not(.look-m3) .topic-card, body:not(.look-m3) .listrow {
+  background: color-mix(in srgb, var(--card) 50%, transparent);
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+}
+
+/* ---------- Material 3: ruhige, deckende Flächen ohne Unschärfe ---------- */
+body.look-m3 .card, body.look-m3 .tabbar, body.look-m3 .modal .sheet {
+  background: var(--card) !important;
+  -webkit-backdrop-filter: none !important; backdrop-filter: none !important;
+  border: 0 !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .2), 0 2px 6px rgba(0, 0, 0, .12) !important;
+}
+body.look-m3 .modal { background: rgba(0, 0, 0, .35) !important; -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+body.look-m3 .topic-card, body.look-m3 .listrow { background: var(--bg) !important; -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+body.look-m3 .card { border-radius: 24px !important; }
+body.look-m3 .btn, body.look-m3 .profile-btn { border-radius: 999px; }
+
+/* ---------- Profilbild: wirklich rund ---------- */
+.profile-btn, .topbar .profile-btn {
+  width: 36px !important; height: 36px !important; min-width: 36px; min-height: 36px;
+  aspect-ratio: 1 / 1; box-sizing: border-box; border-radius: 50% !important; padding: 0 !important; line-height: 1;
+}
+.profile-init { display: block; line-height: 1; }

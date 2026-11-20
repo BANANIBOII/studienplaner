@@ -113,7 +113,7 @@ const PLAN_DEFAULTS = { grid: "", now: "", todo: "#60a5fa", abgabe: "#f59e0b", k
 const DEVICE_LS = "studienplaner-device-v1";
 const DEVICE_DEFAULTS = {
   dark: true, weekend: false, scrollbars: true, colors: { dark: {}, light: {} },
-  themeMode: "", fontScale: 100, startTab: "dashboard",
+  themeMode: "", fontScale: 100, startTab: "dashboard", look: "glass",
   zoomY: 1, autoRange: false, dayStart: 7, dayEnd: 20, planStep: 30, planLines: false,
   dash: { zoomY: 1, grid: "", now: "" },
   planLook: { grid: "", now: "" },
@@ -186,8 +186,10 @@ function activeDesignName() {
 // Karte in den Einstellungen: zeigt das aktuelle Design und öffnet die Auswahl
 function viewDesignCard() {
   const c = themeColors();
+  const lookSel = (v, label) => `<button class="look-opt${(state.settings.look === "m3") === (v === "m3") ? " on" : ""}" data-act="looksel" data-v="${v}">${label}</button>`;
   return `<div class="card"><h3>Design</h3>
-    <div class="row" style="justify-content:space-between;gap:12px">
+    <div class="look-toggle">${lookSel("glass", "Glas")}${lookSel("m3", "Material 3")}</div>
+    <div class="row" style="justify-content:space-between;gap:12px;margin-top:12px">
       <div class="grow"><b>${esc(activeDesignName())}</b><div class="muted">Gilt nur für dieses Gerät</div></div>
       <div class="dprev-mini" style="background:${c.bg}"><span style="background:${c.card}"></span><i style="background:${c.accent}"></i></div>
     </div>
@@ -328,7 +330,7 @@ function applyDevice(settings) {
 function deviceFromSettings(s) {
   return {
     dark: s.dark, weekend: s.weekend, colors: s.colors, zoomY: s.zoomY, autoRange: s.autoRange,
-    dayStart: s.dayStart, dayEnd: s.dayEnd, planStep: s.planStep || 30, planLines: !!s.planLines, dash: s.dash, navSide: s.navSide || "", checkSide: s.checkSide || "left", scrollbars: s.scrollbars !== false, themeMode: s.themeMode || "", fontScale: s.fontScale || 100, startTab: s.startTab || "dashboard", layouts: s.layouts || {}, cal: s.cal || DEVICE_DEFAULTS.cal, nfDev: { ...DEVICE_DEFAULTS.nfDev, ...(s.nfDev || {}) },
+    dayStart: s.dayStart, dayEnd: s.dayEnd, planStep: s.planStep || 30, planLines: !!s.planLines, dash: s.dash, navSide: s.navSide || "", checkSide: s.checkSide || "left", scrollbars: s.scrollbars !== false, themeMode: s.themeMode || "", fontScale: s.fontScale || 100, startTab: s.startTab || "dashboard", look: s.look || "glass", layouts: s.layouts || {}, cal: s.cal || DEVICE_DEFAULTS.cal, nfDev: { ...DEVICE_DEFAULTS.nfDev, ...(s.nfDev || {}) },
     planLook: { grid: (s.plan && s.plan.grid) || "", now: (s.plan && s.plan.now) || "" },
   };
 }
@@ -629,6 +631,7 @@ function applyTheme() {
   // Farbe der Statusleiste am Handy an den aktuellen Hintergrund anpassen
   const tc = document.querySelector('meta[name="theme-color"]');
   if (tc) tc.setAttribute("content", currentMode() === "dark" ? "#0a1414" : "#eef2f7");
+  document.body.classList.toggle("look-m3", state.settings.look === "m3");
   document.body.classList.toggle("nav-left", state.settings.navSide === "left");
   document.body.classList.toggle("nav-bottom", state.settings.navSide === "bottom");
   document.body.classList.toggle("check-right", state.settings.checkSide === "right");
@@ -3878,6 +3881,7 @@ document.addEventListener("click", async (e) => {
     case "setback": ui.setPage = null; ui.nfOnly = null; render(); break;
     case "qkkind": { const f = el.closest("form"); if (f) quickKind(f, el.dataset.v); break; }
     case "qkday": { const f = el.closest("form"); if (f) quickDays(f, el.dataset.v); break; }
+    case "looksel": state.settings.look = el.dataset.v; saveDevice(); render(); break;
     case "nfvib": state.settings.nfDev = { ...(state.settings.nfDev || {}), vib: el.dataset.v }; saveDevice(); render(); break;
     case "nfopen":
       ui.nfOnly = el.dataset.k;
