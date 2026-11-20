@@ -1070,3 +1070,25 @@ body.tab-scrub .tab-pill { transition-duration: .12s; }
   .hero { padding: 20px; }
   .hero h2 { font-size: 22px; line-height: 1.2; }
 }
+
+/* ---------- Countdown: drei Spalten nebeneinander ---------- */
+.cd-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.cd-col {
+  min-width: 0; display: flex; flex-direction: column; gap: 6px; padding: 10px;
+  border-radius: 14px; background: color-mix(in srgb, var(--c) 9%, transparent);
+  border: 1px solid color-mix(in srgb, var(--c) 28%, transparent);
+}
+.cd-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: var(--c); }
+.cd-item {
+  display: flex; flex-direction: column; gap: 2px; min-width: 0; padding: 6px 0; text-align: left;
+  background: none; border: 0; color: inherit; font: inherit; cursor: pointer; border-top: 1px solid color-mix(in srgb, var(--c) 18%, transparent);
+}
+.cd-item:first-of-type { border-top: 0; }
+.cd-item b { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.cd-item span { font-size: 12px; font-weight: 700; }
+.cd-none { font-size: 12px; padding: 4px 0; }
+@media (max-width: 480px) {
+  .cd-grid { gap: 8px; }
+  .cd-col { padding: 8px; }
+  .cd-item b { font-size: 12px; }
+}

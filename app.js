@@ -1090,19 +1090,16 @@ function countdownBlock() {
   const today = iso(new Date());
   const groups = [["todo", "To-Dos"], ["abgabe", "Abgaben"], ["klausur", "Klausuren"]];
   const sortFn = (a, b) => (a.date || "9999").localeCompare(b.date || "9999");
-  return `<div class="card"><h3>Countdown</h3>${groups.map(([type, label]) => {
+  // Drei Spalten nebeneinander (je Art die nächsten drei). Tippen öffnet den Eintrag, Gedrückthalten wie überall.
+  return `<div class="card"><h3>Countdown</h3><div class="cd-grid">${groups.map(([type, label]) => {
     const items = state.todos
       .filter((t) => t.type === type && !t.done && (!t.date || t.date >= today))
       .sort(sortFn).slice(0, 3);
-    return `<h4 style="color:${catColor(type)}">${label}</h4>` + (items.length
-      ? items.map((t) => `<div class="listrow" data-lp="${t.id}" data-act="todoopen" data-id="${t.id}">
-          <span class="pdot" style="background:${catColor(type)}"></span>
-          <div class="grow"><b>${esc(t.title)}</b><div class="muted">${t.date ? dateText(t) + (t.time ? " · " + esc(t.time) : "") : "Termin folgt"}</div></div>
-          <div style="font-weight:700;white-space:nowrap;color:${dueColor(t.date, type)}">${t.date ? countdownText(t.date) : "–"}</div>
-          <span class="prio ${t.priority || "mittel"}">${t.priority || "mittel"}</span>
-          <button class="btn ghost" data-act="tedit" data-id="${t.id}" title="Bearbeiten">✎</button></div>`).join("")
-      : `<div class="muted">Keine.</div>`);
-  }).join("")}</div>`;
+    return `<div class="cd-col" style="--c:${catColor(type)}"><div class="cd-label">${label}</div>${items.length
+      ? items.map((t) => `<button class="cd-item" data-lp="${t.id}" data-act="todoopen" data-id="${t.id}">
+          <b>${esc(t.title)}</b><span style="color:${dueColor(t.date, type)}">${t.date ? countdownText(t.date) : "Termin folgt"}</span></button>`).join("")
+      : `<div class="muted cd-none">Keine</div>`}</div>`;
+  }).join("")}</div></div>`;
 }
 
 function todoItem(t) {
