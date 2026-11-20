@@ -1106,3 +1106,26 @@ body.tab-scrub .tab-pill { transition-duration: .12s; }
   /* Der große Seitentitel steht jetzt oben in der Kopfzeile, deshalb hier nicht noch einmal */
   #app > h2:first-child { display: none; }
 }
+
+/* ---------- Profil-Knopf und Profil-Fenster (Kopfzeile, Handy) ---------- */
+.profile-btn {
+  width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--line); flex: none;
+  background: var(--accent-soft); color: var(--accent); font: inherit; font-weight: 700; font-size: 15px;
+  display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0;
+}
+.profile-btn:active { transform: scale(.92); }
+.topbar { gap: 12px; }
+.prof-head { display: flex; align-items: center; gap: 14px; padding: 4px 0 14px; }
+.prof-head b { font-size: 16px; word-break: break-all; }
+.prof-av {
+  width: 52px; height: 52px; border-radius: 50%; flex: none; display: flex; align-items: center; justify-content: center;
+  background: var(--accent); color: #0b1220; font-weight: 800; font-size: 20px;
+}
+.prof-list { border-top: 1px solid var(--line); margin-top: 4px; }
+.prof-row {
+  display: flex; align-items: center; gap: 14px; width: 100%; padding: 15px 4px; background: none; border: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 70%, transparent); color: inherit; font: inherit; font-size: 16px; text-align: left; cursor: pointer;
+}
+.prof-row span { width: 24px; text-align: center; color: var(--muted); }
+.prof-row.danger { color: #ef4444; }
+.prof-row.danger span { color: #ef4444; }

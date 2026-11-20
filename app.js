@@ -754,6 +754,8 @@ function render() {
     const sub = ui.tab === "einstellungen" && ui.setPage && SETTINGS_LIST.find((x) => x.k === ui.setPage);
     headEl.textContent = ui.tab === "protokolle" && ui.modOpen ? ui.modOpen : sub ? sub.t : (TAB_NAMES[ui.tab] || "Studienplaner");
   }
+  const initEl = document.querySelector(".profile-init");
+  if (initEl) initEl.textContent = session && session.user && session.user.email ? session.user.email.charAt(0).toUpperCase() : "S";
   syncPlanFab();
   syncLayFab();
   syncTabBadge();
@@ -3347,6 +3349,23 @@ document.addEventListener("wheel", (e) => {
 let lastDayTap = { d: "", t: 0 };
 let lastTabTap = { k: "", t: 0 };
 
+// Profil-Fenster oben rechts: Konto, Sync-Status und Schnellzugriffe
+function openProfileSheet() {
+  const email = session && session.user ? session.user.email : "";
+  const sync = (document.querySelector(".syncStatus") || {}).textContent || "";
+  openModal(`<div class="prof-head">
+      <div class="prof-av">${esc(email ? email.charAt(0).toUpperCase() : "S")}</div>
+      <div><b>${email ? esc(email) : "Nur auf diesem Gerät"}</b><div class="muted">${esc(sync || (email ? "Synchronisiert" : "Lokal gespeichert"))}</div></div>
+    </div>
+    <div class="prof-list">
+      <button class="prof-row" data-act="profgo" data-v="einstellungen"><span>⚙️</span>Einstellungen</button>
+      <button class="prof-row" data-act="profgo" data-v="undo"><span>↶</span>Rückgängig</button>
+      <button class="prof-row" data-act="profgo" data-v="redo"><span>↷</span>Wiederholen</button>
+      <button class="prof-row" data-act="profgo" data-v="layout"><span>▦</span>Layout bearbeiten</button>
+      ${email ? `<button class="prof-row danger" data-act="profgo" data-v="logout"><span>⎋</span>Abmelden</button>` : ""}
+    </div>`);
+}
+
 // Gleitende Markierung unter dem aktiven Reiter (untere Leiste)
 function placeTabPill() {
   const pill = document.querySelector(".tab-pill");
@@ -3601,6 +3620,17 @@ document.addEventListener("click", async (e) => {
     case "confno": closeModal(); break;
     case "mclose": closeModal(); break;
     case "undo": undo(); break;
+    case "profile": openProfileSheet(); break;
+    case "profgo": {
+      const v = el.dataset.v;
+      closeModal();
+      if (v === "einstellungen") { ui.tab = "einstellungen"; ui.setPage = null; ui.nfOnly = null; render(); window.scrollTo(0, 0); }
+      else if (v === "layout") { ui.layEdit = true; setLayFabOn(); render(); }
+      else if (v === "undo") undo();
+      else if (v === "redo") redo();
+      else if (v === "logout") cloudSignOut();
+      break;
+    }
     case "rueckblick": openRueckblick(); break;
     case "rueckrange": ui.rueckRange = el.dataset.v; openRueckblick(); break;
     case "calsfreset": ui.calFrom = ui.calTo = ui.calType = ui.calMod = ui.calSearch = ""; render(); break;
