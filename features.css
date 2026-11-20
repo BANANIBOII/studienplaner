@@ -1140,3 +1140,19 @@ body.tab-scrub .tab-pill { transition-duration: .12s; }
 .chip-row { flex-wrap: nowrap !important; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
 .chip-row::-webkit-scrollbar { display: none; }
 .chip-row > * { flex: none; }
+
+/* ---------- Glas-Look: Fenster und Profil-Fenster ---------- */
+.modal {
+  background: rgba(3, 8, 10, .42);
+  -webkit-backdrop-filter: blur(10px) saturate(1.2); backdrop-filter: blur(10px) saturate(1.2);
+}
+.modal .sheet {
+  background: color-mix(in srgb, var(--card) 80%, transparent);
+  -webkit-backdrop-filter: blur(22px) saturate(1.6); backdrop-filter: blur(22px) saturate(1.6);
+  border: 1px solid color-mix(in srgb, var(--text) 9%, transparent);
+  box-shadow: 0 -12px 44px rgba(0, 0, 0, .35), inset 0 1px 0 color-mix(in srgb, var(--text) 8%, transparent);
+}
+.modal .sheet .prof-list { border-top-color: color-mix(in srgb, var(--text) 10%, transparent); }
+@media (prefers-reduced-motion: reduce) {
+  .modal, .modal .sheet { -webkit-backdrop-filter: none; backdrop-filter: none; }
+}
