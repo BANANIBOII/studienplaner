@@ -1,3 +1,20 @@
+// Eigene Linien-Symbole (ersetzen Zeichen wie ✎ ⋮ ✕, die manche Handys als leeres Kästchen zeigen)
+const ICON_SVG = (d, cls = "ico") => `<svg class="${cls}" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+const ICON = {
+  edit: ICON_SVG('<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>'),
+  more: ICON_SVG('<circle cx="12" cy="5" r="1.4" fill="currentColor"/><circle cx="12" cy="12" r="1.4" fill="currentColor"/><circle cx="12" cy="19" r="1.4" fill="currentColor"/>'),
+  x: ICON_SVG('<path d="M6 6l12 12M18 6 6 18"/>'),
+  check: ICON_SVG('<path d="M5 12.5l4.2 4.2L19 7"/>'),
+  layout: ICON_SVG('<rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/>'),
+  up: ICON_SVG('<path d="M6 14l6-6 6 6"/>', "ico ico-sm"),
+  down: ICON_SVG('<path d="M6 10l6 6 6-6"/>', "ico ico-sm"),
+  next: ICON_SVG('<path d="M9 6l6 6-6 6"/>', "ico ico-sm"),
+  reload: ICON_SVG('<path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/>'),
+  external: ICON_SVG('<path d="M14 4h6v6"/><path d="M20 4l-9 9"/><path d="M19 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5"/>', "ico ico-sm"),
+  undo: ICON_SVG('<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>'),
+  redo: ICON_SVG('<path d="M15 14l5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/>'),
+  swap: ICON_SVG('<path d="M7 4 3 8l4 4"/><path d="M3 8h14"/><path d="M17 20l4-4-4-4"/><path d="M21 16H7"/>'),
+};
 // Fehleranzeige auf dem Bildschirm (hilft, Fehler am Handy zu finden). Tippen schließt sie.
 function showJsError(msg, file = "", line = "") {
   try {
@@ -208,13 +225,13 @@ function openDesignModal() {
 // Eigene Karten im Dashboard (Verknüpfungen, Notizen)
 // Meine Karten: jede Karte steht für sich (keine Rahmenkarte mehr), damit sie im Layout frei beweglich ist
 function linkItemHTML(c) {
-  const inner = `<b>${esc(c.title)}</b>${c.note ? `<span class="muted">${esc(c.note)}</span>` : ""}${c.url ? `<span class="muted" style="font-size:12px">↗ ${esc(c.url.replace(/^https?:\/\//, ""))}</span>` : ""}`;
+  const inner = `<b>${esc(c.title)}</b>${c.note ? `<span class="muted">${esc(c.note)}</span>` : ""}${c.url ? `<span class="muted" style="font-size:12px">${ICON.external} ${esc(c.url.replace(/^https?:\/\//, ""))}</span>` : ""}`;
   const main = c.url
     ? `<a class="linkmain" href="${esc(c.url)}" target="_blank" rel="noopener">${inner}</a>`
     : `<div class="linkmain">${inner}</div>`;
   return `<div class="linkcard" style="border-color:${c.color || "var(--accent)"}">
     ${main}
-    <div class="row" style="gap:4px;justify-content:flex-end"><button class="btn ghost" data-act="cardedit" data-id="${c.id}">✎</button></div>
+    <div class="row" style="gap:4px;justify-content:flex-end"><button class="btn ghost" data-act="cardedit" data-id="${c.id}">${ICON.edit}</button></div>
   </div>`;
 }
 // Ohne Bearbeitungsmodus: einfache Reihe der Karten
@@ -834,7 +851,7 @@ function dashDayButton(now) {
   const nowMin = now.getHours() * 60 + now.getMinutes();
   const remaining = state.events.some((e) => e.date === iso(now) && e.end > nowMin);
   if (remaining) return "";
-  return `<div class="row" style="margin-top:10px"><button class="btn ghost" data-act="dashnext">Nächster Tag: ${WEEKDAYS_LONG[(nextWorkday(now).getDay() + 6) % 7]} ▸</button></div>`;
+  return `<div class="row" style="margin-top:10px"><button class="btn ghost" data-act="dashnext">Nächster Tag: ${WEEKDAYS_LONG[(nextWorkday(now).getDay() + 6) % 7]} ${ICON.next}</button></div>`;
 }
 
 // ---------- Suche ----------
@@ -940,7 +957,7 @@ function viewDashboard() {
   // Karten: Stundenplan heute, To-Dos, Countdown, Links. Ohne Layout-Bearbeitung wie bisher.
   const planCard = `<div class="card">
       <div class="row" style="justify-content:space-between"><h3 style="margin:0">${iso(dashDay(now)) === iso(now) ? "Heute im Stundenplan" : "Stundenplan"}</h3>
-        <button class="btn ghost menu-btn" data-act="dashmenu" title="Einstellungen">⋮</button></div>
+        <button class="btn ghost menu-btn" data-act="dashmenu" title="Einstellungen">${ICON.more}</button></div>
       ${todayPlanHTML()}
       ${dashDayButton(now)}
       ${quickNoteHTML()}
@@ -1060,7 +1077,7 @@ function notePanelHTML(name, date) {
     <div class="row" style="justify-content:space-between;align-items:flex-start">
       <div class="grow"><b style="font-size:15px">${esc(name)}</b><div class="muted">${fmtD(parseIso(date))}</div></div>
       <button class="btn ghost" data-act="gotoprot" data-m="${enc(name)}">Protokoll →</button>
-      <button class="btn ghost" data-act="npclose" title="Schließen">✕</button>
+      <button class="btn ghost" data-act="npclose" title="Schließen">${ICON.x}</button>
     </div>
     <form data-form="notepanel" data-m="${enc(name)}" data-date="${date}" style="margin-top:10px">
       <input type="hidden" name="id" value="${editing ? editing.id : ""}">
@@ -1075,7 +1092,7 @@ function notePanelHTML(name, date) {
     ${dayNotes.filter((x) => !editing || x.id !== editing.id).length ? `<div class="np-list">${dayNotes.filter((x) => !editing || x.id !== editing.id).map((x) => `<div class="np-entry">
         <input type="checkbox" class="note-check" data-act="ncheck" data-id="${x.id}" data-m="${enc(name)}" ${x.checked ? "checked" : ""}>
         <div class="grow ${x.checked ? "is-done" : ""}">${x.topicId && m.topics.find((t) => t.id === x.topicId) ? `<small class="pill-topic">${esc(m.topics.find((t) => t.id === x.topicId).title)}</small>` : ""}${esc(x.done)}</div>
-        <button class="btn ghost" data-act="npedit" data-id="${x.id}" title="Bearbeiten">✎</button>
+        <button class="btn ghost" data-act="npedit" data-id="${x.id}" title="Bearbeiten">${ICON.edit}</button>
         <button class="btn ghost" data-act="npdelete" data-id="${x.id}" data-m="${enc(name)}" title="Löschen">🗑</button>
       </div>`).join("")}</div>` : ""}
   </div>`;
@@ -1118,7 +1135,7 @@ function todoItem(t) {
     <input type="checkbox" data-act="tdone" data-id="${t.id}" ${canCheck(t) ? "" : "disabled"}>
     <div class="grow"><b>${esc(t.title)}</b><div class="muted">${sub}${due}${t.time ? " · " + esc(t.time) : ""}</div></div>
     <span class="prio ${prio}">${prio}</span>
-    <button class="btn ghost" data-act="tedit" data-id="${t.id}" title="Bearbeiten">✎</button>
+    <button class="btn ghost" data-act="tedit" data-id="${t.id}" title="Bearbeiten">${ICON.edit}</button>
   </div>`;
 }
 
@@ -1180,7 +1197,7 @@ function allDayHTML(dates, showDate) {
         <b class="${t.done ? "done-title" : ""}">${esc(t.title)}</b>
         <div class="muted">${label}${CAT_LABEL[t.type] || "To-Do"}${note}</div>
       </div>
-      <button class="btn ghost" data-act="tedit" data-id="${t.id}">✎</button>
+      <button class="btn ghost" data-act="tedit" data-id="${t.id}">${ICON.edit}</button>
     </div>`;
   }).join("")}</div>`;
 }
@@ -1259,7 +1276,7 @@ function dayCountOf(k) {
 }
 // Knopf zum Ein- und Ausklappen der Aufgaben ohne Uhrzeit (in der Ecke über der Zeitspalte)
 function planCornerHTML(count, open) {
-  return `<button class="plan-corner${open ? " on" : ""}" data-act="planTasks" aria-label="Aufgaben ein- und ausblenden"><span>${open ? "▴" : "▾"}</span><small>${count}</small></button>`;
+  return `<button class="plan-corner${open ? " on" : ""}" data-act="planTasks" aria-label="Aufgaben ein- und ausblenden"><span>${open ? ICON.up : ICON.down}</span><small>${count}</small></button>`;
 }
 // Gibt es Aufgaben ohne Uhrzeit im Zeitraum (dann gibt es eine Leiste und einen Knopf)
 function untimedInRange(from, to) {
@@ -1285,7 +1302,7 @@ function syncPlanFab() {
   const old = document.getElementById("planFab");
   const want = ui.tab === "stundenplan" && !ui.layEdit;
   if (!want) { if (old) old.remove(); return; }
-  if (!old) document.body.insertAdjacentHTML("beforeend", `<button id="planFab" class="plan-fab" data-act="planmenu" title="Einstellungen">⋮</button>`);
+  if (!old) document.body.insertAdjacentHTML("beforeend", `<button id="planFab" class="plan-fab" data-act="planmenu" title="Einstellungen">${ICON.more}</button>`);
 }
 // Einträge, die an einem Tag liegen (auch Zeiträume über mehrere Tage)
 function todosOn(k) {
@@ -1363,7 +1380,7 @@ function dayColumn(k, label, wide, today, noNav = false, chips = "") {
 function viewPlan() {
   const today = new Date();
   const animCls = ui.anim ? ` anim-${ui.anim}` : "";
-  const menuBtn = `<button class="btn ghost" data-act="planmenu" title="Einstellungen">⋮</button>`;
+  const menuBtn = `<button class="btn ghost" data-act="planmenu" title="Einstellungen">${ICON.more}</button>`;
 
   if (ui.view === "day") {
     const d = parseIso(ui.dayDate);
@@ -1474,7 +1491,7 @@ function openPlanMenu() {
       <input type="time" value="${mk.time || ""}" data-mark="time" data-id="${mk.id}" style="width:auto">
       <input type="time" value="${mk.end || ""}" data-mark="end" data-id="${mk.id}" style="width:auto" title="Ende (leer = nur Linie)">
       <input value="${esc(mk.label || "")}" data-mark="label" data-id="${mk.id}" placeholder="Name" style="flex:1;min-width:80px">
-      <button class="btn ghost" data-act="markdel" data-id="${mk.id}" title="Löschen">✕</button>
+      <button class="btn ghost" data-act="markdel" data-id="${mk.id}" title="Löschen">${ICON.x}</button>
     </div>`).join("")}
     <button class="btn ghost" data-act="markadd" style="margin-bottom:12px">+ Leiste hinzufügen</button>
     <div class="row" style="margin-top:14px">
@@ -1723,7 +1740,7 @@ function dayPanelHTML(date) {
 function openDayModal(date) {
   ui.selDate = date;
   openModal(`<div class="row" style="justify-content:space-between;margin-bottom:8px"><h3 style="margin:0">${fmtD(parseIso(date))}</h3>
-      <button class="btn ghost" data-act="mclose" title="Schließen">✕</button></div>
+      <button class="btn ghost" data-act="mclose" title="Schließen">${ICON.x}</button></div>
     ${dayPanelHTML(date)}
     <div class="sheet-actions"><button class="btn ghost" data-act="daypopopen" data-d="${date}">Im Stundenplan</button>
       <div class="right"><button class="btn" data-act="tnew">+ Eintrag</button></div></div>`);
@@ -1821,7 +1838,7 @@ function viewCal() {
       <button class="btn ghost" data-act="calToday">Heute</button>
       <div class="row" style="gap:6px">
         <button class="btn ghost calfold${fold ? "" : " is-open"}" data-act="calfold" title="${fold ? "Monat anzeigen" : "Nur diese Woche zeigen"}" aria-label="${fold ? "Ausklappen" : "Einklappen"}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg></button>
-        <button class="btn ghost menu-btn" data-act="calmenu" title="Darstellung">⋮</button>
+        <button class="btn ghost menu-btn" data-act="calmenu" title="Darstellung">${ICON.more}</button>
       </div>
     </div>
     <div class="month${animCls}">${cells}</div>
@@ -1841,7 +1858,7 @@ function viewCal() {
   }).join("");
   const allCard = `<div class="card">
     <div class="row" style="justify-content:space-between;margin-bottom:10px"><h3 style="margin:0">Alle Einträge</h3><span class="count">${openCount} offen</span></div>
-    <div class="row" style="gap:6px;flex-wrap:wrap;margin-bottom:8px">${chip("alle", "Alle")}${chip("klausur", "Klausuren")}${chip("abgabe", "Abgaben")}${chip("todo", "To-Dos")}</div>
+    <div class="row chip-row" style="gap:6px;margin-bottom:8px">${chip("alle", "Alle")}${chip("klausur", "Klausuren")}${chip("abgabe", "Abgaben")}${chip("todo", "To-Dos")}</div>
     <label class="row" style="font-size:14px;margin-bottom:6px"><input type="checkbox" data-act="calshowdone" ${showDone ? "checked" : ""}> Erledigte zeigen</label>
     ${body || `<div class="empty"><div class="ei">✨</div>Nichts in dieser Auswahl.</div>`}
   </div>`;
@@ -1879,7 +1896,7 @@ function todoRow(t) {
     <div class="grow"><span class="${t.done ? "done-title" : ""}"><b>${esc(t.title)}</b></span>
       <div class="muted" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><span style="color:${c};display:inline-flex;align-items:center;gap:4px">${typeIcon(t.type, c, 13)}${CAT_LABEL[t.type] || "To-Do"}</span>${t.time ? " · " + esc(t.time) : ""}${t.date ? "" : " · Termin folgt"}</div></div>
     <span class="prio ${prio}">${prio}</span>
-    <button class="btn ghost" data-act="tedit" data-id="${t.id}">✎</button>
+    <button class="btn ghost" data-act="tedit" data-id="${t.id}">${ICON.edit}</button>
   </div>`;
 }
 
@@ -1948,7 +1965,7 @@ function cardHTML(name, dim) {
     <div class="row">
       <div class="grow"><b class="mod-name">${esc(name)}</b>
         <div class="muted">${done} von ${total} Themen fertig · ${m.notes.length} Einträge</div></div>
-      <button class="btn ghost menu-btn" data-act="mmenu" data-m="${enc(name)}" title="Optionen">⋮</button>
+      <button class="btn ghost menu-btn" data-act="mmenu" data-m="${enc(name)}" title="Optionen">${ICON.more}</button>
     </div>
     <div class="progress"><div style="width:${pct}%;background:${m.color}"></div></div>
   </div>`;
@@ -2005,7 +2022,7 @@ function setLayFabOn() { try { localStorage.setItem(LAYFAB_KEY, "1"); } catch {}
 function syncLayFab() {
   const old = document.getElementById("layFab");
   if (!layFabOn()) { if (old) old.remove(); return; }
-  const label = ui.layEdit ? "✓" : "▦";
+  const label = ui.layEdit ? ICON.check : ICON.layout;
   const title = ui.layEdit ? "Layout fertig" : "Layout bearbeiten";
   if (old) { old.textContent = label; old.title = title; old.classList.toggle("on", ui.layEdit); return; }
   document.body.insertAdjacentHTML("beforeend", `<button id="layFab" class="lay-fab${ui.layEdit ? " on" : ""}" data-act="laytoggle" title="${title}">${label}</button>`);
@@ -2044,7 +2061,7 @@ function linksCardHTML(name, m) {
   const rows = links.map((l) => `<div class="listrow" style="align-items:center;gap:8px">
       <div class="grow"><b>${esc(l.title)}</b><div class="muted" style="font-size:12px;word-break:break-all">${esc(l.url)}</div></div>
       <a class="btn ghost" href="${esc(l.url)}" target="_blank" rel="noopener">Öffnen</a>
-      <button class="btn ghost" data-act="mledit" data-m="${n}" data-id="${l.id}">✎</button>
+      <button class="btn ghost" data-act="mledit" data-m="${n}" data-id="${l.id}">${ICON.edit}</button>
     </div>`).join("");
   return `<div class="card">
       <div class="row" style="justify-content:space-between">
@@ -2068,7 +2085,7 @@ function viewModuleDetail(name) {
         <button class="btn ghost" data-act="mback">‹</button>
         <div class="grow"><div class="mod-title" style="color:${m.color}">${esc(name)}</div>
           <div class="muted">${done} von ${total} Themen fertig</div></div>
-        <button class="btn ghost menu-btn" data-act="mmenu" data-m="${n}" title="Optionen">⋮</button>
+        <button class="btn ghost menu-btn" data-act="mmenu" data-m="${n}" title="Optionen">${ICON.more}</button>
       </div>
       <div class="progress"><div style="width:${pct}%;background:${m.color}"></div></div>
     </div>
@@ -2096,7 +2113,7 @@ function topicCard(name, t) {
   return `<div class="topic-card" data-act="topen" data-id="${t.id}" data-m="${enc(name)}">
     <div class="grow"><b>${esc(t.title)}</b>
       <div class="muted">${es.length} ${es.length === 1 ? "Eintrag" : "Einträge"}</div></div>
-    ${complete ? `<span class="pct" style="background:${m.color};color:${textOn(m.color)}">✓ 100 %</span>` : ""}
+    ${complete ? `<span class="pct" style="background:${m.color};color:${textOn(m.color)}">${ICON.check} 100 %</span>` : ""}
     <span class="chev">›</span>
   </div>`;
 }
@@ -2111,8 +2128,8 @@ function viewTopicDetail(name, tid) {
       <div class="row">
         <button class="btn ghost" data-act="tback">‹</button>
         <div class="grow"><div class="mod-title">${esc(t.title)}</div><div class="muted">${esc(name)}</div></div>
-        ${complete ? `<span class="pct" style="background:${m.color};color:${textOn(m.color)}">✓ 100 %</span>` : ""}
-        <button class="btn ghost" data-act="ttitle" data-id="${t.id}" data-m="${n}" title="Umbenennen">✎</button>
+        ${complete ? `<span class="pct" style="background:${m.color};color:${textOn(m.color)}">${ICON.check} 100 %</span>` : ""}
+        <button class="btn ghost" data-act="ttitle" data-id="${t.id}" data-m="${n}" title="Umbenennen">${ICON.edit}</button>
       </div>
     </div>
     <div class="card">
@@ -2132,8 +2149,8 @@ function noteBlock(name, x) {
       <div class="muted note-date">${fmtD(parseIso(x.date))}</div>
       <div class="note-text">${esc(x.done)}</div>
     </div>
-    <button class="btn ghost" data-act="nedit" data-id="${x.id}" data-m="${enc(name)}" title="Bearbeiten">✎</button>
-    <button class="btn ghost" data-act="ndel" data-id="${x.id}" data-m="${enc(name)}" title="Löschen">✕</button>
+    <button class="btn ghost" data-act="nedit" data-id="${x.id}" data-m="${enc(name)}" title="Bearbeiten">${ICON.edit}</button>
+    <button class="btn ghost" data-act="ndel" data-id="${x.id}" data-m="${enc(name)}" title="Löschen">${ICON.x}</button>
   </div>`;
 }
 
@@ -2142,10 +2159,10 @@ function phoneToolsHTML() {
   return `<div class="card phone-tools">
     <h3 style="margin-top:0">Werkzeuge</h3>
     <div class="row" style="gap:8px;flex-wrap:wrap">
-      <button class="btn ghost" data-act="undo">↶ Rückgängig</button>
-      <button class="btn ghost" data-act="redo">↷ Wiederholen</button>
+      <button class="btn ghost" data-act="undo">${ICON.undo} Rückgängig</button>
+      <button class="btn ghost" data-act="redo">${ICON.redo} Wiederholen</button>
       <button class="btn ghost lay-btn" data-act="laytoggle">Layout bearbeiten</button>
-      <button class="btn ghost" data-act="navside">⇆ Leiste wechseln</button>
+      <button class="btn ghost" data-act="navside">${ICON.swap} Leiste wechseln</button>
     </div>
     <p class="muted" style="margin:10px 0 0">Sync: <span class="syncStatus sync">lokal</span></p>
   </div>`;
@@ -2210,7 +2227,7 @@ function settingsPages() {
     </div>`,
   ].join("");
 
-  // Stundenplan: Semester, Datei, Anzeige. Zeitachse, Wochenende und Termine stehen im ⋮-Menü des Stundenplans.
+  // Stundenplan: Semester, Datei, Anzeige. Zeitachse, Wochenende und Termine stehen im Menü des Stundenplans.
   pages.stunden = [
     `<div class="card"><h3>Semester</h3>
       <form data-form="semester"><label class="muted">Semester-Bezeichnung</label>
@@ -2223,7 +2240,7 @@ function settingsPages() {
       ${btns([["normal", "Normal"], ["kompakt", "Kompakt"]], s.planHead === "kompakt" ? "kompakt" : "normal", "headset")}
       <label class="muted" style="display:block;margin:16px 0 6px">Stundenhöhe (zwei Finger auf dem Stundenplan geht auch)</label>
       ${zoomBtns}
-      <p class="muted" style="margin-bottom:0">Zeitachse, Wochenende und Termine stellst du im ⋮-Menü des Stundenplans ein.</p>
+      <p class="muted" style="margin-bottom:0">Zeitachse, Wochenende und Termine stellst du im Menü des Stundenplans ein.</p>
     </div>`,
   ].join("");
 
@@ -2509,7 +2526,7 @@ function mensaCardHTML() {
   } else if (fresh) {
     body = `<div class="muted">${esc(fresh.hinweis || "Kein Speiseplan für diesen Tag.")}</div>`;
   } else if (mensaErr) {
-    body = `<div class="muted">Speiseplan gerade nicht erreichbar. Mit ↻ erneut versuchen.</div>`;
+    body = `<div class="muted">Speiseplan gerade nicht erreichbar. Mit ${ICON.reload} erneut versuchen.</div>`;
   } else {
     body = `<div class="muted">Speiseplan wird geladen …</div>`;
   }
@@ -2525,8 +2542,8 @@ function mensaCardHTML() {
         <button class="btn ghost" data-act="mensanav" data-v="-1" title="Tag zurück">‹</button>
         <button class="btn ghost" data-act="mensanav" data-v="0" title="Zu heute">Heute</button>
         <button class="btn ghost" data-act="mensanav" data-v="1" title="Tag vor">›</button>
-        <a class="btn ghost lay-keep" href="https://werkswelt.de/?id=mohm" target="_blank" rel="noopener" title="Speiseplan auf der Website öffnen">↗</a>
-        <button class="btn ghost menu-btn" data-act="mensareload" title="Neu laden">↻</button>
+        <a class="btn ghost lay-keep" href="https://werkswelt.de/?id=mohm" target="_blank" rel="noopener" title="Speiseplan auf der Website öffnen">${ICON.external}</a>
+        <button class="btn ghost menu-btn" data-act="mensareload" title="Neu laden">${ICON.reload}</button>
       </span>
     </div>
     <div style="margin-top:10px">${hinweisDatum}${body}</div>
@@ -2832,7 +2849,7 @@ function openNoteModal(name, date, noteId, presetTopic) {
       <div class="row" style="justify-content:space-between;align-items:center;gap:8px">
         <b class="grow" style="font-size:17px;color:${m.color}">${esc(name)}</b>
         <button type="button" class="btn ghost" data-act="gotoprot" data-m="${enc(name)}">Protokoll</button>
-        <button type="button" class="btn ghost" data-act="mclose" title="Schließen">✕</button>
+        <button type="button" class="btn ghost" data-act="mclose" title="Schließen">${ICON.x}</button>
       </div>
       <form data-form="note" ${draftKey ? `data-draft="${esc(draftKey)}"` : ""} class="note-form">
         <input type="hidden" name="module" value="${esc(name)}">

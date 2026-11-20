@@ -1167,3 +1167,7 @@ body.tab-scrub .tab-pill { transition-duration: .12s; }
 .modal.out .sheet { animation: popOut .17s ease-in forwards; }
 @keyframes popIn { from { opacity: 0; transform: translateY(14px) scale(.96); } to { opacity: 1; transform: none; } }
 @keyframes popOut { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(10px) scale(.97); } }
+
+/* ---------- Symbole (eigene Linien-Zeichnungen) ---------- */
+.ico { display: inline-block; vertical-align: -3px; flex: none; }
+.ico-sm { width: 14px !important; height: 14px !important; vertical-align: -2px; }
