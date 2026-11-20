@@ -3628,7 +3628,7 @@ document.addEventListener("click", async (e) => {
       else if (v === "layout") { ui.layEdit = true; setLayFabOn(); render(); }
       else if (v === "undo") undo();
       else if (v === "redo") redo();
-      else if (v === "logout") cloudSignOut();
+      else if (v === "logout") { if (await appConfirm("Wirklich abmelden? Deine Daten bleiben in der Cloud und sind nach dem Anmelden wieder da.", "Abmelden")) cloudSignOut(); }
       break;
     }
     case "rueckblick": openRueckblick(); break;
