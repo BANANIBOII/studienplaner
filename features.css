@@ -1127,5 +1127,5 @@ body.tab-scrub .tab-pill { transition-duration: .12s; }
   border-bottom: 1px solid color-mix(in srgb, var(--line) 70%, transparent); color: inherit; font: inherit; font-size: 16px; text-align: left; cursor: pointer;
 }
 .prof-row span { width: 24px; text-align: center; color: var(--muted); }
-.prof-row.danger { color: #ef4444; }
-.prof-row.danger span { color: #ef4444; }
+.prof-row.prof-out { color: #ef4444; background: none; }
+.prof-row.prof-out span { color: #ef4444; }

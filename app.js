@@ -3353,16 +3353,25 @@ let lastTabTap = { k: "", t: 0 };
 function openProfileSheet() {
   const email = session && session.user ? session.user.email : "";
   const sync = (document.querySelector(".syncStatus") || {}).textContent || "";
+  // Eigene Linien-Symbole statt Zeichen: die Zeichen (z. B. ⎋) zeigen manche Handys nur als leeres Kästchen
+  const ico = (d) => `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+  const I = {
+    gear: ico('<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"/>'),
+    undo: ico('<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>'),
+    redo: ico('<path d="M15 14l5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/>'),
+    layout: ico('<rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/>'),
+    logout: ico('<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/>'),
+  };
   openModal(`<div class="prof-head">
       <div class="prof-av">${esc(email ? email.charAt(0).toUpperCase() : "S")}</div>
       <div><b>${email ? esc(email) : "Nur auf diesem Gerät"}</b><div class="muted">${esc(sync || (email ? "Synchronisiert" : "Lokal gespeichert"))}</div></div>
     </div>
     <div class="prof-list">
-      <button class="prof-row" data-act="profgo" data-v="einstellungen"><span>⚙️</span>Einstellungen</button>
-      <button class="prof-row" data-act="profgo" data-v="undo"><span>↶</span>Rückgängig</button>
-      <button class="prof-row" data-act="profgo" data-v="redo"><span>↷</span>Wiederholen</button>
-      <button class="prof-row" data-act="profgo" data-v="layout"><span>▦</span>Layout bearbeiten</button>
-      ${email ? `<button class="prof-row danger" data-act="profgo" data-v="logout"><span>⎋</span>Abmelden</button>` : ""}
+      <button class="prof-row" data-act="profgo" data-v="einstellungen"><span>${I.gear}</span>Einstellungen</button>
+      <button class="prof-row" data-act="profgo" data-v="undo"><span>${I.undo}</span>Rückgängig</button>
+      <button class="prof-row" data-act="profgo" data-v="redo"><span>${I.redo}</span>Wiederholen</button>
+      <button class="prof-row" data-act="profgo" data-v="layout"><span>${I.layout}</span>Layout bearbeiten</button>
+      ${email ? `<button class="prof-row prof-out" data-act="profgo" data-v="logout"><span>${I.logout}</span>Abmelden</button>` : ""}
     </div>`);
 }
 
