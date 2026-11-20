@@ -748,6 +748,12 @@ function render() {
   }
   appEl.dataset.shownTab = ui.tab;
   document.documentElement.classList.toggle("plan-tab", ui.tab === "stundenplan");
+  // Kopfzeile: zeigt den Titel der Seite (oder des geöffneten Bereichs)
+  const headEl = document.querySelector(".topbar h1");
+  if (headEl) {
+    const sub = ui.tab === "einstellungen" && ui.setPage && SETTINGS_LIST.find((x) => x.k === ui.setPage);
+    headEl.textContent = ui.tab === "protokolle" && ui.modOpen ? ui.modOpen : sub ? sub.t : (TAB_NAMES[ui.tab] || "Studienplaner");
+  }
   syncPlanFab();
   syncLayFab();
   syncTabBadge();

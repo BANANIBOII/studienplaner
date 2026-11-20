@@ -1092,3 +1092,17 @@ body.tab-scrub .tab-pill { transition-duration: .12s; }
   .cd-col { padding: 8px; }
   .cd-item b { font-size: 12px; }
 }
+
+/* ---------- Kopfzeile (Handy): nur der Seitentitel, bleibt beim Scrollen oben ---------- */
+@media (max-width: 799px) {
+  .topbar {
+    display: flex !important; padding: 12px 20px; padding-top: calc(12px + env(safe-area-inset-top));
+    background: color-mix(in srgb, var(--bg) 82%, transparent); border-bottom: 1px solid color-mix(in srgb, var(--line) 60%, transparent);
+    -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+  }
+  body.nav-bottom:not(.locked) .topbar { display: flex !important; }
+  .topbar .top-actions { display: none !important; }
+  .topbar h1 { font-size: 20px; line-height: 1.2; letter-spacing: -.2px; }
+  /* Der große Seitentitel steht jetzt oben in der Kopfzeile, deshalb hier nicht noch einmal */
+  #app > h2:first-child { display: none; }
+}
