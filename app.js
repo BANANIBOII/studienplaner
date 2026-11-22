@@ -2711,7 +2711,7 @@ document.addEventListener("change", (e) => {
 });
 
 // ---------- Mensa-Karte (Speiseplan über die Supabase-Funktion "mensa") ----------
-const MENSA_LS = "studienplaner-mensa-v3";
+const MENSA_LS = "studienplaner-mensa-v4";
 let mensaTried = null;   // Tag, für den schon geladen wurde (verhindert Schleifen)
 let mensaErr = false;
 let mensaBusy = false;
@@ -2749,19 +2749,11 @@ document.addEventListener("touchend", (e) => {
 document.addEventListener("touchcancel", () => { mensaTouch = null; }, { passive: true });
 // Hinweis: Die Speisedaten sagen nicht, ob ein Gericht vegetarisch ist. Das wird anhand des Namens geschätzt.
 const MEAT_RE = /(fleisch|schwein|rind|hähnchen|huhn|pute|geflügel|fisch|lachs|speck|wurst|schinken|kalb|lamm|hack|gyros|döner|salami|ente|bratwurst)/i;
-// Emojis je Gericht: nur wenn der Name eindeutig ist. Die Icons der Mensa-Seite stehen nicht im Text,
-// deshalb wird nichts geraten (Frikadelle kann Rind, Schwein oder vegetarisch sein).
-const MENSA_EMOJI = [
-  [/vegan/i, "🌱"],
-  [/schwein|speck|schinken|wurst|kassler|salami/i, "🐷"],
-  [/rind|hackfleisch|rinderhack|steak/i, "🐄"],
-  [/hähnchen|huhn|pute|geflügel|ente/i, "🐔"],
-  [/fisch|lachs|thunfisch|seelachs/i, "🐟"],
-  [/lamm/i, "🐑"],
-];
-function mensaEmoji(name) {
-  const hits = MENSA_EMOJI.filter(([re]) => re.test(name)).map(([, e]) => e);
-  return hits.join(" ");
+// Symbole je Gericht. Kommen von der KI, die die Icons der Mensa-Seite liest.
+const MENSA_TAG_EMOJI = { schwein: "🐷", rind: "🐄", gefluegel: "🐔", fisch: "🐟", lamm: "🐑", vegan: "🌱", vegetarisch: "🥕", glutenfrei: "🌾" };
+const MENSA_MEAT_TAGS = ["schwein", "rind", "gefluegel", "fisch", "lamm"];
+function mensaEmoji(g) {
+  return (g.tags || []).map((t) => MENSA_TAG_EMOJI[t]).filter(Boolean).join(" ");
 }
 function mensaCardHTML() {
   const target = mensaTarget();
@@ -2774,12 +2766,12 @@ function mensaCardHTML() {
   if (offDay) {
     body = `<div class="muted">Keine Daten verfügbar.</div>`;
   } else if (fresh && fresh.gerichte && fresh.gerichte.length) {
-    const shown = ui.mensaNoMeat ? fresh.gerichte.filter((g) => !MEAT_RE.test(g.name)) : fresh.gerichte;
+    const shown = ui.mensaNoMeat ? fresh.gerichte.filter((g) => !(g.tags || []).some((t) => MENSA_MEAT_TAGS.includes(t))) : fresh.gerichte;
     body = (shown.length ? shown : fresh.gerichte).map((g) =>
-      `<div class="mensa-row"><span class="muted">${esc(g.label)}</span><span><span title="Aus dem Namen geschätzt" style="margin-right:4px">${mensaEmoji(g.name)}</span><b>${esc(g.name)}</b></span><span class="mensa-price">${esc(g.preis.stud)}</span></div>`
-    ).join("") + `<div class="muted" style="font-size:12px;margin-top:8px">🐷 Schwein · 🐄 Rind · 🐔 Geflügel · 🐟 Fisch · 🐑 Lamm · 🌱 vegan · Symbole nur bei eindeutigem Namen</div>
+      `<div class="mensa-row"><span class="muted">${esc(g.label)}</span><span><span style="margin-right:4px">${mensaEmoji(g)}</span><b>${esc(g.name)}</b>${g.allergene ? `<div class="muted" style="font-size:12px">Allergene: ${esc(g.allergene)}</div>` : ""}</span><span class="mensa-price">${esc(g.preis.stud)}</span></div>`
+    ).join("") + `<div class="muted" style="font-size:12px;margin-top:8px">🐷 Schwein · 🐄 Rind · 🐔 Geflügel · 🐟 Fisch · 🐑 Lamm · 🌱 vegan · 🥕 vegetarisch · 🌾 glutenfrei${fresh.ki ? " · von der KI gelesen" : ""}</div>
       <div class="muted" style="font-size:12px">Preise für Studierende</div>
-      <button class="btn ghost btn-sm" data-act="mensafilter" style="margin-top:8px">${ui.mensaNoMeat ? "Alle anzeigen" : "Nur ohne Fleisch (geschätzt)"}</button>`;
+      ${fresh.ki ? `<button class="btn ghost btn-sm" data-act="mensafilter" style="margin-top:8px">${ui.mensaNoMeat ? "Alle anzeigen" : "Nur ohne Fleisch"}</button>` : ""}`;
   } else if (fresh) {
     body = `<div class="muted">${esc(fresh.hinweis || "Kein Speiseplan für diesen Tag.")}</div>`;
   } else if (mensaErr) {
@@ -2814,7 +2806,7 @@ async function loadMensa(force) {
   mensaTried = target;
   try {
     const r = await fetch(SUPABASE_URL + "/functions/v1/mensa?tag=" + target, {
-      headers: { Authorization: "Bearer " + SUPABASE_ANON_KEY, apikey: SUPABASE_ANON_KEY },
+      headers: { Authorization: "Bearer " + ((session && session.access_token) || SUPABASE_ANON_KEY), apikey: SUPABASE_ANON_KEY },
       signal: AbortSignal.timeout(20000),
     });
     const data = await r.json();
