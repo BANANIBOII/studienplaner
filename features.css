@@ -1293,3 +1293,22 @@ body.look-m3 .btn, body.look-m3 .profile-btn { border-radius: 999px; }
   aspect-ratio: 1 / 1; box-sizing: border-box; border-radius: 50% !important; padding: 0 !important; line-height: 1;
 }
 .profile-init { display: block; line-height: 1; }
+
+/* ---------- Aufgaben: nach rechts wischen zum Erledigen ---------- */
+.item[data-id] { touch-action: pan-y; }
+.item.swipe-ready { background: color-mix(in srgb, var(--accent) 20%, var(--card)); }
+
+/* ---------- Kalender: Farbpunkte je Tag in den Modulfarben ---------- */
+.mday { position: relative; }
+.mdots { position: absolute; left: 50%; bottom: 4px; transform: translateX(-50%); display: flex; gap: 3px; pointer-events: none; }
+.mdots i { width: 5px; height: 5px; border-radius: 50%; display: block; }
+
+/* ---------- Kontrast im Glas-Look: graue Texte etwas heller ---------- */
+body:not(.look-m3) .muted { color: color-mix(in srgb, var(--text) 70%, var(--muted)); }
+
+/* ---------- Ruhiger Modus für schwache Geräte: ohne Unschärfe ---------- */
+body.lite .card, body.lite .tabbar, body.lite .modal .sheet, body.lite .modal {
+  -webkit-backdrop-filter: none !important; backdrop-filter: none !important;
+}
+body.lite .card { background: color-mix(in srgb, var(--card) 94%, transparent) !important; }
+body.lite .tabbar { background: var(--card) !important; }

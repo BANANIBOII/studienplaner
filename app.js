@@ -632,6 +632,7 @@ function applyTheme() {
   const tc = document.querySelector('meta[name="theme-color"]');
   if (tc) tc.setAttribute("content", currentMode() === "dark" ? "#0a1414" : "#eef2f7");
   document.body.classList.toggle("look-m3", state.settings.look === "m3");
+  document.body.classList.toggle("lite", isWeakDevice() && state.settings.look !== "glass-full");
   document.body.classList.toggle("nav-left", state.settings.navSide === "left");
   document.body.classList.toggle("nav-bottom", state.settings.navSide === "bottom");
   document.body.classList.toggle("check-right", state.settings.checkSide === "right");
@@ -1138,6 +1139,17 @@ function countdownBlock() {
           <b>${esc(t.title)}</b><span style="color:${dueColor(t.date, type)}">${t.date ? countdownText(t.date) : "Termin folgt"}</span></button>`).join("")
       : `<div class="muted cd-none">Keine</div>`}</div>`;
   }).join("")}</div></div>`;
+}
+
+// Vibration nur, wenn sie in den Benachrichtigungs-Einstellungen dieses Geräts nicht aus ist
+function buzz(ms) {
+  try {
+    if (navigator.vibrate && (state.settings.nfDev || {}).vib !== "aus") navigator.vibrate(ms);
+  } catch (_) {}
+}
+// Schwache Geräte: Unschärfe-Effekte aus (spart Akku und ruckelt weniger)
+function isWeakDevice() {
+  return (navigator.hardwareConcurrency || 8) <= 4 || (navigator.deviceMemory || 8) <= 3;
 }
 
 function todoItem(t) {
@@ -1838,7 +1850,9 @@ function viewCal() {
       border += `background-color:${tint};`;
     }
     const cls = ["mday", `style-${cal.style}`, d.getMonth() !== m.getMonth() ? "other" : "", k === today ? "today" : "", k === ui.selDate ? "sel" : "", spans0.length ? "has-span" : ""].join(" ");
-    cells += `<div class="${cls}" data-act="sel" data-d="${k}" style="--i:${i};${border}">${calCellInner(cal.style, d, dayT, evCount)}${overlays}</div>`;
+    const dots = state.events.filter((e) => e.date === k && !e.cancelled).slice(0, 3)
+      .map((e) => `<i style="background:${(state.modules[e.name] || {}).color || "var(--accent)"}"></i>`).join("");
+    cells += `<div class="${cls}" data-act="sel" data-d="${k}" style="--i:${i};${border}">${calCellInner(cal.style, d, dayT, evCount)}${overlays}${dots ? `<span class="mdots">${dots}</span>` : ""}</div>`;
   }
   const navAct = fold ? "calweek" : "mon";
   const monthCard = `<div class="card">
@@ -2957,7 +2971,7 @@ document.addEventListener("pointerdown", (e) => {
       longFired = true;
       const el0 = pressStart.el;
       pressStart = null;
-      if (navigator.vibrate) navigator.vibrate(15);
+      buzz(15);
       // Langes Drücken: Termin = Notiz-Popup, To-Do/Countdown = Bearbeiten (wie im Stundenplan)
       if (el0.classList.contains("ev")) {
         const ev = state.events.find((x) => x.id === el0.dataset.id);
@@ -2995,7 +3009,7 @@ document.addEventListener("pointerdown", (e) => {
       longFired = true;
       const name = dec(pressStart.el.dataset.m);
       pressStart = null;
-      if (navigator.vibrate) navigator.vibrate(15);
+      buzz(15);
       openModuleMenu(name);
     }, 500);
     return;
@@ -3011,7 +3025,7 @@ document.addEventListener("pointerdown", (e) => {
     longFired = true;
     const { el, y } = pressStart;
     pressStart = null;
-    if (navigator.vibrate) navigator.vibrate(15);
+    buzz(15);
     if (el.classList.contains("ev")) {
       // Langes Drücken auf einen Termin = Notiz-Popup (im Bearbeitungsmodus stattdessen zum Verschieben)
       const ev = state.events.find((x) => x.id === el.dataset.id);
@@ -3447,7 +3461,7 @@ document.addEventListener("pointermove", (e) => {
     ui.tab = btn.dataset.tab;
     ui.modOpen = null;
     ui.topicOpen = null;
-    if (navigator.vibrate) navigator.vibrate(4);
+    buzz(4);
     render();
   }
 }, true);
@@ -3477,7 +3491,7 @@ document.addEventListener("pointerdown", (e) => {
   if (!btn || e.button > 0) return;
   tabPressTimer = setTimeout(() => {
     tabPressFired = true;
-    if (navigator.vibrate) navigator.vibrate(12);
+    buzz(12);
     openQuickSheet();
   }, 500);
 }, true);
@@ -5199,7 +5213,7 @@ document.addEventListener("pointerdown", (e) => {
 function startDrag() {
   if (!drag || drag.active) return;
   drag.active = true;
-  if (navigator.vibrate) navigator.vibrate(15);
+  buzz(15);
   const g = document.createElement("div");
   g.id = "dragGhost";
   g.className = "drag-ghost";
@@ -5526,3 +5540,46 @@ function updateOnlineBanner(offline) {
 window.addEventListener("online", () => updateOnlineBanner(false));
 window.addEventListener("offline", () => updateOnlineBanner(true));
 updateOnlineBanner(!navigator.onLine);
+
+// Wischen nach rechts erledigt eine Aufgabe (nur Berührung, nur waagerecht; senkrecht scrollt die Seite weiter)
+(function () {
+  let sw = null;
+  document.addEventListener("pointerdown", (e) => {
+    if (e.pointerType !== "touch" || !e.target.closest) return;
+    const row = e.target.closest(".item[data-id]");
+    if (!row || e.target.closest("button, input, select, textarea, a")) return;
+    const cb = row.querySelector('input[data-act="tdone"]');
+    if (!cb || cb.disabled) return;
+    sw = { row, cb, x: e.clientX, y: e.clientY, dx: 0, axis: null, id: e.pointerId };
+  }, { passive: true });
+  document.addEventListener("pointermove", (e) => {
+    if (!sw || e.pointerId !== sw.id) return;
+    const dx = e.clientX - sw.x, dy = e.clientY - sw.y;
+    if (sw.axis === null) {
+      if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+      sw.axis = Math.abs(dx) > Math.abs(dy) ? "x" : "y";
+    }
+    if (sw.axis !== "x") { sw = null; return; }
+    sw.dx = Math.max(0, Math.min(dx, 160));
+    sw.row.style.transition = "none";
+    sw.row.style.transform = `translateX(${sw.dx}px)`;
+    sw.row.classList.toggle("swipe-ready", sw.dx > 90);
+  }, { passive: true });
+  const end = () => {
+    if (!sw) return;
+    const s = sw; sw = null;
+    s.row.style.transition = "transform .25s ease";
+    s.row.style.transform = "";
+    s.row.classList.remove("swipe-ready");
+    if (s.axis === "x") s.row._swiped = Date.now();
+    if (s.axis === "x" && s.dx > 90) s.cb.click();
+  };
+  document.addEventListener("pointerup", end);
+  document.addEventListener("pointercancel", end);
+  // Nach einem Wisch soll der Eintrag nicht zusätzlich geöffnet werden
+  document.addEventListener("click", (e) => {
+    const row = e.target.closest && e.target.closest(".item[data-id]");
+    if (e.target.matches && e.target.matches('input[data-act="tdone"]')) return; // der Klick, der die Aufgabe erledigt, bleibt
+    if (row && row._swiped && Date.now() - row._swiped < 400) { e.stopPropagation(); e.preventDefault(); }
+  }, true);
+})();
