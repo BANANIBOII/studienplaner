@@ -3935,9 +3935,19 @@ document.addEventListener("click", async (e) => {
       render(); break;
     case "calfold": {
       const c = calSet();
+      const old = document.querySelector(".month");
+      const h0 = old ? old.getBoundingClientRect().height : 0;
       state.settings.cal = { ...c, fold: !c.fold };
       ui.anim = "fold";
-      commit(); break;
+      commit();
+      // Höhe sanft von alt nach neu übergehen lassen, statt zu springen
+      const el = document.querySelector(".month");
+      const h1 = el ? el.getBoundingClientRect().height : 0;
+      if (el && h0 && Math.abs(h1 - h0) > 4 && el.animate) {
+        el.animate([{ height: h0 + "px", overflow: "hidden" }, { height: h1 + "px", overflow: "hidden" }],
+          { duration: 340, easing: "cubic-bezier(.2,.8,.2,1)" });
+      }
+      break;
     }
     case "calweek": {
       const d = addDays(parseIso(ui.selDate || iso(new Date())), 7 * Number(el.dataset.v));
