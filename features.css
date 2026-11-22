@@ -1495,9 +1495,9 @@ body:not(.dark) { --elev: 0 8px 24px rgba(20, 60, 60, .1); }
 }
 /* scale statt transform: die Einblend-Animationen setzen transform und würden die Verkleinerung überdecken */
 .card:active, .modcard:active, .listrow:active, .ev:active, .dchip:active, .mday:active, .plan-corner:active, .look-opt:active {
-  scale: .95;
+  scale: .75;
   filter: brightness(.92);
-  transition-duration: .09s, .09s, .09s, .2s;
+  transition-duration: .1s, .1s, .1s, .2s;
 }
 @media (prefers-reduced-motion: reduce) {
   .card:active, .modcard:active, .listrow:active, .ev:active, .dchip:active, .mday:active, .plan-corner:active, .look-opt:active { scale: 1; }
