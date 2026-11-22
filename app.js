@@ -3945,7 +3945,7 @@ document.addEventListener("click", async (e) => {
       const h1 = el ? el.getBoundingClientRect().height : 0;
       if (el && h0 && Math.abs(h1 - h0) > 4 && el.animate) {
         el.animate([{ height: h0 + "px", overflow: "hidden" }, { height: h1 + "px", overflow: "hidden" }],
-          { duration: 340, easing: "cubic-bezier(.2,.8,.2,1)" });
+          { duration: 260, easing: "cubic-bezier(.2,.8,.2,1)" });
       }
       break;
     }

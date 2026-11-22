@@ -1408,3 +1408,35 @@ body:not(.dark) { --elev: 0 8px 24px rgba(20, 60, 60, .1); }
 .plan-top-wrap.open > .plan-top { opacity: 1; }
 .plan-top-wrap .plan-stripwrap { margin-bottom: 6px; }
 @media (prefers-reduced-motion: reduce) { .plan-top-wrap, .plan-top-wrap > .plan-top { transition: none; } }
+
+/* ===== Animationen: ein Tempo, eine Kurve, nur Position und Transparenz =====
+   Dieser Block steht am Ende und überschreibt die älteren Definitionen (die dieselben Namen mehrfach nutzen). */
+:root { --ease-out: cubic-bezier(.2, .8, .2, 1); }
+@keyframes tabFwd  { from { opacity: 0; transform: translate3d(24px, 0, 0); } to { opacity: 1; transform: none; } }
+@keyframes tabBack { from { opacity: 0; transform: translate3d(-24px, 0, 0); } to { opacity: 1; transform: none; } }
+@keyframes riseIn  { from { opacity: 0; transform: translate3d(0, 10px, 0); } to { opacity: 1; transform: none; } }
+@keyframes appIn   { from { opacity: 0; transform: translate3d(0, 6px, 0); } to { opacity: 1; transform: none; } }
+@keyframes sheetUp { from { opacity: 0; transform: translate3d(0, 20px, 0); } to { opacity: 1; transform: none; } }
+@keyframes popIn   { from { opacity: 0; transform: translate3d(0, 12px, 0) scale(.97); } to { opacity: 1; transform: none; } }
+@keyframes slideNext { from { transform: translate3d(32px, 0, 0); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes slidePrev { from { transform: translate3d(-32px, 0, 0); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes grpFromRight { from { transform: translate3d(14.2857%, 0, 0); } to { transform: translate3d(0, 0, 0); } }
+@keyframes grpFromLeft  { from { transform: translate3d(-14.2857%, 0, 0); } to { transform: translate3d(0, 0, 0); } }
+@keyframes calDayIn { from { opacity: 0; transform: translate3d(0, -6px, 0) scale(.96); } to { opacity: 1; transform: none; } }
+
+#app.tab-in.dir-fwd > *  { animation: tabFwd .22s var(--ease-out) both; }
+#app.tab-in.dir-back > * { animation: tabBack .22s var(--ease-out) both; }
+#app.tab-in > *          { animation: appIn .18s var(--ease-out) both; }
+#app.tab-in .card, #app.tab-in .listrow { animation: riseIn .26s var(--ease-out) both; }
+.modal { animation: fadeBg .16s ease-out; }
+.modal .sheet { animation: sheetUp .22s var(--ease-out); }
+.modal.out { animation: fadeOutBg .14s ease-in forwards; }
+.modal.out .sheet { animation: sheetDown .14s ease-in forwards; }
+.anim-next, .anim-prev { animation: none; }
+.anim-next .plan-group { animation: grpFromRight .22s var(--ease-out); }
+.anim-prev .plan-group { animation: grpFromLeft .22s var(--ease-out); }
+.anim-zoom { animation: planZoomIn .2s var(--ease-out); }
+.month.anim-fold .mday { animation: calDayIn .22s var(--ease-out) both; animation-delay: calc(min(var(--i, 0), 13) * 10ms); }
+.plan-top-wrap { transition: grid-template-rows .24s var(--ease-out); }
+.plan-top-wrap > .plan-top { transition: opacity .18s ease; }
+.toast { transition: opacity .2s ease, transform .2s var(--ease-out); }
