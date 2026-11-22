@@ -1637,6 +1637,7 @@ window.addEventListener("resize", () => requestAnimationFrame(fitEventNames));
 function openEventInfo(id) {
   const ev = state.events.find((x) => x.id === id);
   if (!ev) return;
+  modalTintName = ev.name;
   const info = parseEventDesc(ev.desc);
   const [y, m, d] = ev.date.split("-");
   const row = (label, val) => `<div class="row" style="justify-content:space-between;padding:8px 0;border-bottom:1px solid rgba(128,128,128,.25)"><span class="muted">${label}</span><b>${esc(val)}</b></div>`;
@@ -2038,6 +2039,7 @@ function cardHTML(name, dim) {
 }
 
 function openModuleMenu(name) {
+  modalTintName = name;
   const n = enc(name);
   openModal(`
     <h3>${esc(name)}</h3>
@@ -2477,6 +2479,30 @@ function cloudSection() {
 // Zurück-Taste: ein Fenster schließt zuerst, dann erst die Seite (siehe popstate weiter unten)
 let ignorePop = 0;   // Anzahl selbst ausgelöster history.back()-Aufrufe, die nicht als Zurück gelten
 let modalTok = 0;    // verhindert, dass ein ausblendendes Fenster ein neu geöffnetes wieder entfernt
+// Pop-ups wachsen aus dem zuletzt angetippten Element heraus und schrumpfen beim Schließen dorthin
+let tapOrigin = null, modalFrom = null, modalTintName = null;
+document.addEventListener("pointerdown", (e) => {
+  const el = e.target.closest ? e.target.closest("[data-act], .item, .ev, .dchip, .mday, .card, .modcard, .listrow") : null;
+  tapOrigin = el ? { r: el.getBoundingClientRect(), t: Date.now() } : null;
+}, true);
+function growFromTap(sheet) {
+  const o = tapOrigin;
+  tapOrigin = null;
+  modalFrom = null;
+  if (!sheet || !o || Date.now() - o.t > 900 || !sheet.animate || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  sheet.style.animation = "none"; // erst die CSS-Animation aus, damit die Maße stimmen
+  const s = sheet.getBoundingClientRect(), r = o.r;
+  if (!s.width || !r.width) return;
+  const x = r.left + r.width / 2 - (s.left + s.width / 2);
+  const y = r.top + r.height / 2 - (s.top + s.height / 2);
+  const k = Math.max(0.25, Math.min(1, r.width / s.width));
+  modalFrom = { x, y, k };
+  sheet.animate([
+    { opacity: 0, transform: `translate(${x}px, ${y}px) scale(${k})` },
+    { opacity: 1, transform: "none" },
+  ], { duration: 520, easing: "cubic-bezier(.32,.72,0,1)" });
+}
+
 function openModal(html) {
   ui.dayPop = null;
   const root = document.getElementById("modalRoot");
@@ -2484,6 +2510,12 @@ function openModal(html) {
   // Eigener Verlaufseintrag für das Fenster, damit die Zurück-Taste es zuerst schließt
   if (!(history.state && history.state.sp === "modal")) { try { history.pushState({ sp: "modal" }, ""); } catch (_) {} }
   root.innerHTML = `<div class="modal" data-act="mbg"><div class="sheet">${html}</div></div>`;
+  const sheet = root.querySelector(".sheet");
+  const tint = modalTintName;
+  modalTintName = null;
+  const color = tint && (state.modules[tint] || {}).color;
+  if (color && sheet) { sheet.classList.add("mod-tint"); sheet.style.setProperty("--mod", color); }
+  growFromTap(sheet);
 }
 // ---------- Nächste Frist (Countdown, groß) und Rückblick ----------
 const TAB_NAMES = { dashboard: "Dashboard", stundenplan: "Stundenplan", kalender: "Kalender & To-Dos", protokolle: "Vorlesungs-Protokolle", einstellungen: "Einstellungen" };
@@ -2882,9 +2914,22 @@ function hideModal() {
   ui.editNote = null;
   const m = root.querySelector(".modal");
   if (m && !m.classList.contains("out")) {
+    const sh = m.querySelector(".sheet");
+    const f = modalFrom;
+    modalFrom = null;
     m.classList.add("out");
     const tok = ++modalTok;
-    setTimeout(() => { if (tok === modalTok) root.innerHTML = ""; }, 170);
+    if (f && sh && sh.animate) {
+      // Zurück in das Element schrumpfen, aus dem das Pop-up gewachsen ist
+      sh.style.animation = "none";
+      m.style.animation = "none";
+      sh.animate([{ opacity: 1, transform: "none" }, { opacity: 0, transform: `translate(${f.x}px, ${f.y}px) scale(${f.k})` }],
+        { duration: 340, easing: "cubic-bezier(.4,0,1,1)", fill: "forwards" });
+      m.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 340, easing: "ease-in", fill: "forwards" });
+      setTimeout(() => { if (tok === modalTok) root.innerHTML = ""; }, 340);
+    } else {
+      setTimeout(() => { if (tok === modalTok) root.innerHTML = ""; }, 170);
+    }
   } else {
     root.innerHTML = "";
   }
@@ -2922,6 +2967,7 @@ function appAlert(text) {
 }
 
 function openNoteModal(name, date, noteId, presetTopic) {
+  modalTintName = name;
   const m = ensureModule(name);
   const note = noteId ? m.notes.find((x) => x.id === noteId) : null;
   const dayKey = date || (note ? note.date : iso(new Date()));
@@ -3945,7 +3991,7 @@ document.addEventListener("click", async (e) => {
       const h1 = el ? el.getBoundingClientRect().height : 0;
       if (el && h0 && Math.abs(h1 - h0) > 4 && el.animate) {
         el.animate([{ height: h0 + "px", overflow: "hidden" }, { height: h1 + "px", overflow: "hidden" }],
-          { duration: 340, easing: "cubic-bezier(.32,.72,0,1)" });
+          { duration: 460, easing: "cubic-bezier(.32,.72,0,1)" });
       }
       break;
     }

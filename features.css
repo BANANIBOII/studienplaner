@@ -1468,3 +1468,23 @@ body:not(.dark) { --elev: 0 8px 24px rgba(20, 60, 60, .1); }
 .anim-next .plan-group { animation: grpFromRight .36s var(--ease-ios); }
 .anim-prev .plan-group { animation: grpFromLeft .36s var(--ease-ios); }
 .month.anim-fold .mday { animation: calDayIn .32s var(--ease-spring) both; animation-delay: calc(min(var(--i, 0), 13) * 12ms); }
+
+/* ===== Pop-ups mit Modulfarbe (Stundenplan) ===== */
+.modal .sheet.mod-tint {
+  box-shadow: inset 0 4px 0 var(--mod), 0 12px 34px rgba(0, 0, 0, .22);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--mod) 18%, var(--card)) 0, var(--card) 170px) !important;
+}
+
+/* ===== Etwas langsamer und ruhiger ===== */
+#app.tab-in.dir-fwd > *, #app.tab-in.dir-back > * { animation-duration: .46s; }
+#app.tab-in > * { animation-duration: .32s; }
+#app.tab-in .card, #app.tab-in .listrow { animation-duration: .56s; }
+.modal { animation-duration: .32s; }
+.modal .sheet { animation-duration: .5s; }
+.modal.out { animation-duration: .28s; }
+.modal.out .sheet { animation-duration: .3s; }
+.anim-next .plan-group, .anim-prev .plan-group { animation-duration: .46s; }
+.anim-zoom { animation-duration: .34s; }
+.month.anim-fold .mday { animation-duration: .42s; }
+.plan-top-wrap { transition-duration: .46s; }
+.btn:active, .tabbar button:active, .hist-btn:active { transition-duration: .16s; }
