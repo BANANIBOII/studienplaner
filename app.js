@@ -4330,6 +4330,8 @@ document.addEventListener("submit", async (e) => {
       if (!title) { fail("Bitte einen Text schreiben."); break; }
       if (data.kind === "once") {
         if (!data.date) { fail("Bitte ein Datum wählen."); break; }
+        if (timeAlreadyPast(data.date, data.time)) { fail("Diese Uhrzeit ist heute schon vorbei. Wähle ein späteres Datum oder eine spätere Uhrzeit."); break; }
+        pruneExpiredOnce();
         customList().push({ id: uid(), title, body: "", time: data.time, days: [], date: data.date, on: true });
       } else {
         const days = [...f.querySelectorAll('input[name="d"]:checked')].map((x) => Number(x.value));
@@ -4345,6 +4347,7 @@ document.addEventListener("submit", async (e) => {
       let item;
       if (data.kind === "once") {
         if (!data.date) { appAlert("Bitte ein Datum wählen."); break; }
+        if (timeAlreadyPast(data.date, data.time)) { appAlert("Diese Uhrzeit ist heute schon vorbei. Wähle ein späteres Datum oder eine spätere Uhrzeit."); break; }
         item = { ...base, days: [], date: data.date };
       } else {
         const days = [...f.querySelectorAll('input[name="d"]:checked')].map((x) => Number(x.value));
@@ -4352,6 +4355,7 @@ document.addEventListener("submit", async (e) => {
         item = { ...base, days };
       }
       if (old) { delete old.date; Object.assign(old, item); } else list.push(item);
+      pruneExpiredOnce();
       closeModal(); commit(); break;
     }
     case "modlink": {
@@ -4934,6 +4938,19 @@ function notifyDetailsHTML() {
 const WD_SHORT = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
 const DAY_ORDER = [1, 2, 3, 4, 5, 6, 0]; // Montag zuerst
 const REPEAT_LABEL = { once: "nur dieser Termin", weekly: "jede Woche", even: "gerade KW", odd: "ungerade KW" };
+// Einmal-Erinnerungen, deren Tag vorbei ist, werden entfernt (Server schickt sie ohnehin nicht mehr)
+function pruneExpiredOnce() {
+  const todayIso = iso(new Date());
+  const list = customList();
+  for (let i = list.length - 1; i >= 0; i--) if (list[i].date && list[i].date < todayIso) list.splice(i, 1);
+}
+// Heute mit einer Uhrzeit, die schon vorbei ist, würde nie gesendet
+function timeAlreadyPast(date, time) {
+  if (date !== iso(new Date())) return false;
+  const [h, m] = String(time || "00:00").split(":").map(Number);
+  const now = new Date();
+  return h * 60 + m <= now.getHours() * 60 + now.getMinutes();
+}
 function customList() {
   const n = notifyCfg();
   if (!Array.isArray(n.custom)) n.custom = [];
@@ -4967,7 +4984,8 @@ function deviceNotifyHTML() {
     </div>`;
 }
 function customNotifyHTML() {
-  const list = customList();
+  const todayIso = iso(new Date());
+  const list = customList().filter((c) => !c.date || c.date >= todayIso);
   const fixed = list.length
     ? list.map((c) => `<div class="listrow" style="align-items:center;gap:8px">
         <div class="grow"><b>${esc(c.title || "Erinnerung")}</b>
@@ -4976,7 +4994,7 @@ function customNotifyHTML() {
         <button class="btn ghost" data-act="cnedit" data-id="${c.id}">Bearbeiten</button>
       </div>`).join("")
     : `<p class="muted">Noch keine feste Erinnerung.</p>`;
-  const rules = eventRules().map(({ ev, r }) => `<div class="listrow" style="align-items:center;gap:8px">
+  const rules = eventRules().filter(({ ev, r }) => (r.repeat || "once") !== "once" || ev.date >= todayIso).map(({ ev, r }) => `<div class="listrow" style="align-items:center;gap:8px">
         <div class="grow"><b>${esc(r.title || ev.name)}</b>
           <div class="muted" style="font-size:13px">${esc(ev.name)} · ${fmtD(parseIso(ev.date))} ${fmtMin(ev.start)} · ${r.before} Min vorher · ${REPEAT_LABEL[r.repeat || "once"]}</div></div>
         <input type="checkbox" data-evrnon="${ev.id}|${r.id}" ${r.on !== false ? "checked" : ""} title="an/aus">
