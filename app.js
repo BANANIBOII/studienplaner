@@ -2705,6 +2705,20 @@ document.addEventListener("touchend", (e) => {
 document.addEventListener("touchcancel", () => { mensaTouch = null; }, { passive: true });
 // Hinweis: Die Speisedaten sagen nicht, ob ein Gericht vegetarisch ist. Das wird anhand des Namens geschätzt.
 const MEAT_RE = /(fleisch|schwein|rind|hähnchen|huhn|pute|geflügel|fisch|lachs|speck|wurst|schinken|kalb|lamm|hack|gyros|döner|salami|ente|bratwurst)/i;
+// Emojis je Gericht: Fleischart aus dem Namen, vegan aus dem Namen, sonst (geschätzt) vegetarisch
+const MENSA_EMOJI = [
+  [/vegan/i, "🌱"],
+  [/schwein|speck|schinken|wurst|kassler|salami/i, "🐷"],
+  [/rind|hack|burger|steak|frikadelle|bolognese/i, "🐄"],
+  [/hähnchen|huhn|pute|geflügel|ente/i, "🐔"],
+  [/fisch|lachs|thunfisch|seelachs/i, "🐟"],
+  [/lamm/i, "🐑"],
+];
+function mensaEmoji(name) {
+  const hits = MENSA_EMOJI.filter(([re]) => re.test(name)).map(([, e]) => e);
+  if (hits.length) return hits.join(" ");
+  return MEAT_RE.test(name) ? "🍽️" : "🥕";
+}
 function mensaCardHTML() {
   const target = mensaTarget();
   const today = iso(new Date());
@@ -2718,8 +2732,9 @@ function mensaCardHTML() {
   } else if (fresh && fresh.gerichte && fresh.gerichte.length) {
     const shown = ui.mensaNoMeat ? fresh.gerichte.filter((g) => !MEAT_RE.test(g.name)) : fresh.gerichte;
     body = (shown.length ? shown : fresh.gerichte).map((g) =>
-      `<div class="mensa-row"><span class="muted">${esc(g.label)}</span><span><b>${esc(g.name)}</b></span><span class="mensa-price">${esc(g.preis.stud)}</span></div>`
-    ).join("") + `<div class="muted" style="font-size:12px;margin-top:8px">Preise für Studierende</div>
+      `<div class="mensa-row"><span class="muted">${esc(g.label)}</span><span><span title="Aus dem Namen geschätzt" style="margin-right:4px">${mensaEmoji(g.name)}</span><b>${esc(g.name)}</b></span><span class="mensa-price">${esc(g.preis.stud)}</span></div>`
+    ).join("") + `<div class="muted" style="font-size:12px;margin-top:8px">🐷 Schwein · 🐄 Rind · 🐔 Geflügel · 🐟 Fisch · 🐑 Lamm · 🌱 vegan · 🥕 vegetarisch (geschätzt)</div>
+      <div class="muted" style="font-size:12px">Preise für Studierende</div>
       <button class="btn ghost btn-sm" data-act="mensafilter" style="margin-top:8px">${ui.mensaNoMeat ? "Alle anzeigen" : "Nur ohne Fleisch (geschätzt)"}</button>`;
   } else if (fresh) {
     body = `<div class="muted">${esc(fresh.hinweis || "Kein Speiseplan für diesen Tag.")}</div>`;
