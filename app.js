@@ -898,7 +898,6 @@ function render() {
   const initEl = document.querySelector(".profile-init");
   if (initEl) initEl.textContent = session && session.user && session.user.email ? session.user.email.charAt(0).toUpperCase() : "S";
   syncPlanFab();
-  syncLayFab();
   syncTabBadge();
   // Einblenden nur beim Wechsel des Reiters, nicht bei jedem Haken oder Klick
   if (tabChanged && !document.body.classList.contains("tab-scrub")) {
@@ -2158,18 +2157,6 @@ function topicComplete(m, t) {
   return es.length > 0 && es.every((x) => x.checked);
 }
 
-// Schwebender Knopf für den Layout-Modus. Erscheint, sobald der Modus einmal aktiviert wurde.
-const LAYFAB_KEY = "sp-layfab";
-function layFabOn() { try { return localStorage.getItem(LAYFAB_KEY) === "1"; } catch { return false; } }
-function setLayFabOn() { try { localStorage.setItem(LAYFAB_KEY, "1"); } catch {} }
-function syncLayFab() {
-  const old = document.getElementById("layFab");
-  if (!layFabOn()) { if (old) old.remove(); return; }
-  const label = ui.layEdit ? ICON.check : ICON.layout;
-  const title = ui.layEdit ? "Layout fertig" : "Layout bearbeiten";
-  if (old) { old.innerHTML = label; old.title = title; old.classList.toggle("on", ui.layEdit); return; }
-  document.body.insertAdjacentHTML("beforeend", `<button id="layFab" class="lay-fab${ui.layEdit ? " on" : ""}" data-act="laytoggle" title="${title}">${label}</button>`);
-}
 // Zahl am Kalender-Reiter: offene Aufgaben bis Sonntag (überfällige eingeschlossen)
 function syncTabBadge() {
   const btn = document.querySelector('.tabbar button[data-tab="kalender"]');
@@ -3925,7 +3912,7 @@ document.addEventListener("click", async (e) => {
       const v = el.dataset.v;
       closeModal();
       if (v === "einstellungen") { ui.tab = "einstellungen"; ui.setPage = null; ui.nfOnly = null; render(); window.scrollTo(0, 0); }
-      else if (v === "layout") { ui.layEdit = true; setLayFabOn(); render(); }
+      else if (v === "layout") { ui.layEdit = true; render(); }
       else if (v === "undo") undo();
       else if (v === "redo") redo();
       else if (v === "logout") { if (await appConfirm("Wirklich abmelden? Deine Daten bleiben in der Cloud und sind nach dem Anmelden wieder da.", "Abmelden")) cloudSignOut(); }
@@ -4104,7 +4091,7 @@ document.addEventListener("click", async (e) => {
     case "navset": state.settings.navSide = el.dataset.v; commit(); break;
     case "calmenu": openCalMenu(); break;
     case "checkset": state.settings.checkSide = el.dataset.v; commit(); break;
-    case "laytoggle": ui.layEdit = !ui.layEdit; if (ui.layEdit) setLayFabOn(); render(); break;
+    case "laytoggle": ui.layEdit = !ui.layEdit; render(); break;
     case "mensareload": loadMensa(true); break;
     case "dtoday": ui.dayDate = iso(new Date()); ui.anim = null; render(); break;
     case "planview": planToggle(); break;

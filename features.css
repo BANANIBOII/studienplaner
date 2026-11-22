@@ -864,16 +864,6 @@ html.no-scrollbars::-webkit-scrollbar { display: none; width: 0; height: 0; }
 .setd { display: block; font-size: 13px; line-height: 1.35; margin-top: 2px; }
 .setchev { font-size: 22px; opacity: .45; flex: none; }
 
-/* Schwebender Knopf für den Layout-Modus (auf allen Reitern) */
-.lay-fab {
-  position: fixed; left: 16px; bottom: calc(78px + env(safe-area-inset-bottom)); z-index: 40;
-  width: 52px; height: 52px; border-radius: 50%; border: 0;
-  background: var(--accent-soft); color: var(--accent);
-  box-shadow: 0 6px 18px rgba(0, 0, 0, .28); font-size: 22px; font-weight: 700;
-}
-.lay-fab.on { background: var(--accent); color: #0b1220; }
-@media (min-width: 800px) { .lay-fab { bottom: 18px; left: 22px; } }
-
 /* Zahl am Reiter (offene Aufgaben bis Sonntag) */
 .tabbar button { position: relative; }
 .tab-badge {
