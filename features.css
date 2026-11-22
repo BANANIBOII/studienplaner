@@ -1360,3 +1360,17 @@ body:not(.dark) { --elev: 0 8px 24px rgba(20, 60, 60, .1); }
   .sheet-actions .right .btn.ghost { min-height: 50px; padding-left: 14px; padding-right: 14px; }
   .sheet-actions > .btn, .sheet-actions > .danger-text { min-height: 50px; }
 }
+
+/* ---------- Stundenplan-Menü: nach Abschnitten gegliedert ---------- */
+.pm-link { width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 14px 0; border: 0; border-bottom: 1px solid var(--line); background: transparent; color: var(--text); font: inherit; font-weight: 700; text-align: left; cursor: pointer; }
+.pm-link span { font-size: 22px; color: var(--muted); }
+.pm-sec { font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin: 18px 0 4px; }
+.pm-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--line); font-size: 15px; }
+.pm-row select { width: auto; max-width: 52%; }
+.pm-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.pm-cell { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--muted); }
+.pm-cell input[type="color"] { width: 100%; height: 40px; padding: 4px; }
+.pm-hint { font-size: 13px; margin: 6px 0 10px; }
+.pm-mark { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; align-items: center; margin-bottom: 8px; }
+.pm-mark input[data-mark="label"] { grid-column: 1 / 3; }
+.pm-mark .menu-btn { grid-row: 1 / 3; grid-column: 3; }

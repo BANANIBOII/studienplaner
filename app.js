@@ -1496,37 +1496,42 @@ function openPlanMenu() {
     }
     return o;
   };
+  const zoomPct = Math.round(getZoom("plan") * 100);
+  const range = (key, lbl, from, to, sel) => `<label class="pm-cell"><span>${lbl}</span><select data-plan-range="${key}" ${s.autoRange ? "disabled" : ""}>${opts(from, to, sel)}</select></label>`;
   openModal(`
-    <h3>Stundenplan-Einstellungen</h3>
-    <button class="btn" data-act="planedit" style="margin-bottom:12px">Termine bearbeiten (verschieben, kopieren)</button>
-    <label class="row" style="margin-bottom:12px"><input type="checkbox" data-change="weekend" ${s.weekend ? "checked" : ""}> Samstag und Sonntag anzeigen</label>
-    <label class="row" style="margin-bottom:12px"><input type="checkbox" data-change="autorange" ${s.autoRange ? "checked" : ""}> Zeitachse automatisch an Vorlesungen anpassen (30 Min davor und danach)</label>
-    <label class="muted">Abstand der Zeitachse</label>
-    <select data-plan-step style="margin-bottom:12px">${PLAN_STEPS.map((v) => `<option value="${v}" ${v === planStepMin() ? "selected" : ""}>${v === 60 ? "1 Std" : `${v} Min`}</option>`).join("")}</select>
-    <label class="row" style="margin-bottom:12px"><input type="checkbox" data-change="planlines" ${s.planLines ? "checked" : ""}> Waagerechte Linien im gleichen Abstand (sonst nur jede Stunde)</label>
-    <label class="muted">Beginn</label>
-    <select data-plan-range="dayStart" ${s.autoRange ? "disabled" : ""}>${opts(6, 11.5, s.dayStart)}</select>
-    <label class="muted">Ende</label>
-    <select data-plan-range="dayEnd" ${s.autoRange ? "disabled" : ""}>${opts(14, 23.5, s.dayEnd)}</select>
-    <label class="muted">Höhe: ${Math.round(getZoom("plan") * 100)} %</label>
-    <input type="range" min="50" max="200" step="5" value="${Math.round(getZoom("plan") * 100)}" data-plan-zoom>
-    <p class="muted">Alternativ mit zwei Fingern zusammenziehen oder auseinanderziehen (am PC: Strg + Mausrad).</p>
-    <label class="muted">Hintergrund des Stundenplans</label>
-    <input type="color" value="${gridVal}" data-plan="grid">
-    <label class="muted">Farbe der Linie (aktuelle Uhrzeit)</label>
-    <input type="color" value="${nowVal}" data-plan="now">
-    <h4 style="margin:16px 0 6px">Leisten & Pausen</h4>
-    <p class="muted" style="margin:0 0 8px">Ohne Ende eine Linie, mit Ende ein Band (z. B. Mittagspause 12:00–13:00).</p>
-    ${(s.planMarks || []).map((mk) => `<div class="row" style="gap:6px;flex-wrap:wrap;margin-bottom:8px">
-      <input type="time" value="${mk.time || ""}" data-mark="time" data-id="${mk.id}" style="width:auto">
-      <input type="time" value="${mk.end || ""}" data-mark="end" data-id="${mk.id}" style="width:auto" title="Ende (leer = nur Linie)">
-      <input value="${esc(mk.label || "")}" data-mark="label" data-id="${mk.id}" placeholder="Name" style="flex:1;min-width:80px">
-      <button class="btn ghost" data-act="markdel" data-id="${mk.id}" title="Löschen">${ICON.x}</button>
+    <h3>Stundenplan</h3>
+    <button class="pm-link" data-act="planedit">Termine verschieben oder kopieren<span aria-hidden="true">›</span></button>
+
+    <div class="pm-sec">Ansicht</div>
+    <label class="pm-row"><span>Samstag und Sonntag</span><input type="checkbox" data-change="weekend" ${s.weekend ? "checked" : ""}></label>
+    <label class="pm-row"><span>Zeitachse an Vorlesungen anpassen</span><input type="checkbox" data-change="autorange" ${s.autoRange ? "checked" : ""}></label>
+    <label class="pm-row"><span>Abstand der Zeitachse</span><select data-plan-step>${PLAN_STEPS.map((v) => `<option value="${v}" ${v === planStepMin() ? "selected" : ""}>${v === 60 ? "1 Std" : `${v} Min`}</option>`).join("")}</select></label>
+    <label class="pm-row"><span>Waagerechte Linien in gleichem Abstand</span><input type="checkbox" data-change="planlines" ${s.planLines ? "checked" : ""}></label>
+    <label class="pm-row"><span>Höhe: ${zoomPct} %</span><input type="range" min="50" max="200" step="5" value="${zoomPct}" data-plan-zoom></label>
+    <p class="muted pm-hint">Zoomen geht auch mit zwei Fingern.</p>
+
+    <div class="pm-sec">Zeitraum${s.autoRange ? " (automatisch)" : ""}</div>
+    <div class="pm-pair">${range("dayStart", "Beginn", 6, 11.5, s.dayStart)}${range("dayEnd", "Ende", 14, 23.5, s.dayEnd)}</div>
+
+    <div class="pm-sec">Farben</div>
+    <div class="pm-pair">
+      <label class="pm-cell"><span>Hintergrund</span><input type="color" value="${gridVal}" data-plan="grid"></label>
+      <label class="pm-cell"><span>Jetzt-Linie</span><input type="color" value="${nowVal}" data-plan="now"></label>
+    </div>
+
+    <div class="pm-sec">Leisten & Pausen</div>
+    <p class="muted pm-hint">Ohne Ende eine Linie, mit Ende ein Band, z. B. für die Mittagspause.</p>
+    ${(s.planMarks || []).map((mk) => `<div class="pm-mark">
+      <input type="time" value="${mk.time || ""}" data-mark="time" data-id="${mk.id}" title="Beginn">
+      <input type="time" value="${mk.end || ""}" data-mark="end" data-id="${mk.id}" title="Ende (leer = nur Linie)">
+      <input value="${esc(mk.label || "")}" data-mark="label" data-id="${mk.id}" placeholder="Name">
+      <button class="btn ghost menu-btn" data-act="markdel" data-id="${mk.id}" title="Löschen">${ICON.x}</button>
     </div>`).join("")}
-    <button class="btn ghost" data-act="markadd" style="margin-bottom:12px">+ Leiste hinzufügen</button>
-    <div class="row" style="margin-top:14px">
+    <button class="btn ghost" data-act="markadd">+ Leiste hinzufügen</button>
+
+    <div class="sheet-actions">
       <button class="btn ghost" data-act="planreset">Standard</button>
-      <button class="btn" data-act="mclose">Fertig</button>
+      <div class="right"><button class="btn" data-act="mclose">Fertig</button></div>
     </div>`);
 }
 
