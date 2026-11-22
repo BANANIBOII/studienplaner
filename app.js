@@ -816,7 +816,7 @@ function greetingInfo(now) {
   const today = iso(now);
   const nowMin = now.getHours() * 60 + now.getMinutes();
   const hour = now.getHours();
-  const hi = hour < 11 ? "Guten Morgen!" : hour < 17 ? "Hallo!" : "Guten Abend!";
+  const hi = hour < 5 ? "Gute Nacht!" : hour < 11 ? "Guten Morgen!" : hour < 17 ? "Hallo!" : "Guten Abend!";
   const todays = state.events.filter((e) => e.date === today).sort((a, b) => a.start - b.start);
   const running = todays.find((e) => e.start <= nowMin && nowMin < e.end);
   const upcoming = todays.filter((e) => e.start > nowMin);
