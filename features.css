@@ -1529,3 +1529,16 @@ body:not(.dark) { --elev: 0 8px 24px rgba(20, 60, 60, .1); }
 @media (max-height: 500px) and (orientation: landscape) {
   .topbar { padding-top: 8px; padding-bottom: 8px; }
 }
+
+/* ===== Kopfzeile: Kontext unter dem Titel, Suche als Symbol, Sync nur als Punkt am Profil ===== */
+.topbar .topbar-title { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; order: 0; }
+.topbar .topbar-title h1 { flex: none; }
+.topbar-sub { font-size: 12px; color: var(--muted); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; text-transform: none; }
+.topbar .search-top { order: 1; display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; flex: none; margin-left: 8px; border-radius: 50%; border: 1px solid var(--line); background: transparent; color: var(--text); cursor: pointer; padding: 0; }
+.topbar .search-top .ic { width: 18px; height: 18px; }
+.topbar .top-actions { order: 2; }
+.topbar .profile-btn { order: 3; }
+.topbar h1 { flex: none; }
+/* Dashboard-Suchleiste nur, wenn keine Kopfzeile sichtbar ist */
+@media (max-width: 799px) { body:not(.locked) .dash-search { display: none !important; } }
+body.nav-bottom:not(.locked) .dash-search { display: none !important; }

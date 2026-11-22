@@ -805,6 +805,8 @@ function render() {
     const sub = ui.tab === "einstellungen" && ui.setPage && SETTINGS_LIST.find((x) => x.k === ui.setPage);
     headEl.textContent = ui.tab === "protokolle" && ui.modOpen ? ui.modOpen : sub ? sub.t : (TAB_NAMES[ui.tab] || "Studienplaner");
   }
+  const subEl = document.querySelector(".topbar-sub");
+  if (subEl) subEl.textContent = topbarSub();
   const initEl = document.querySelector(".profile-init");
   if (initEl) initEl.textContent = session && session.user && session.user.email ? session.user.email.charAt(0).toUpperCase() : "S";
   syncPlanFab();
@@ -889,8 +891,20 @@ function dashDayButton(now) {
 }
 
 // ---------- Suche ----------
+// Kleiner Kontext unter dem Titel der Kopfzeile
+function topbarSub() {
+  const today = new Date();
+  if (ui.tab === "dashboard") return `${WEEKDAYS_LONG[(today.getDay() + 6) % 7]}, ${fmtD(today)}`;
+  if (ui.tab === "stundenplan") {
+    const mon = addDays(mondayOf(today), ui.weekOffset * 7);
+    if (ui.view === "day") return `KW ${kwOf(mon)} · ${fmtD(parseIso(ui.dayDate))}`;
+    return `KW ${kwOf(mon)} · ${fmtD(mon)} – ${fmtD(addDays(mon, 6))}`;
+  }
+  if (ui.tab === "kalender") return (ui.month || today).toLocaleDateString("de-DE", { month: "long", year: "numeric" });
+  return "";
+}
 function searchBtnHTML() {
-  return `<button class="btn ghost search-btn" data-act="search">🔍 Suchen in To-Dos, Terminen und Protokollen</button>`;
+  return `<button class="btn ghost search-btn dash-search" data-act="search">🔍 Suchen in To-Dos, Terminen und Protokollen</button>`;
 }
 
 // Suche: Ergebnisse direkt beim Tippen aktualisieren
