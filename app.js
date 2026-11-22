@@ -118,7 +118,7 @@ const PLAN_DEFAULTS = { grid: "", now: "", todo: "#60a5fa", abgabe: "#f59e0b", k
 const DEVICE_LS = "studienplaner-device-v1";
 const DEVICE_DEFAULTS = {
   dark: true, weekend: false, scrollbars: true, colors: { dark: {}, light: {} },
-  themeMode: "", fontScale: 100, font: "inter", startTab: "dashboard", look: "glass",
+  themeMode: "", fontScale: 100, font: "inter", startTab: "dashboard", look: "glass", dynDay: false,
   zoomY: 1, autoRange: false, dayStart: 7, dayEnd: 20, planStep: 30, planLines: false,
   dash: { zoomY: 1, grid: "", now: "" },
   planLook: { grid: "", now: "" },
@@ -157,13 +157,47 @@ const BUILTIN_PRESETS = [
   { name: "Blau Klassik", colors: {
       dark:  { accent: "#60a5fa", bg: "#0b1120", card: "#131c33", text: "#e2e8f0", muted: "#8093b3", now: "#f472b6", line: "#1e2a45" },
       light: { accent: "#2563eb", bg: "#f1f5fd", card: "#ffffff", text: "#0f172a", muted: "#64748b", now: "#e11d48", line: "#dde6f5" } } },
+  // Neue Presets (immer hinten anhängen, damit die Nummern der Presets stabil bleiben)
+  { name: "Mint", colors: {
+      dark:  { accent: "#2dd4bf", bg: "#071513", card: "#0e211e", text: "#d9fbf4", muted: "#7aa89f", now: "#fbbf24", line: "#17302b" },
+      light: { accent: "#0f766e", bg: "#f0fbf8", card: "#ffffff", text: "#0b2a26", muted: "#5a7d77", now: "#d97706", line: "#d5ebe5" } } },
+  { name: "Rosé", colors: {
+      dark:  { accent: "#f9a8d4", bg: "#140a10", card: "#21121b", text: "#fce7f3", muted: "#b08aa0", now: "#fde047", line: "#311b28" },
+      light: { accent: "#db2777", bg: "#fdf2f8", card: "#ffffff", text: "#3b0a22", muted: "#8f5a74", now: "#ca8a04", line: "#f5d4e5" } } },
+  { name: "Kaffee", colors: {
+      dark:  { accent: "#d6a77a", bg: "#120d09", card: "#1d1510", text: "#f5ebe0", muted: "#a08a78", now: "#f87171", line: "#2e221a" },
+      light: { accent: "#8b5a2b", bg: "#faf6f1", card: "#ffffff", text: "#2b1d12", muted: "#7d6a58", now: "#b91c1c", line: "#ebe1d4" } } },
+  { name: "Polarlicht", colors: {
+      dark:  { accent: "#5eead4", bg: "#060b14", card: "#0d1626", text: "#e6fbff", muted: "#7f9bb5", now: "#c084fc", line: "#17243a" },
+      light: { accent: "#0d9488", bg: "#f2f8fb", card: "#ffffff", text: "#0b1f2e", muted: "#5a7285", now: "#9333ea", line: "#dbe8f0" } } },
+  { name: "Mitternacht", colors: {
+      dark:  { accent: "#fcd34d", bg: "#05070f", card: "#0c1224", text: "#e8ecf8", muted: "#7d88a8", now: "#f472b6", line: "#1a2238" },
+      light: { accent: "#92400e", bg: "#f7f5ef", card: "#ffffff", text: "#1f1a10", muted: "#7a6f58", now: "#be185d", line: "#e8e2d3" } } },
+  { name: "Frühlingswiese", colors: {
+      dark:  { accent: "#a3e635", bg: "#0a1108", card: "#131d10", text: "#f0fde4", muted: "#8ea27a", now: "#fb7185", line: "#1f2b18" },
+      light: { accent: "#4d7c0f", bg: "#f7fbef", card: "#ffffff", text: "#1a2510", muted: "#66784f", now: "#e11d48", line: "#e0ebd0" } } },
 ];
+
+// ---------- Tageszeit-Design: passt Hell/Dunkel und Farben an die Uhrzeit an (nur auf diesem Gerät) ----------
+const DAY_SLOTS = [
+  { from: 6, to: 11, dark: false, preset: "Mint", label: "Morgen" },
+  { from: 11, to: 17, dark: false, preset: "Standard Türkis", label: "Tag" },
+  { from: 17, to: 21, dark: true, preset: "Sonnenuntergang", label: "Abend" },
+  { from: 21, to: 30, dark: true, preset: "Mitternacht", label: "Nacht" },   // 21–6 Uhr (Stunden 0–5 zählen als 24–29)
+];
+const dynOn = () => state.settings.dynDay === true;
+function daySlot(date = new Date()) {
+  let h = date.getHours();
+  if (h < 6) h += 24;
+  return DAY_SLOTS.find((x) => h >= x.from && h < x.to) || DAY_SLOTS[1];
+}
 
 function applyPreset(pid) {
   const kind = pid[0];
   const key = pid.slice(2);
   const p = kind === "b" ? BUILTIN_PRESETS[Number(key)] : (state.settings.presets || []).find((x) => x.id === key);
   if (!p) return;
+  state.settings.dynDay = false;
   state.settings.colors = JSON.parse(JSON.stringify(p.colors));
   commit();
 }
@@ -183,6 +217,7 @@ const designIsActive = (colors) => {
   return ["dark", "light"].every((m) => JSON.stringify(cur[m] || {}) === JSON.stringify((colors || {})[m] || {}));
 };
 function activeDesignName() {
+  if (dynOn()) return `Automatisch · ${daySlot().label}`;
   const all = [...BUILTIN_PRESETS, ...(state.settings.presets || [])];
   const hit = all.find((p) => designIsActive(p.colors));
   return hit ? hit.name : "Eigenes Design";
@@ -335,7 +370,7 @@ function applyDevice(settings) {
 function deviceFromSettings(s) {
   return {
     dark: s.dark, weekend: s.weekend, colors: s.colors, zoomY: s.zoomY, autoRange: s.autoRange,
-    dayStart: s.dayStart, dayEnd: s.dayEnd, planStep: s.planStep || 30, planLines: !!s.planLines, dash: s.dash, navSide: s.navSide || "", checkSide: s.checkSide || "left", scrollbars: s.scrollbars !== false, themeMode: s.themeMode || "", fontScale: s.fontScale || 100, font: s.font || "inter", startTab: s.startTab || "dashboard", look: s.look || "glass", layouts: s.layouts || {}, cal: s.cal || DEVICE_DEFAULTS.cal, nfDev: { ...DEVICE_DEFAULTS.nfDev, ...(s.nfDev || {}) },
+    dayStart: s.dayStart, dayEnd: s.dayEnd, planStep: s.planStep || 30, planLines: !!s.planLines, dash: s.dash, navSide: s.navSide || "", checkSide: s.checkSide || "left", scrollbars: s.scrollbars !== false, themeMode: s.themeMode || "", dynDay: s.dynDay === true, fontScale: s.fontScale || 100, font: s.font || "inter", startTab: s.startTab || "dashboard", look: s.look || "glass", layouts: s.layouts || {}, cal: s.cal || DEVICE_DEFAULTS.cal, nfDev: { ...DEVICE_DEFAULTS.nfDev, ...(s.nfDev || {}) },
     planLook: { grid: (s.plan && s.plan.grid) || "", now: (s.plan && s.plan.now) || "" },
   };
 }
@@ -623,12 +658,18 @@ const ui = {
 
 // ---------- Farben / Design ----------
 function currentMode() {
+  if (dynOn()) return daySlot().dark ? "dark" : "light";
   if (state.settings.themeMode === "system") return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
   return state.settings.dark ? "dark" : "light";
 }
 function themeColors() {
   const mode = currentMode();
-  return { ...THEME_DEFAULTS[mode], ...((state.settings.colors || {})[mode] || {}) };
+  let custom = (state.settings.colors || {})[mode];
+  if (dynOn()) {
+    const preset = BUILTIN_PRESETS.find((p) => p.name === daySlot().preset);
+    custom = preset ? preset.colors[mode] : custom;
+  }
+  return { ...THEME_DEFAULTS[mode], ...(custom || {}) };
 }
 // Schriftarten (pro Gerät). Serif und Rund werden erst geladen, wenn sie gewählt sind.
 const FONT_STACKS = {
@@ -2079,7 +2120,7 @@ function syncLayFab() {
   if (!layFabOn()) { if (old) old.remove(); return; }
   const label = ui.layEdit ? ICON.check : ICON.layout;
   const title = ui.layEdit ? "Layout fertig" : "Layout bearbeiten";
-  if (old) { old.textContent = label; old.title = title; old.classList.toggle("on", ui.layEdit); return; }
+  if (old) { old.innerHTML = label; old.title = title; old.classList.toggle("on", ui.layEdit); return; }
   document.body.insertAdjacentHTML("beforeend", `<button id="layFab" class="lay-fab${ui.layEdit ? " on" : ""}" data-act="laytoggle" title="${title}">${label}</button>`);
 }
 // Zahl am Kalender-Reiter: offene Aufgaben bis Sonntag (überfällige eingeschlossen)
@@ -2269,6 +2310,7 @@ function settingsPages() {
       <label class="muted" style="display:block;margin:4px 0 6px">Schriftart (nur auf diesem Gerät)</label>
       ${btns([["inter", "Inter"], ["system", "System"], ["serif", "Serif"], ["rounded", "Rund"]], FONT_STACKS[s.font] ? s.font : "inter", "fontsel")}
       <div style="height:12px"></div>
+      <label class="row"><input type="checkbox" data-change="dynday" ${s.dynDay === true ? "checked" : ""}> Automatisch nach Tageszeit (Morgen, Tag, Abend, Nacht)</label>
       <label class="row"><input type="checkbox" data-change="scrollbars" ${s.scrollbars !== false ? "checked" : ""}> Scrollbalken anzeigen (nur auf diesem Gerät)</label>
     </div>`,
     `<div class="card"><h3>Farben (${mode === "dark" ? "Dunkel" : "Hell"}-Modus)</h3>
@@ -4414,6 +4456,11 @@ document.addEventListener("change", async (e) => {
     applyTheme();
     return;
   }
+  if (t.dataset.change === "dynday") {
+    state.settings.dynDay = t.checked;
+    commit();
+    return;
+  }
   if (t.dataset.change === "scrollbars") {
     state.settings.scrollbars = t.checked;
     commit();
@@ -5027,6 +5074,8 @@ function tickPlan() {
   if (ui.tab === "stundenplan" && !document.querySelector(".modal")) render();
 }
 setInterval(tickPlan, 60000);
+// Tageszeit-Design: alle 5 Minuten prüfen, ob ein anderer Abschnitt des Tages begonnen hat
+setInterval(() => { if (dynOn()) applyTheme(); }, 5 * 60 * 1000);
 
 // ---------- Push-Benachrichtigungen ----------
 const VAPID_PUBLIC_KEY = "BET0TZ9SGPPKXHs2r3t3WPyzHyE7QNsyOGEk4uipfwjV6-HbB1G5nrNjYZjtLkhTL6X_-iBxAFMI9uvTfE_kbjA";
