@@ -4668,7 +4668,7 @@ document.addEventListener("submit", async (e) => {
     if (!key) return;
     if (await saveGeminiKey(key)) {
       showToast("✓ Key gespeichert");
-      keyStatusText = "✓ Key gespeichert";
+      await refreshKeyStatus();   // holt das Datum vom Server
       render();
     }
     return;
