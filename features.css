@@ -1520,3 +1520,12 @@ body:not(.dark) { --elev: 0 8px 24px rgba(20, 60, 60, .1); }
   transition: top .12s var(--ease-ios), height .12s var(--ease-ios);
 }
 @media (prefers-reduced-motion: reduce) { .drop-preview, .drag-ghost { transition: none; animation: none; } }
+
+/* ===== Kopfzeile auf breiten Bildschirmen (Querformat, Tablet): Titel links, Aktionen und Profil rechts ===== */
+.topbar h1 { flex: 1 1 auto; min-width: 0; }
+.topbar .top-actions { display: flex; gap: 8px; align-items: center; order: 1; }
+.topbar .profile-btn { order: 2; margin-left: 8px; }
+.topbar .top-actions:empty { display: none; }
+@media (max-height: 500px) and (orientation: landscape) {
+  .topbar { padding-top: 8px; padding-bottom: 8px; }
+}
