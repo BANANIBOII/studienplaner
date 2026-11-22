@@ -5671,3 +5671,31 @@ updateOnlineBanner(!navigator.onLine);
 
 checkPushState();
 setTimeout(loadTodaySent, 1500);
+
+// Pop-up am Handy nach unten wischen zum Schließen (nur wenn der Inhalt ganz oben steht; X, Zurück und Hintergrund bleiben)
+(function () {
+  let d = null;
+  document.addEventListener("pointerdown", (e) => {
+    if (e.pointerType !== "touch" || !e.target.closest) return;
+    const sheet = e.target.closest("#modalRoot .sheet");
+    if (!sheet || sheet.scrollTop > 0 || e.target.closest("input, textarea, select")) return;
+    d = { sheet, y: e.clientY, dy: 0, id: e.pointerId };
+  }, { passive: true });
+  document.addEventListener("pointermove", (e) => {
+    if (!d || e.pointerId !== d.id) return;
+    d.dy = e.clientY - d.y;
+    if (d.dy > 0) {
+      d.sheet.style.transition = "none";
+      d.sheet.style.transform = `translateY(${Math.min(d.dy, 320)}px)`;
+    }
+  }, { passive: true });
+  const end = () => {
+    if (!d) return;
+    const s = d; d = null;
+    s.sheet.style.transition = "transform .2s ease";
+    s.sheet.style.transform = "";
+    if (s.dy > 110) closeModal();
+  };
+  document.addEventListener("pointerup", end);
+  document.addEventListener("pointercancel", end);
+})();
