@@ -1268,7 +1268,7 @@ body:not(.look-m3) .card {
   background: color-mix(in srgb, var(--card) 66%, transparent);
   -webkit-backdrop-filter: blur(16px) saturate(1.4); backdrop-filter: blur(16px) saturate(1.4);
   border: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, .22), inset 0 1px 0 color-mix(in srgb, var(--text) 7%, transparent);
+  box-shadow: var(--elev), inset 0 1px 0 color-mix(in srgb, var(--text) 7%, transparent);
 }
 body:not(.look-m3) .topic-card, body:not(.look-m3) .listrow {
   background: color-mix(in srgb, var(--card) 50%, transparent);
@@ -1323,3 +1323,18 @@ body.lite .tabbar { background: var(--card) !important; }
 input[data-act="tdone"]:checked { animation: tickPop .35s cubic-bezier(.2, .9, .3, 1.4); }
 @keyframes tickPop { 0% { transform: scale(.6); } 100% { transform: scale(1); } }
 @media (prefers-reduced-motion: reduce) { input[data-act="tdone"]:checked { animation: none; } }
+
+/* ---------- Schatten: ein gemeinsamer Wert für Karten, Leiste und Fenster ---------- */
+:root { --elev: 0 8px 24px rgba(0, 0, 0, .2); }
+body:not(.dark) { --elev: 0 8px 24px rgba(20, 60, 60, .1); }
+.card, .tabbar, .modal .sheet { box-shadow: var(--elev); }
+
+/* ---------- Abstände: festes Raster (4er-Schritte) ---------- */
+:root { --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-5: 20px; }
+.card { padding: var(--sp-5); }
+.card > h3:first-child, .card > h4:first-child { margin-top: 0; margin-bottom: var(--sp-3); }
+.item { padding: var(--sp-3); }
+.listrow { padding: var(--sp-3) var(--sp-4); }
+
+/* ---------- Kleiner Knopf für Hinzufügen (z. B. „+ Link“) ---------- */
+.btn.btn-sm { padding: 6px 12px; font-size: 13px; border-radius: 999px; }

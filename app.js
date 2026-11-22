@@ -2098,7 +2098,7 @@ function linksCardHTML(name, m) {
   return `<div class="card">
       <div class="row" style="justify-content:space-between">
         <div class="sec-title" style="margin:0">Links & Quellen</div>
-        <button class="btn" data-act="mlnew" data-m="${n}">+ Link</button>
+        <button class="btn btn-sm" data-act="mlnew" data-m="${n}">+ Link</button>
       </div>
       ${rows || `<div class="muted">Noch kein Link, z. B. zu NotebookLM oder einer Quelle.</div>`}
     </div>`;
@@ -3948,6 +3948,12 @@ document.addEventListener("click", async (e) => {
       }
       t.done = !t.done;
       t.doneAt = t.done ? iso(new Date()) : null;
+      // Rückmeldung, sobald heute (und alles Überfällige) erledigt ist
+      if (t.done) {
+        const todayIso = iso(new Date());
+        const leftOver = state.todos.some((x) => x.id !== t.id && !x.done && x.date && x.date <= todayIso);
+        if (!leftOver) setTimeout(() => showToast("Alles für heute erledigt"), 400);
+      }
       ui.popId = id;
       setTimeout(() => { ui.popId = null; }, 900);
       if (el.closest("#modalRoot")) closeModal();   // aus dem Aktionsfenster heraus: schließen
