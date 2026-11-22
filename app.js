@@ -118,7 +118,7 @@ const PLAN_DEFAULTS = { grid: "", now: "", todo: "#60a5fa", abgabe: "#f59e0b", k
 const DEVICE_LS = "studienplaner-device-v1";
 const DEVICE_DEFAULTS = {
   dark: true, weekend: false, scrollbars: true, colors: { dark: {}, light: {} },
-  themeMode: "", fontScale: 100, font: "inter", startTab: "dashboard", look: "glass", dynDay: false,
+  themeMode: "", fontScale: 100, font: "inter", startTab: "dashboard", look: "glass", dynDay: false, daySlots: null,
   zoomY: 1, autoRange: false, dayStart: 7, dayEnd: 20, planStep: 30, planLines: false,
   dash: { zoomY: 1, grid: "", now: "" },
   planLook: { grid: "", now: "" },
@@ -180,16 +180,35 @@ const BUILTIN_PRESETS = [
 
 // ---------- Tageszeit-Design: passt Hell/Dunkel und Farben an die Uhrzeit an (nur auf diesem Gerät) ----------
 const DAY_SLOTS = [
-  { from: 6, to: 11, dark: false, preset: "Mint", label: "Morgen" },
-  { from: 11, to: 17, dark: false, preset: "Standard Türkis", label: "Tag" },
-  { from: 17, to: 21, dark: true, preset: "Sonnenuntergang", label: "Abend" },
-  { from: 21, to: 30, dark: true, preset: "Mitternacht", label: "Nacht" },   // 21–6 Uhr (Stunden 0–5 zählen als 24–29)
+  { from: 6, to: 11, label: "Morgen", def: { preset: "Mint", dark: false } },
+  { from: 11, to: 17, label: "Tag", def: { preset: "Standard Türkis", dark: false } },
+  { from: 17, to: 21, label: "Abend", def: { preset: "Sonnenuntergang", dark: true } },
+  { from: 21, to: 30, label: "Nacht", def: { preset: "Mitternacht", dark: true } },   // 21–6 Uhr (Stunden 0–5 zählen als 24–29)
 ];
 const dynOn = () => state.settings.dynDay === true;
+// Design-ID eines Presets: "b:<Nummer>" für eingebaute, "u:<id>" für eigene
+function presetColorsFor(pid) {
+  if (!pid) return null;
+  const key = pid.slice(2);
+  const p = pid[0] === "b" ? BUILTIN_PRESETS[Number(key)] : (state.settings.presets || []).find((x) => x.id === key);
+  return p ? p.colors : null;
+}
+// Gewählte Einstellung eines Abschnitts (Design-ID und Hell/Dunkel), sonst die Vorgabe
+function slotSetting(i) {
+  const d = DAY_SLOTS[i];
+  const saved = (state.settings.daySlots || [])[i] || {};
+  const bi = BUILTIN_PRESETS.findIndex((p) => p.name === d.def.preset);
+  return {
+    preset: saved.preset || (bi >= 0 ? "b:" + bi : "b:0"),
+    dark: typeof saved.dark === "boolean" ? saved.dark : d.def.dark,
+  };
+}
 function daySlot(date = new Date()) {
   let h = date.getHours();
   if (h < 6) h += 24;
-  return DAY_SLOTS.find((x) => h >= x.from && h < x.to) || DAY_SLOTS[1];
+  const found = DAY_SLOTS.findIndex((x) => h >= x.from && h < x.to);
+  const i = found < 0 ? 1 : found;
+  return { ...DAY_SLOTS[i], ...slotSetting(i) };
 }
 
 function applyPreset(pid) {
@@ -238,6 +257,34 @@ function viewDesignCard() {
 }
 
 // Alle Designs direkt auf der Seite (kein eigenes Fenster mehr)
+// Auswahl aller Designs (eingebaute und eigene) für die Tageszeit-Abschnitte
+function allPresetOpts(selected) {
+  const all = [
+    ...BUILTIN_PRESETS.map((p, i) => ["b:" + i, p.name]),
+    ...(state.settings.presets || []).map((p) => ["u:" + p.id, p.name]),
+  ];
+  return all.map(([v, n]) => `<option value="${esc(v)}" ${v === selected ? "selected" : ""}>${esc(n)}</option>`).join("");
+}
+function dynCardHTML() {
+  return `<div class="card"><h3>Automatisch nach Tageszeit</h3>
+    <label class="row"><input type="checkbox" data-change="dynday" ${dynOn() ? "checked" : ""}> Design je nach Uhrzeit wechseln</label>
+    <p class="muted" style="margin:8px 0 12px">Gilt nur für dieses Gerät. Für jeden Abschnitt wählst du Design und Hell oder Dunkel.</p>
+    ${DAY_SLOTS.map((d, i) => {
+      const cfg = slotSetting(i);
+      return `<div class="dayslot" style="padding:10px 0;border-top:1px solid var(--line)">
+        <div class="row" style="justify-content:space-between"><b>${d.label}</b><span class="muted">${d.from % 24}–${d.to % 24} Uhr</span></div>
+        <div class="row" style="gap:8px;margin-top:6px">
+          <select class="grow" data-change="dynslot" data-i="${i}" data-f="preset">${allPresetOpts(cfg.preset)}</select>
+          <select data-change="dynslot" data-i="${i}" data-f="dark">
+            <option value="light" ${cfg.dark ? "" : "selected"}>Hell</option>
+            <option value="dark" ${cfg.dark ? "selected" : ""}>Dunkel</option>
+          </select>
+        </div>
+      </div>`;
+    }).join("")}
+  </div>`;
+}
+
 function designListHTML() {
   const mine = state.settings.presets || [];
   const row = (pid, name, colors, deletable) => `<div class="dcard ${designIsActive(colors) ? "on" : ""}">
@@ -370,7 +417,7 @@ function applyDevice(settings) {
 function deviceFromSettings(s) {
   return {
     dark: s.dark, weekend: s.weekend, colors: s.colors, zoomY: s.zoomY, autoRange: s.autoRange,
-    dayStart: s.dayStart, dayEnd: s.dayEnd, planStep: s.planStep || 30, planLines: !!s.planLines, dash: s.dash, navSide: s.navSide || "", checkSide: s.checkSide || "left", scrollbars: s.scrollbars !== false, themeMode: s.themeMode || "", dynDay: s.dynDay === true, fontScale: s.fontScale || 100, font: s.font || "inter", startTab: s.startTab || "dashboard", look: s.look || "glass", layouts: s.layouts || {}, cal: s.cal || DEVICE_DEFAULTS.cal, nfDev: { ...DEVICE_DEFAULTS.nfDev, ...(s.nfDev || {}) },
+    dayStart: s.dayStart, dayEnd: s.dayEnd, planStep: s.planStep || 30, planLines: !!s.planLines, dash: s.dash, navSide: s.navSide || "", checkSide: s.checkSide || "left", scrollbars: s.scrollbars !== false, themeMode: s.themeMode || "", dynDay: s.dynDay === true, daySlots: s.daySlots || null, fontScale: s.fontScale || 100, font: s.font || "inter", startTab: s.startTab || "dashboard", look: s.look || "glass", layouts: s.layouts || {}, cal: s.cal || DEVICE_DEFAULTS.cal, nfDev: { ...DEVICE_DEFAULTS.nfDev, ...(s.nfDev || {}) },
     planLook: { grid: (s.plan && s.plan.grid) || "", now: (s.plan && s.plan.now) || "" },
   };
 }
@@ -666,8 +713,8 @@ function themeColors() {
   const mode = currentMode();
   let custom = (state.settings.colors || {})[mode];
   if (dynOn()) {
-    const preset = BUILTIN_PRESETS.find((p) => p.name === daySlot().preset);
-    custom = preset ? preset.colors[mode] : custom;
+    const pc = presetColorsFor(daySlot().preset);
+    if (pc) custom = pc[mode];
   }
   return { ...THEME_DEFAULTS[mode], ...(custom || {}) };
 }
@@ -2304,13 +2351,13 @@ function settingsPages() {
       <p class="muted" style="margin-top:0">Gilt nur für dieses Gerät.</p>
       ${btns([["light", "Hell"], ["dark", "Dunkel"], ["system", "Wie Gerät"]], themeNow, "themeset")}</div>`,
     viewDesignCard(),
+    dynCardHTML(),
     `<div class="card"><h3>Schrift & Anzeige</h3>
       <label class="muted" style="display:block;margin-bottom:6px">Schriftgröße: ${s.fontScale || 100} % (nur auf diesem Gerät)</label>
       <input type="range" min="80" max="150" step="5" value="${s.fontScale || 100}" data-change="fontscale" style="width:100%;margin-bottom:14px">
       <label class="muted" style="display:block;margin:4px 0 6px">Schriftart (nur auf diesem Gerät)</label>
       ${btns([["inter", "Inter"], ["system", "System"], ["serif", "Serif"], ["rounded", "Rund"]], FONT_STACKS[s.font] ? s.font : "inter", "fontsel")}
       <div style="height:12px"></div>
-      <label class="row"><input type="checkbox" data-change="dynday" ${s.dynDay === true ? "checked" : ""}> Automatisch nach Tageszeit (Morgen, Tag, Abend, Nacht)</label>
       <label class="row"><input type="checkbox" data-change="scrollbars" ${s.scrollbars !== false ? "checked" : ""}> Scrollbalken anzeigen (nur auf diesem Gerät)</label>
     </div>`,
     `<div class="card"><h3>Farben (${mode === "dark" ? "Dunkel" : "Hell"}-Modus)</h3>
@@ -4454,6 +4501,14 @@ document.addEventListener("change", async (e) => {
     state.settings.fontScale = Number(t.value);
     saveDevice();
     applyTheme();
+    return;
+  }
+  if (t.dataset.change === "dynslot") {
+    const cur = DAY_SLOTS.map((_, j) => slotSetting(j));
+    const i = Number(t.dataset.i);
+    cur[i] = t.dataset.f === "dark" ? { ...cur[i], dark: t.value === "dark" } : { ...cur[i], preset: t.value };
+    state.settings.daySlots = cur;
+    commit();
     return;
   }
   if (t.dataset.change === "dynday") {
