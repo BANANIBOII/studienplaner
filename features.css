@@ -1491,13 +1491,14 @@ body:not(.dark) { --elev: 0 8px 24px rgba(20, 60, 60, .1); }
 
 /* ===== Antipp-Rückmeldung: beim Drücken wird das Element leicht kleiner und etwas dunkler ===== */
 .card, .modcard, .listrow, .ev, .dchip, .mday, .plan-corner, .look-opt {
-  transition: transform .18s var(--ease-ios), background-color .2s ease, filter .2s ease, border-color .2s ease;
+  transition: scale .2s var(--ease-ios), background-color .2s ease, filter .2s ease, border-color .2s ease;
 }
+/* scale statt transform: die Einblend-Animationen setzen transform und würden die Verkleinerung überdecken */
 .card:active, .modcard:active, .listrow:active, .ev:active, .dchip:active, .mday:active, .plan-corner:active, .look-opt:active {
-  transform: scale(.975);
-  filter: brightness(.95);
-  transition-duration: .08s, .08s, .08s, .2s;
+  scale: .95;
+  filter: brightness(.92);
+  transition-duration: .09s, .09s, .09s, .2s;
 }
 @media (prefers-reduced-motion: reduce) {
-  .card:active, .modcard:active, .listrow:active, .ev:active, .dchip:active, .mday:active, .plan-corner:active, .look-opt:active { transform: none; }
+  .card:active, .modcard:active, .listrow:active, .ev:active, .dchip:active, .mday:active, .plan-corner:active, .look-opt:active { scale: 1; }
 }
