@@ -4333,10 +4333,12 @@ document.addEventListener("submit", async (e) => {
         if (timeAlreadyPast(data.date, data.time)) { fail("Diese Uhrzeit ist heute schon vorbei. Wähle ein späteres Datum oder eine spätere Uhrzeit."); break; }
         pruneExpiredOnce();
         customList().push({ id: uid(), title, body: "", time: data.time, days: [], date: data.date, on: true });
+        setTimeout(() => showToast(`Erinnerung gespeichert: ${fmtD(parseIso(data.date))} um ${data.time}`), 300);
       } else {
         const days = [...f.querySelectorAll('input[name="d"]:checked')].map((x) => Number(x.value));
         if (!days.length) { fail("Bitte mindestens einen Tag wählen."); break; }
         customList().push({ id: uid(), title, body: "", time: data.time, days, on: true });
+        setTimeout(() => showToast(`Erinnerung gespeichert: ${daysLabel(days)} um ${data.time}`), 300);
       }
       closeModal(); commit(); break;
     }
@@ -4833,6 +4835,24 @@ function pushNeedsHomeScreen() {
   return isIOS && !standalone;
 }
 
+// Ist auf diesem Gerät wirklich ein Abo aktiv? (wird beim Start geprüft)
+let pushState = { checked: false, active: false };
+async function checkPushState() {
+  try {
+    if (!pushSupported() || Notification.permission !== "granted") pushState = { checked: true, active: false };
+    else {
+      const reg = await navigator.serviceWorker.getRegistration();
+      const sub = reg && (await reg.pushManager.getSubscription());
+      pushState = { checked: true, active: !!sub };
+    }
+  } catch (_) { pushState = { checked: true, active: false }; }
+  if (ui.tab === "einstellungen") render();
+}
+function pushWarnHTML() {
+  if (!pushState.checked || pushState.active || !pushSupported()) return "";
+  return `<div class="card push-warn"><b>Benachrichtigungen sind auf diesem Gerät aus.</b>
+    <p class="muted" style="margin:6px 0 0">Erinnerungen kommen erst, wenn du sie unter Einstellungen → Benachrichtigungen aktivierst.</p></div>`;
+}
 function pushCardHTML() {
   if (!pushSupported()) {
     return `<div class="card"><h3>Benachrichtigungen</h3><p class="muted" style="margin:0">Dieser Browser unterstützt keine Benachrichtigungen.</p></div>`;
@@ -5000,7 +5020,7 @@ function customNotifyHTML() {
         <input type="checkbox" data-evrnon="${ev.id}|${r.id}" ${r.on !== false ? "checked" : ""} title="an/aus">
         <button class="btn ghost" data-act="evredit" data-id="${ev.id}" data-rid="${r.id}">Bearbeiten</button>
       </div>`).join("");
-  return `<div class="card"><h3>Feste Erinnerungen</h3>
+  return `${pushWarnHTML()}<div class="card"><h3>Feste Erinnerungen</h3>
       <p class="muted" style="margin-top:0">Eine Nachricht zu einer festen Uhrzeit an den gewählten Tagen, zum Beispiel „Losgehen“ um 7:30.</p>
       ${fixed}
       <button class="btn" data-act="cnnew" style="margin-top:12px">+ Neue Erinnerung</button>
@@ -5621,3 +5641,5 @@ updateOnlineBanner(!navigator.onLine);
     if (row && row._swiped && Date.now() - row._swiped < 400) { e.stopPropagation(); e.preventDefault(); }
   }, true);
 })();
+
+checkPushState();
