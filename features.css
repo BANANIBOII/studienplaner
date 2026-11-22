@@ -1382,3 +1382,21 @@ body:not(.dark) { --elev: 0 8px 24px rgba(20, 60, 60, .1); }
 .profile-btn[data-sync="err"]::after { background: #ef4444; }
 .profile-btn[data-sync="local"]::after { background: #94a3b8; }
 .nextfire { font-size: 12px; margin-top: 2px; }
+
+/* Unteraufgaben in der Aufgabe */
+.subs { margin: 10px 0 4px; }
+.sub-row { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid color-mix(in srgb, var(--text) 8%, transparent); }
+.sub-row .grow { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.sub-row.is-done .grow { text-decoration: line-through; opacity: .6; }
+.sub-row input[type="checkbox"] { width: 20px; height: 20px; flex: 0 0 auto; accent-color: var(--accent); }
+.sub-row .btn { min-width: 36px; padding: 4px 8px; }
+.sub-add { display: flex; gap: 8px; margin-top: 8px; }
+.sub-add input { flex: 1; min-width: 0; }
+
+/* Vorlesungsfreie Zeit und Feiertage im Kalender */
+.mday.is-break {
+  background-image: repeating-linear-gradient(135deg, color-mix(in srgb, var(--muted) 16%, transparent) 0 3px, transparent 3px 7px);
+}
+.break-form { margin-top: 12px; display: grid; gap: 6px; }
+.break-form input { width: 100%; }
+.break-list { margin-bottom: 4px; }

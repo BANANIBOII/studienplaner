@@ -1161,9 +1161,11 @@ function todoItem(t) {
   const sub = CAT_LABEL[t.type] || "To-Do";
   const due = t.date ? ` · fällig ${dateText(t)}` : " · Termin folgt";
   const prio = t.priority || "mittel";
+  const subs = t.subs || [];
+  const subTxt = subs.length ? ` · ${subs.filter((s) => s.done).length}/${subs.length} Unterpunkte` : "";
   return `<div class="item" data-lp="${t.id}" data-act="todoopen" data-id="${t.id}">
     <input type="checkbox" data-act="tdone" data-id="${t.id}" ${canCheck(t) ? "" : "disabled"}>
-    <div class="grow"><b>${esc(t.title)}</b><div class="muted">${sub}${due}${t.time ? " · " + esc(t.time) : ""}</div></div>
+    <div class="grow"><b>${esc(t.title)}</b><div class="muted">${sub}${due}${t.time ? " · " + esc(t.time) : ""}${subTxt}</div></div>
     <span class="prio ${prio}">${prio}</span>
     <button class="btn ghost" data-act="tedit" data-id="${t.id}" title="Bearbeiten">${ICON.edit}</button>
   </div>`;
@@ -1859,10 +1861,11 @@ function viewCal() {
       const tint = spans.reduce((acc, sp) => `color-mix(in srgb, ${calColor(sp)} 14%, ${acc})`, "var(--bg)");
       border += `background-color:${tint};`;
     }
-    const cls = ["mday", `style-${cal.style}`, d.getMonth() !== m.getMonth() ? "other" : "", k === today ? "today" : "", k === ui.selDate ? "sel" : "", spans0.length ? "has-span" : ""].join(" ");
+    const brk = breakOn(k);
+    const cls = ["mday", `style-${cal.style}`, d.getMonth() !== m.getMonth() ? "other" : "", k === today ? "today" : "", k === ui.selDate ? "sel" : "", spans0.length ? "has-span" : "", brk ? "is-break" : ""].join(" ");
     const dots = state.events.filter((e) => e.date === k && !e.cancelled).slice(0, 3)
       .map((e) => `<i style="background:${(state.modules[e.name] || {}).color || "var(--accent)"}"></i>`).join("");
-    cells += `<div class="${cls}" data-act="sel" data-d="${k}" style="--i:${i};${border}">${calCellInner(cal.style, d, dayT, evCount)}${overlays}${dots ? `<span class="mdots">${dots}</span>` : ""}</div>`;
+    cells += `<div class="${cls}" data-act="sel" data-d="${k}"${brk ? ` title="${esc(brk.name || "Vorlesungsfrei")}"` : ""} style="--i:${i};${border}">${calCellInner(cal.style, d, dayT, evCount)}${overlays}${dots ? `<span class="mdots">${dots}</span>` : ""}</div>`;
   }
   const navAct = fold ? "calweek" : "mon";
   const monthCard = `<div class="card">
@@ -2269,6 +2272,17 @@ function settingsPages() {
     `<div class="card"><h3>Semester</h3>
       <form data-form="semester"><label class="muted">Semester-Bezeichnung</label>
         <input name="semester" value="${esc(s.semester)}"><button class="btn">Speichern</button></form></div>`,
+    `<div class="card"><h3>Vorlesungsfreie Zeit &amp; Feiertage</h3>
+      <p class="muted" style="margin-top:0">Diese Tage sind im Kalender markiert, damit man sieht, wann keine Vorlesung ist.</p>
+      ${breaksListHTML()}
+      <form data-form="break" class="break-form">
+        <input name="name" placeholder="Bezeichnung, z. B. Weihnachtsferien" required maxlength="80">
+        <div class="grid2">
+          <div><label class="muted">Von</label><input type="date" name="from" required></div>
+          <div><label class="muted">Bis (leer = ein Tag)</label><input type="date" name="to"></div>
+        </div>
+        <div class="row" style="margin-top:8px"><button class="btn">Hinzufügen</button></div>
+      </form></div>`,
     `<div class="card"><h3>Stundenplan-Datei</h3>
       <p class="muted" style="margin-top:0">Ersetzt den bisherigen Stundenplan. Module werden automatisch angelegt, vorhandene Einträge bleiben erhalten. Aktuell: ${state.events.length} Termine.</p>
       <input type="file" accept=".ics,text/calendar" data-change="ics"></div>`,
@@ -2366,7 +2380,7 @@ const SET_ICON = {
 };
 const SETTINGS_LIST = [
   { k: "darst", t: "Erscheinungsbild", d: "Hell/Dunkel, Designs, Schrift, Farben", w: "design vorlage preset hell dunkel schrift scrollbalken farben kategorie akzent", ic: "🎨", col: "#ec4899" },
-  { k: "stunden", t: "Stundenplan", d: "Semester, Stundenplan-Datei, Kopfzeile, Höhe", w: "stundenplan semester ics termine kopfzeile höhe zoom", ic: "📅", col: "#0ea5e9" },
+  { k: "stunden", t: "Stundenplan", d: "Semester, Stundenplan-Datei, Kopfzeile, Höhe", w: "stundenplan semester ics termine kopfzeile höhe zoom ferien feiertage vorlesungsfrei", ic: "📅", col: "#0ea5e9" },
   { k: "benach", t: "Benachrichtigungen", d: "Module, Mensa, Fristen, Ruhezeit, Tests", w: "benachrichtigung mensa fristen modul ruhezeit test vorwarnzeit push", ic: "🔔", col: "#f59e0b" },
   { k: "navi", t: "Bedienung", d: "Startseite, Reiterleiste, Werkzeuge", w: "bedienung startseite reiterleiste navigation haken werkzeuge rückgängig layout", ic: "🧭", col: "#8b5cf6" },
   { k: "daten", t: "Daten & Cloud", d: "Sicherung, Cloud-Sync, Papierkorb, Zurücksetzen", w: "backup sicherung export import papierkorb zurücksetzen cloud sync anmelden", ic: "☁️", col: "#10b981" },
@@ -2936,6 +2950,54 @@ document.addEventListener("input", (e) => {
   }
 });
 
+// Vorlesungsfreie Zeit und Feiertage: Zeiträume aus den Einstellungen (werden über die Cloud synchronisiert)
+function breakOn(k) {
+  return (state.settings.breaks || []).find((b) => b.from <= k && k <= (b.to || b.from));
+}
+function breaksListHTML() {
+  const list = state.settings.breaks || [];
+  if (!list.length) return `<p class="muted">Noch keine Zeiträume eingetragen.</p>`;
+  return `<div class="break-list">${list.map((b) => {
+    const same = !b.to || b.to === b.from;
+    const range = same ? fmtD(parseIso(b.from)) : `${fmtD(parseIso(b.from))} – ${fmtD(parseIso(b.to))}`;
+    return `<div class="sub-row">
+      <div class="grow"><b>${esc(b.name)}</b><div class="muted" style="font-size:13px">${range}</div></div>
+      <button type="button" class="btn ghost" data-act="brkdel" data-id="${b.id}" title="Entfernen">×</button>
+    </div>`;
+  }).join("")}</div>`;
+}
+
+// Unteraufgaben: kleine Checkliste innerhalb einer Aufgabe (t.subs = [{id, title, done}])
+function subsSectionHTML(t) {
+  const subs = t.subs || [];
+  const n = subs.filter((s) => s.done).length;
+  return `<div class="subs" data-subs="${t.id}">
+    <label class="muted">Unteraufgaben${subs.length ? ` (${n}/${subs.length})` : ""}</label>
+    ${subs.map((s) => `<div class="sub-row${s.done ? " is-done" : ""}">
+      <input type="checkbox" data-act="subdone" data-tid="${t.id}" data-sid="${s.id}" ${s.done ? "checked" : ""}>
+      <span class="grow">${esc(s.title)}</span>
+      <button type="button" class="btn ghost" data-act="subdel" data-tid="${t.id}" data-sid="${s.id}" title="Entfernen">×</button>
+    </div>`).join("")}
+    <div class="sub-add">
+      <input type="text" data-subinput="${t.id}" placeholder="Neue Unteraufgabe" maxlength="120">
+      <button type="button" class="btn ghost" data-act="subadd" data-tid="${t.id}">Hinzufügen</button>
+    </div>
+  </div>`;
+}
+// Nur den Unteraufgaben-Teil neu zeichnen, damit andere Eingaben im Fenster erhalten bleiben
+function refreshSubs(tid) {
+  const t = state.todos.find((x) => x.id === tid);
+  const box = document.querySelector(`[data-subs="${tid}"]`);
+  if (t && box) box.outerHTML = subsSectionHTML(t);
+}
+// Enter im Feld „Neue Unteraufgabe“ fügt sie hinzu, statt das ganze Formular abzuschicken
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Enter" || !e.target.matches || !e.target.matches("[data-subinput]")) return;
+  e.preventDefault();
+  const btn = document.querySelector(`[data-act="subadd"][data-tid="${e.target.dataset.subinput}"]`);
+  if (btn) btn.click();
+});
+
 function openTodoModal(id, date) {
   const t = id ? state.todos.find((x) => x.id === id) : null;
   const type = t ? t.type : "todo";
@@ -2963,6 +3025,7 @@ function openTodoModal(id, date) {
         <div><label class="muted">Uhrzeit</label><input type="time" name="time" value="${t ? t.time : ""}"></div>
         <div><label class="muted">Dauer in Minuten</label><input type="number" name="duration" min="15" step="15" value="${dur}"></div>
       </div>
+      ${t ? subsSectionHTML(t) : `<p class="muted" style="font-size:.85em">Unteraufgaben kannst du hinzufügen, sobald die Aufgabe gespeichert ist.</p>`}
       <div class="row" style="margin-top:12px">
         <button class="btn">Speichern</button>
         ${t ? `<button type="button" class="btn danger" data-act="tdelm" data-id="${t.id}">Löschen</button>` : ""}
@@ -3948,6 +4011,38 @@ document.addEventListener("click", async (e) => {
       showUndo("Aufgabe gelöscht");
       closeModal(); commit(); break;
     }
+    case "subadd": {
+      const tid = el.dataset.tid;
+      const t = state.todos.find((x) => x.id === tid);
+      const inp = document.querySelector(`[data-subinput="${tid}"]`);
+      const title = inp ? inp.value.trim() : "";
+      if (!t || !title) { if (inp) inp.focus(); break; }
+      t.subs = [...(t.subs || []), { id: uid(), title, done: false }];
+      commit(); refreshSubs(tid);
+      const again = document.querySelector(`[data-subinput="${tid}"]`);
+      if (again) again.focus();
+      break;
+    }
+    case "subdone": {
+      const t = state.todos.find((x) => x.id === el.dataset.tid);
+      const s = t && (t.subs || []).find((x) => x.id === el.dataset.sid);
+      if (!s) break;
+      s.done = el.checked;
+      commit(); refreshSubs(t.id); break;
+    }
+    case "subdel": {
+      const t = state.todos.find((x) => x.id === el.dataset.tid);
+      if (!t) break;
+      t.subs = (t.subs || []).filter((x) => x.id !== el.dataset.sid);
+      commit(); refreshSubs(t.id); break;
+    }
+    case "brkdel": {
+      const b = (state.settings.breaks || []).find((x) => x.id === el.dataset.id);
+      if (!b) break;
+      if (!(await appConfirm(`„${b.name}“ entfernen?`, "Entfernen"))) break;
+      state.settings.breaks = state.settings.breaks.filter((x) => x.id !== b.id);
+      commit(); break;
+    }
     case "tdone": {
       const t = state.todos.find((x) => x.id === id);
       if (!t) break;
@@ -4502,6 +4597,16 @@ document.addEventListener("submit", async (e) => {
         state.todos.push({ id: uid(), done: false, ...entry });
       }
       closeModal(); commit(); break;
+    }
+    case "break": {
+      const name = (data.name || "").trim();
+      const from = data.from || "";
+      const to = data.to || from;
+      if (!name || !from) break;
+      if (to < from) { appAlert("Das Ende liegt vor dem Anfang. Bitte prüfe die Daten."); break; }
+      state.settings.breaks = [...(state.settings.breaks || []), { id: uid(), name, from, to }]
+        .sort((a, b) => a.from.localeCompare(b.from));
+      f.reset(); commit(); break;
     }
     case "quicknote": {
       const text = (data.text || "").trim();
