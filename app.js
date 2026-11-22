@@ -5580,6 +5580,23 @@ function startDrag() {
   moveDrag(drag.x, drag.y);
 }
 
+// Vorschau beim Ziehen im Stundenplan: zeigt die Umrandung, wo der Termin auf 15 Minuten gerundet landen würde
+function dropPreview(grid, y) {
+  let p = document.getElementById("dropPreview");
+  if (!grid || !drag) { if (p) p.remove(); return; }
+  const r = grid.getBoundingClientRect();
+  let min = Math.round((START_MIN + (y - r.top) / PX_PER_MIN) / 15) * 15;
+  min = Math.max(START_MIN, Math.min(min, END_MIN - 15));
+  const t = state.todos.find((q) => q.id === drag.id);
+  const ev = state.events.find((q) => q.id === drag.id);
+  const len = ev && ev.start != null && ev.end != null ? ev.end - ev.start : (t && t.duration) || 60;
+  if (!p) { p = document.createElement("div"); p.id = "dropPreview"; p.className = "drop-preview"; }
+  if (p.parentNode !== grid) grid.appendChild(p);
+  p.style.top = (min - START_MIN) * PX_PER_MIN + "px";
+  p.style.height = Math.max(24, len * PX_PER_MIN) + "px";
+  p.textContent = `${fmtMin(min)} – ${fmtMin(min + len)}`;
+}
+
 function moveDrag(x, y) {
   const g = document.getElementById("dragGhost");
   if (g) g.style.transform = `translate(${x + 14}px, ${y - 12}px)`;
@@ -5592,6 +5609,7 @@ function moveDrag(x, y) {
   else if (cell) { cell.classList.add("drop"); drag.target = cell.dataset.d; }
   else if (zone) { zone.classList.add("drop"); drag.target = ""; }
   else drag.target = null;
+  dropPreview(grid && ui.tab === "stundenplan" ? grid : null, y);
   // Am linken oder rechten Rand: nach kurzem Halten weiterschalten
   const edge = ui.tab === "stundenplan" && x != null ? (x < 40 ? -1 : x > innerWidth - 40 ? 1 : 0) : 0;
   if (edge !== drag.edge) {
@@ -5629,6 +5647,7 @@ function endDrag(cancelled, x, y) {
   const g = document.getElementById("dragGhost");
   if (g) g.remove();
   document.body.classList.remove("is-dragging");
+  document.getElementById("dropPreview")?.remove();
   document.querySelectorAll(".drop").forEach((c) => c.classList.remove("drop"));
   // Der nachfolgende Klick nach dem Ziehen soll nicht den Tag öffnen
   suppressClick = true;

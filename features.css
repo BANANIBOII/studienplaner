@@ -337,7 +337,7 @@ input[type="color"]::-moz-color-swatch { border: 0; border-radius: 7px; }
 .week::-webkit-scrollbar-thumb { background: var(--muted); border-radius: 8px; border: 2px solid var(--line); }
 
 /* Stundenplan: Ziel beim Ziehen einer Aufgabe */
-.grid.drop { outline: 2px dashed var(--accent); outline-offset: -2px; }
+.grid.drop { outline: none; }
 .allday .chip[data-drag] { cursor: grab; }
 
 /* Tagesansicht: Wochentag fett im Spaltenkopf, Datum darunter */
@@ -1495,7 +1495,7 @@ body:not(.dark) { --elev: 0 8px 24px rgba(20, 60, 60, .1); }
 }
 /* scale statt transform: die Einblend-Animationen setzen transform und würden die Verkleinerung überdecken */
 .card:active, .modcard:active, .listrow:active, .ev:active, .dchip:active, .mday:active, .plan-corner:active, .look-opt:active {
-  scale: .85;
+  scale: .95;
   filter: brightness(.92);
   transition-duration: .1s, .1s, .1s, .2s;
 }
@@ -1507,3 +1507,16 @@ body:not(.dark) { --elev: 0 8px 24px rgba(20, 60, 60, .1); }
 @keyframes tapPulse { 0% { scale: 1; } 35% { scale: .85; } 100% { scale: 1; } }
 .tap-pulse { animation: tapPulse .32s var(--ease-spring); }
 @media (prefers-reduced-motion: reduce) { .tap-pulse { animation: none; } }
+
+/* ===== Verschieben im Stundenplan: Vorschau der Zielzeit + sanfteres Folgen des Fingers ===== */
+.drag-ghost { transition: transform .07s linear, opacity .15s ease; animation: dragGhostIn .18s var(--ease-spring) both; }
+@keyframes dragGhostIn { from { opacity: 0; } to { opacity: 1; } }
+.grid { position: relative; }
+.drop-preview {
+  position: absolute; left: 3px; right: 3px; z-index: 2; box-sizing: border-box;
+  border: 2px dashed var(--accent); border-radius: 10px; pointer-events: none;
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: var(--accent); font-size: 12px; font-weight: 700; padding: 4px 8px; overflow: hidden;
+  transition: top .12s var(--ease-ios), height .12s var(--ease-ios);
+}
+@media (prefers-reduced-motion: reduce) { .drop-preview, .drag-ghost { transition: none; animation: none; } }
