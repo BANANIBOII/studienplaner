@@ -14,6 +14,11 @@ const ICON = {
   external: ICON_SVG('<path d="M14 4h6v6"/><path d="M20 4l-9 9"/><path d="M19 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5"/>', "ico ico-sm"),
   undo: ICON_SVG('<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>'),
   redo: ICON_SVG('<path d="M15 14l5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/>'),
+  cup: ICON_SVG('<path d="M4 9h13v5a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5Z"/><path d="M17 11h1.5a2.5 2.5 0 0 1 0 5H17"/><path d="M8 3v2M11 3v2M14 3v2"/>'),
+  spark: ICON_SVG('<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8Z"/>'),
+  book: ICON_SVG('<path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5Z"/><path d="M4 20.5V5.5"/>'),
+  note: ICON_SVG('<path d="M6 3h8l4 4v14H6Z"/><path d="M14 3v4h4M9 12h6M9 16h6"/>'),
+  search: ICON_SVG('<circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/>'),
   swap: ICON_SVG('<path d="M7 4 3 8l4 4"/><path d="M3 8h14"/><path d="M17 20l4-4-4-4"/><path d="M21 16H7"/>'),
 };
 // Fehleranzeige auf dem Bildschirm (hilft, Fehler am Handy zu finden). Tippen schließt sie.
@@ -984,7 +989,7 @@ function viewDashboard() {
           <input type="date" name="date" value="${iso(new Date())}">
           <button class="btn">+</button>
         </form>
-        ${open.length ? open.slice(0, 5).map(todoItem).join("") : `<div class="empty"><div class="ei">🎉</div>Diese Woche ist nichts offen.</div>`}
+        ${open.length ? open.slice(0, 5).map(todoItem).join("") : `<div class="empty"><div class="ei">${ICON.spark}</div>Diese Woche ist nichts offen.</div>`}
         ${open.length > 8 ? `<div class="muted" style="margin-top:10px">… und ${open.length - 8} weitere im Kalender.</div>` : ""}
       </div>`;
   const countCard = countdownBlock();
@@ -1021,7 +1026,7 @@ function todayPlanHTML() {
   const tds = state.todos.filter((t) => t.time && (t.date === today || t.endDate === today))
     .map((t) => ({ start: toMin(t.time), end: toMin(t.time) + (Number(t.duration) || DEFAULT_DURATION) }));
   const pts = [...evs.map((e) => ({ start: e.start, end: e.end })), ...tds];
-  if (!pts.length) return `<div class="empty"><div class="ei">☕</div>${today === iso(now) ? "Heute" : "An diesem Tag"} keine Termine.</div>`;
+  if (!pts.length) return `<div class="empty"><div class="ei">${ICON.cup}</div>${today === iso(now) ? "Heute" : "An diesem Tag"} keine Termine.</div>`;
   const from = Math.max(0, Math.min(...pts.map((p) => p.start)) - 30);
   const to = Math.min(24 * 60, Math.max(...pts.map((p) => p.end)) + 30);
   const dash = state.settings.dash;
@@ -1758,7 +1763,7 @@ function dayPanelHTML(date) {
     ? `<div class="empty-day"><span>Nichts an diesem Tag.</span><button class="btn ghost" data-act="tnewday" data-d="${date}">+ Aufgabe anlegen</button></div>` : "";
   return `${emptyDay}${dayEvents.map((e) => `<div class="listrow" data-act="modgo" data-m="${enc(e.name)}" style="cursor:pointer"><span class="pdot" style="background:${colorOf(e.name)}"></span><div class="grow"><b>${esc(e.name)}</b><div class="muted">${fmtMin(e.start)}–${fmtMin(e.end)} · ${esc(e.room)}</div></div></div>`).join("")}
     ${dayAll.filter((t) => !t.done).map(todoRow).join("")}
-    ${!dayAll.length && !dayEvents.length ? `<div class="empty"><div class="ei">✨</div>Nichts an diesem Tag.</div>` : ""}
+    ${!dayAll.length && !dayEvents.length ? `<div class="empty"><div class="ei">${ICON.spark}</div>Nichts an diesem Tag.</div>` : ""}
     ${dayAll.filter((t) => t.done).map(todoRow).join("")}`;
 }
 // Tippen auf einen Tag: kleines Fenster mit den Einträgen dieses Tages
@@ -1808,7 +1813,7 @@ function viewCal() {
     const tRows = tHits.map((t) => hitRow(catColor(t.type), t.title, `${CAT_LABEL[t.type] || "To-Do"} · ${t.date ? fmtD(parseIso(t.date)) : "ohne Datum"}${t.time ? " · " + esc(t.time) : ""}`, `data-act="tedit" data-id="${t.id}"`));
     const eRows = eHits.map((e) => hitRow(colorOf(e.name), e.name, `Vorlesung · ${fmtD(parseIso(e.date))} · ${fmtMin(e.start)}${e.room ? " · " + esc(e.room) : ""}`, `data-act="calgo" data-d="${e.date}"`));
     const total = tRows.length + eRows.length;
-    h += `<div class="card"><h4 style="margin-top:0">${total} Treffer</h4>${tRows.join("")}${eRows.join("")}${total ? "" : `<div class="empty"><div class="ei">🔍</div>Nichts gefunden.</div>`}</div>`;
+    h += `<div class="card"><h4 style="margin-top:0">${total} Treffer</h4>${tRows.join("")}${eRows.join("")}${total ? "" : `<div class="empty"><div class="ei">${ICON.search}</div>Nichts gefunden.</div>`}</div>`;
     return h + searchBar;
   }
 
@@ -1887,7 +1892,7 @@ function viewCal() {
     <div class="row" style="justify-content:space-between;margin-bottom:10px"><h3 style="margin:0">Alle Einträge</h3><span class="count">${openCount} offen</span></div>
     <div class="row chip-row" style="gap:6px;margin-bottom:8px">${chip("alle", "Alle")}${chip("klausur", "Klausuren")}${chip("abgabe", "Abgaben")}${chip("todo", "To-Dos")}</div>
     <label class="row" style="font-size:14px;margin-bottom:6px"><input type="checkbox" data-act="calshowdone" ${showDone ? "checked" : ""}> Erledigte zeigen</label>
-    ${body || `<div class="empty"><div class="ei">✨</div>Nichts in dieser Auswahl.</div>`}
+    ${body || `<div class="empty"><div class="ei">${ICON.spark}</div>Nichts in dieser Auswahl.</div>`}
   </div>`;
 
   const calFlow = `<div class="calstack">${monthCard}${allCard}${searchBar}</div>`;
@@ -2122,7 +2127,7 @@ function viewModuleDetail(name) {
       <form data-form="topic" data-m="${n}" class="row quick-row">
         <input name="title" placeholder="Neues Thema …" required style="flex:1"><button class="btn">+</button>
       </form>
-      ${m.topics.map((t) => topicCard(name, t)).join("") || `<div class="empty"><div class="ei">📚</div>Noch keine Themen. Lege oben das erste an.</div>`}
+      ${m.topics.map((t) => topicCard(name, t)).join("") || `<div class="empty"><div class="ei">${ICON.book}</div>Noch keine Themen. Lege oben das erste an.</div>`}
     </div>
     <div class="card">
       <div class="row" style="justify-content:space-between">
@@ -2164,7 +2169,7 @@ function viewTopicDetail(name, tid) {
         <div class="sec-title" style="margin:0">Einträge</div>
         <button class="btn" data-act="nnewt" data-m="${n}" data-t="${t.id}">+ Eintrag</button>
       </div>
-      ${list.map((x) => noteBlock(name, x)).join("") || `<div class="empty"><div class="ei">📝</div>Noch keine Einträge. Lege den ersten an.</div>`}
+      ${list.map((x) => noteBlock(name, x)).join("") || `<div class="empty"><div class="ei">${ICON.note}</div>Noch keine Einträge. Lege den ersten an.</div>`}
     </div>
     <div style="text-align:center"><button class="btn danger" data-act="tdel" data-id="${t.id}" data-m="${n}">Thema löschen</button></div>`;
 }
@@ -2345,6 +2350,15 @@ function notifyLogHTML() {
 }
 
 // Einstellungen: Hauptliste mit Suche, jeder Punkt öffnet einen Bereich
+// Symbole für die Einstellungs-Bereiche (Linien-Stil statt Emojis)
+const SET_ICON = {
+  darst: ICON_SVG('<circle cx="12" cy="12" r="9"/><circle cx="8" cy="10" r="1.2" fill="currentColor"/><circle cx="12" cy="7.5" r="1.2" fill="currentColor"/><circle cx="16" cy="10" r="1.2" fill="currentColor"/>'),
+  stunden: ICON_SVG('<rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/>'),
+  benach: ICON_SVG('<path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15Z"/><path d="M10 20a2 2 0 0 0 4 0"/>'),
+  navi: ICON_SVG('<path d="M4 7h16M4 12h10M4 17h13"/>'),
+  daten: ICON_SVG('<ellipse cx="12" cy="6" rx="7.5" ry="3"/><path d="M4.5 6v12c0 1.7 3.4 3 7.5 3s7.5-1.3 7.5-3V6"/><path d="M4.5 12c0 1.7 3.4 3 7.5 3s7.5-1.3 7.5-3"/>'),
+  gear: ICON_SVG('<circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/>'),
+};
 const SETTINGS_LIST = [
   { k: "darst", t: "Erscheinungsbild", d: "Hell/Dunkel, Designs, Schrift, Farben", w: "design vorlage preset hell dunkel schrift scrollbalken farben kategorie akzent", ic: "🎨", col: "#ec4899" },
   { k: "stunden", t: "Stundenplan", d: "Semester, Stundenplan-Datei, Kopfzeile, Höhe", w: "stundenplan semester ics termine kopfzeile höhe zoom", ic: "📅", col: "#0ea5e9" },
@@ -2375,7 +2389,7 @@ function viewSettings() {
   return `<h2 style="margin-bottom:10px">Einstellungen</h2>
     <input type="search" data-setq="1" placeholder="Einstellungen suchen" value="${esc(ui.setQuery || "")}" style="width:100%;margin-bottom:12px">
     <div class="card setcard">
-      ${rows.map((x) => `<button data-act="setopen" data-k="${x.k}" class="setrow" style="--c:${x.col || "#64748b"}"><span class="setic">${x.ic || "⚙️"}</span><span class="grow"><b>${x.t}</b><span class="muted setd">${x.d}</span></span><span class="setchev">›</span></button>`).join("") || `<div class="muted" style="padding:14px">Nichts gefunden.</div>`}
+      ${rows.map((x) => `<button data-act="setopen" data-k="${x.k}" class="setrow" style="--c:${x.col || "#64748b"}"><span class="setic">${SET_ICON[x.k] || SET_ICON.gear}</span><span class="grow"><b>${x.t}</b><span class="muted setd">${x.d}</span></span><span class="setchev">›</span></button>`).join("") || `<div class="muted" style="padding:14px">Nichts gefunden.</div>`}
     </div>`;
 }
 

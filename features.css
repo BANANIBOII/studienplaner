@@ -1312,3 +1312,14 @@ body.lite .card, body.lite .tabbar, body.lite .modal .sheet, body.lite .modal {
 }
 body.lite .card { background: color-mix(in srgb, var(--card) 94%, transparent) !important; }
 body.lite .tabbar { background: var(--card) !important; }
+
+/* ---------- Optik ---------- */
+/* Zahlen in gleicher Breite: Zähler und Zeiten springen beim Ändern nicht hin und her */
+.muted, .hero-stats, .cd-grid, .dp-label, .calTitle { font-variant-numeric: tabular-nums; }
+/* Modulfarbe als schmaler Streifen am linken Rand */
+.modcard { position: relative; }
+.modcard::before { content: ""; position: absolute; left: 0; top: 16px; bottom: 16px; width: 4px; border-radius: 0 4px 4px 0; background: var(--mc, var(--accent)); }
+/* Häkchen: kurzer Hüpfer beim Erledigen */
+input[data-act="tdone"]:checked { animation: tickPop .35s cubic-bezier(.2, .9, .3, 1.4); }
+@keyframes tickPop { 0% { transform: scale(.6); } 100% { transform: scale(1); } }
+@media (prefers-reduced-motion: reduce) { input[data-act="tdone"]:checked { animation: none; } }
