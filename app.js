@@ -1445,11 +1445,11 @@ function viewPlan() {
     const dayChips = dayTodoChips(ui.dayDate);
     const chipsHtml = dayChips ? `<div class="dchips">${dayChips}</div>` : "";
     // Aufklappbar wie in der Wochenansicht: Knopf in der Ecke, Leiste nur wenn es Aufgaben ohne Uhrzeit gibt
-    const dayUntimed = todosOn(ui.dayDate).some((t) => !t.time);
+    const dayUntimedCount = todosOn(ui.dayDate).filter((t) => !t.time && !t.done).length;
+    const dayUntimed = dayUntimedCount > 0;
     const dayOpen = dayUntimed && ui.planTasksOpen === true;
-    const dayAny = untimedInRange(addDays(d, -PRELOAD), addDays(d, PRELOAD));
-    const dayCorner = (dayUntimed || dayAny) ? planCornerHTML(todosOn(ui.dayDate).filter((t) => !t.time && !t.done).length, dayOpen) : "";
-    const dayTop = dayOpen ? `<div class="plan-top"><div class="plan-topspacer"></div><div class="plan-stripwrap"><div class="plan-dchips">${dayChips || ""}</div></div></div>` : "";
+    const dayCorner = dayUntimed ? planCornerHTML(dayUntimedCount, dayOpen) : "";
+    const dayTop = dayUntimed ? `<div class="plan-top-wrap${dayOpen ? " open" : ""}"><div class="plan-top"><div class="plan-topspacer"></div><div class="plan-stripwrap"><div class="plan-dchips">${dayChips || ""}</div></div></div></div>` : "";
     // Vorgeladene Tage, alle mit derselben Zeitachse
     applyDayRange(pagesDates());
     const dayGroup = pagesGroup((k) => `<div class="plan-cols">${dayColumn(iso(addDays(d, k)), "", true, today, false, "")}</div>`);
@@ -1467,12 +1467,14 @@ function viewPlan() {
   applyDayRange(pagesDates());
   const colsGroup = pagesGroup((k) => `<div class="plan-cols">${weekColsHTML(addDays(mon, k * 7), dayCount, today)}</div>`);
   // Aufgaben-Streifen: steht oben und wischt mit den Wochen mit (Spalte für die Zeitachse daneben)
-  const hasUntimed = untimedInRange(addDays(mon, -7 * PRELOAD), addDays(mon, 7 * (PRELOAD + 1) - 1));
+  // Nur die sichtbare Woche entscheidet: Knopf und Leiste gibt es nur, wenn hier Aufgaben ohne Uhrzeit stehen
+  const weekUntimed = state.todos.filter((t) => !t.done && t.date && !t.time && t.date <= iso(sun) && ((t.endDate && t.endDate > t.date) ? t.endDate >= iso(mon) : t.date >= iso(mon))).length;
+  const hasUntimed = weekUntimed > 0;
   const tasksOpen = hasUntimed && ui.planTasksOpen === true;
-  const weekTasks = state.todos.filter((t) => !t.done && t.date && t.date >= iso(mon) && t.date <= iso(addDays(mon, 6))).length;
   // Der Aufklapp-Knopf sitzt in der leeren Ecke über der Zeitspalte, oben stehen nur die Wochentage
-  const corner = hasUntimed ? planCornerHTML(weekTasks, tasksOpen) : "";
-  const topHTML = (tasksOpen ?`<div class="plan-top"><div class="plan-topspacer"></div><div class="plan-stripwrap">${pagesGroup((k) => alldayStripHTML(addDays(mon, k * 7), dayCount, true))}</div></div>` : "");
+  const corner = hasUntimed ? planCornerHTML(weekUntimed, tasksOpen) : "";
+  // Die Leiste bleibt im Dokument und klappt per CSS auf/zu (siehe plan-top-wrap)
+  const topHTML = hasUntimed ? `<div class="plan-top-wrap${tasksOpen ? " open" : ""}"><div class="plan-top"><div class="plan-topspacer"></div><div class="plan-stripwrap">${pagesGroup((k) => alldayStripHTML(addDays(mon, k * 7), dayCount, true))}</div></div></div>` : "";
   const compact = state.settings.planHead === "kompakt" ? " compact" : "";
   // Oben fest: Wochentage, dann Aufgaben-Streifen. Nur das Raster darunter scrollt.
   const head = weekHeadHTML(mon, dayCount, today, compact, corner);
@@ -4145,7 +4147,18 @@ document.addEventListener("click", async (e) => {
       else if (k === "set") { ui.tab = "einstellungen"; ui.setPage = key; ui.nfOnly = null; commit(); }
       break;
     }
-    case "planTasks": ui.planTasksOpen = ui.planTasksOpen !== true; render(); break;
+    case "planTasks": {
+      // Nur umschalten, nicht neu aufbauen: so läuft die Leiste sanft auf und zu
+      ui.planTasksOpen = ui.planTasksOpen !== true;
+      const wrap = document.querySelector(".plan-top-wrap");
+      const btn = document.querySelector(".plan-corner");
+      if (wrap && btn) {
+        wrap.classList.toggle("open", ui.planTasksOpen);
+        btn.classList.toggle("on", ui.planTasksOpen);
+        btn.querySelector("span").innerHTML = ui.planTasksOpen ? ICON.up : ICON.down;
+      } else render();
+      break;
+    }
     case "planDense": ui.planDense = !ui.planDense; render(); break;
     case "mlnew": openModLinkEdit(m, null); break;
     case "mledit": openModLinkEdit(m, id); break;

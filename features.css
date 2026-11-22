@@ -1400,3 +1400,11 @@ body:not(.dark) { --elev: 0 8px 24px rgba(20, 60, 60, .1); }
 .break-form { margin-top: 12px; display: grid; gap: 6px; }
 .break-form input { width: 100%; }
 .break-list { margin-bottom: 4px; }
+
+/* Aufgaben-Streifen im Stundenplan: sanft auf- und zuklappen */
+.plan-top-wrap { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .28s cubic-bezier(.2,.8,.2,1); }
+.plan-top-wrap.open { grid-template-rows: 1fr; }
+.plan-top-wrap > .plan-top { margin: 0; min-height: 0; overflow: hidden; opacity: 0; transition: opacity .2s ease; }
+.plan-top-wrap.open > .plan-top { opacity: 1; }
+.plan-top-wrap .plan-stripwrap { margin-bottom: 6px; }
+@media (prefers-reduced-motion: reduce) { .plan-top-wrap, .plan-top-wrap > .plan-top { transition: none; } }
