@@ -1147,7 +1147,7 @@ body.tab-scrub .tab-pill { transition-duration: .12s; }
   -webkit-backdrop-filter: blur(10px) saturate(1.2); backdrop-filter: blur(10px) saturate(1.2);
 }
 .modal .sheet {
-  background: color-mix(in srgb, var(--card) 80%, transparent);
+  background: color-mix(in srgb, var(--card) 98%, transparent);
   -webkit-backdrop-filter: blur(22px) saturate(1.6); backdrop-filter: blur(22px) saturate(1.6);
   border: 1px solid color-mix(in srgb, var(--text) 9%, transparent);
   box-shadow: 0 -12px 44px rgba(0, 0, 0, .35), inset 0 1px 0 color-mix(in srgb, var(--text) 8%, transparent);
@@ -1344,3 +1344,19 @@ body:not(.dark) { --elev: 0 8px 24px rgba(20, 60, 60, .1); }
 .st.ok { background: color-mix(in srgb, #22c55e 18%, transparent); color: #22c55e; }
 .st.miss { background: color-mix(in srgb, #ef4444 18%, transparent); color: #ef4444; }
 .st.wait { background: var(--accent-soft); color: var(--accent); }
+
+/* ---------- Pop-ups am Handy: Hauptknopf immer unten erreichbar ---------- */
+@media (max-width: 480px) {
+  .modal .sheet { overscroll-behavior: contain; }
+  .sheet-actions {
+    position: sticky; bottom: -22px; z-index: 2;
+    margin: 18px -22px -22px; padding: 12px 16px calc(14px + env(safe-area-inset-bottom));
+    background: color-mix(in srgb, var(--card) 96%, transparent);
+    -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+    border-top: 1px solid var(--line); flex-wrap: nowrap; gap: 10px;
+  }
+  .sheet-actions .right { flex: 1; margin-left: 0; gap: 10px; }
+  .sheet-actions .right .btn:not(.ghost) { flex: 1; min-height: 50px; font-size: 16px; }
+  .sheet-actions .right .btn.ghost { min-height: 50px; padding-left: 14px; padding-right: 14px; }
+  .sheet-actions > .btn, .sheet-actions > .danger-text { min-height: 50px; }
+}
