@@ -2769,7 +2769,7 @@ function mensaCardHTML() {
     const shown = ui.mensaNoMeat ? fresh.gerichte.filter((g) => !(g.tags || []).some((t) => MENSA_MEAT_TAGS.includes(t))) : fresh.gerichte;
     body = (shown.length ? shown : fresh.gerichte).map((g) =>
       `<div class="mensa-row"><span class="muted">${esc(g.label)}</span><span><span style="margin-right:4px">${mensaEmoji(g)}</span><b>${esc(g.name)}</b>${g.allergene ? `<div class="muted" style="font-size:12px">Allergene: ${esc(g.allergene)}</div>` : ""}</span><span class="mensa-price">${esc(g.preis.stud)}</span></div>`
-    ).join("") + `<div class="muted" style="font-size:12px;margin-top:8px">🐷 Schwein · 🐄 Rind · 🐔 Geflügel · 🐟 Fisch · 🐑 Lamm · 🌱 vegan · 🥕 vegetarisch · 🌾 glutenfrei${fresh.ki ? " · von der KI gelesen" : ""}</div>
+    ).join("") + `<div class="muted" style="font-size:12px;margin-top:8px">🐷 Schwein · 🐄 Rind · 🐔 Geflügel · 🐟 Fisch · 🐑 Lamm · 🌱 vegan · 🥕 vegetarisch · 🌾 glutenfrei${fresh.ki ? " · von der KI gelesen" : ` · <span>Symbole: KI nicht aktiv (Key im Menü „KI-Assistent“ prüfen)</span>`}</div>
       <div class="muted" style="font-size:12px">Preise für Studierende</div>
       ${fresh.ki ? `<button class="btn ghost btn-sm" data-act="mensafilter" style="margin-top:8px">${ui.mensaNoMeat ? "Alle anzeigen" : "Nur ohne Fleisch"}</button>` : ""}`;
   } else if (fresh) {
