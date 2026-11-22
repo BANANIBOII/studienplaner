@@ -1,5 +1,5 @@
 // Offline-Unterstützung: lädt immer aus dem Netz, nutzt den Cache nur wenn offline.
-const CACHE = "studienplaner-v23";
+const CACHE = "studienplaner-v24";
 const FILES = ["./", "index.html", "styles.css", "features.css", "app.js", "config.js", "manifest.json", "icon.svg"];
 
 self.addEventListener("install", (e) => {
@@ -40,6 +40,8 @@ self.addEventListener("push", (e) => {
   try { data = { ...data, ...e.data.json() }; } catch (_) {}
   // „Notiz schreiben“ nur bei Modul-Erinnerungen
   const actions = data.noteUrl ? [{ action: "note", title: "Notiz schreiben" }] : [];
+  // Frist mit genau einer offenen Aufgabe: „Erledigt“ öffnet die App und hakt sie dort ab
+  if (data.todoId) actions.push({ action: "done", title: "Erledigt" });
   e.waitUntil(readNfPrefs().then((prefs) => {
     const options = {
       body: data.body,
@@ -47,7 +49,7 @@ self.addEventListener("push", (e) => {
       badge: "icon.svg",
       tag: data.tag || "studienplaner",
       actions,
-      data: { url: data.url || "./", noteUrl: data.noteUrl || null },
+      data: { url: data.url || "./", noteUrl: data.noteUrl || null, todoId: data.todoId || null },
       silent: prefs.sound === false,
     };
     if (prefs.vib && VIB_PATTERN[prefs.vib] !== undefined) options.vibrate = VIB_PATTERN[prefs.vib];
@@ -59,7 +61,8 @@ self.addEventListener("push", (e) => {
 self.addEventListener("notificationclick", (e) => {
   e.notification.close();
   const d = e.notification.data || {};
-  const target = e.action === "note" && d.noteUrl ? d.noteUrl : (d.url || "./");
+  let target = e.action === "note" && d.noteUrl ? d.noteUrl : (d.url || "./");
+  if (e.action === "done" && d.todoId) target = "./?done=" + encodeURIComponent(d.todoId);
   // Immer ein Fenster mit dem Ziel öffnen (Android holt es so zuverlässig in den Vordergrund)
   e.waitUntil(clients.openWindow(target));
 });

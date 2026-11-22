@@ -5349,6 +5349,18 @@ function handleLaunch() {
     render();
     setTimeout(() => openTodoModal(null, iso(new Date())), 250);
   }
+  // „Erledigt“ aus einer Benachrichtigung: Aufgabe abhaken und die Adresse aufräumen
+  const doneId = p.get("done");
+  if (doneId) {
+    history.replaceState(null, "", location.pathname);
+    const t = state.todos.find((x) => x.id === doneId);
+    if (t && !t.done && canCheck(t)) {
+      t.done = true;
+      t.doneAt = iso(new Date());
+      commit();
+      showToast(`„${t.title}“ erledigt`);
+    }
+  }
   if (tab && tabs.includes(tab)) {
     ui.tab = tab;
     ui.modOpen = null;
