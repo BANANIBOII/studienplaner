@@ -118,7 +118,7 @@ const PLAN_DEFAULTS = { grid: "", now: "", todo: "#60a5fa", abgabe: "#f59e0b", k
 const DEVICE_LS = "studienplaner-device-v1";
 const DEVICE_DEFAULTS = {
   dark: true, weekend: false, scrollbars: true, colors: { dark: {}, light: {} },
-  themeMode: "", fontScale: 100, startTab: "dashboard", look: "glass",
+  themeMode: "", fontScale: 100, font: "inter", startTab: "dashboard", look: "glass",
   zoomY: 1, autoRange: false, dayStart: 7, dayEnd: 20, planStep: 30, planLines: false,
   dash: { zoomY: 1, grid: "", now: "" },
   planLook: { grid: "", now: "" },
@@ -335,7 +335,7 @@ function applyDevice(settings) {
 function deviceFromSettings(s) {
   return {
     dark: s.dark, weekend: s.weekend, colors: s.colors, zoomY: s.zoomY, autoRange: s.autoRange,
-    dayStart: s.dayStart, dayEnd: s.dayEnd, planStep: s.planStep || 30, planLines: !!s.planLines, dash: s.dash, navSide: s.navSide || "", checkSide: s.checkSide || "left", scrollbars: s.scrollbars !== false, themeMode: s.themeMode || "", fontScale: s.fontScale || 100, startTab: s.startTab || "dashboard", look: s.look || "glass", layouts: s.layouts || {}, cal: s.cal || DEVICE_DEFAULTS.cal, nfDev: { ...DEVICE_DEFAULTS.nfDev, ...(s.nfDev || {}) },
+    dayStart: s.dayStart, dayEnd: s.dayEnd, planStep: s.planStep || 30, planLines: !!s.planLines, dash: s.dash, navSide: s.navSide || "", checkSide: s.checkSide || "left", scrollbars: s.scrollbars !== false, themeMode: s.themeMode || "", fontScale: s.fontScale || 100, font: s.font || "inter", startTab: s.startTab || "dashboard", look: s.look || "glass", layouts: s.layouts || {}, cal: s.cal || DEVICE_DEFAULTS.cal, nfDev: { ...DEVICE_DEFAULTS.nfDev, ...(s.nfDev || {}) },
     planLook: { grid: (s.plan && s.plan.grid) || "", now: (s.plan && s.plan.now) || "" },
   };
 }
@@ -630,9 +630,33 @@ function themeColors() {
   const mode = currentMode();
   return { ...THEME_DEFAULTS[mode], ...((state.settings.colors || {})[mode] || {}) };
 }
+// Schriftarten (pro Gerät). Serif und Rund werden erst geladen, wenn sie gewählt sind.
+const FONT_STACKS = {
+  inter: `"Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif`,
+  system: `system-ui, -apple-system, "Segoe UI", Roboto, sans-serif`,
+  serif: `"Source Serif 4", Georgia, "Times New Roman", serif`,
+  rounded: `"Nunito", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif`,
+};
+const FONT_CSS = {
+  serif: "https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@400;600;700&display=swap",
+  rounded: "https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap",
+};
+function applyFont() {
+  const k = FONT_STACKS[state.settings.font] ? state.settings.font : "inter";
+  if (FONT_CSS[k] && !document.querySelector(`link[data-font="${k}"]`)) {
+    const l = document.createElement("link");
+    l.rel = "stylesheet";
+    l.href = FONT_CSS[k];
+    l.dataset.font = k;
+    document.head.appendChild(l);
+  }
+  document.body.style.fontFamily = FONT_STACKS[k];
+}
+
 function applyTheme() {
   document.body.classList.toggle("dark", currentMode() === "dark");
   document.body.style.zoom = String((state.settings.fontScale || 100) / 100);
+  applyFont();
   // Farbe der Statusleiste am Handy an den aktuellen Hintergrund anpassen
   const tc = document.querySelector('meta[name="theme-color"]');
   if (tc) tc.setAttribute("content", currentMode() === "dark" ? "#0a1414" : "#eef2f7");
@@ -2251,6 +2275,9 @@ function settingsPages() {
     `<div class="card"><h3>Schrift & Anzeige</h3>
       <label class="muted" style="display:block;margin-bottom:6px">Schriftgröße: ${s.fontScale || 100} % (nur auf diesem Gerät)</label>
       <input type="range" min="80" max="150" step="5" value="${s.fontScale || 100}" data-change="fontscale" style="width:100%;margin-bottom:14px">
+      <label class="muted" style="display:block;margin:4px 0 6px">Schriftart (nur auf diesem Gerät)</label>
+      ${btns([["inter", "Inter"], ["system", "System"], ["serif", "Serif"], ["rounded", "Rund"]], FONT_STACKS[s.font] ? s.font : "inter", "fontsel")}
+      <div style="height:12px"></div>
       <label class="row"><input type="checkbox" data-change="scrollbars" ${s.scrollbars !== false ? "checked" : ""}> Scrollbalken anzeigen (nur auf diesem Gerät)</label>
     </div>`,
     `<div class="card"><h3>Farben (${mode === "dark" ? "Dunkel" : "Hell"}-Modus)</h3>
@@ -3983,6 +4010,7 @@ document.addEventListener("click", async (e) => {
     case "qkkind": { const f = el.closest("form"); if (f) quickKind(f, el.dataset.v); break; }
     case "qkday": { const f = el.closest("form"); if (f) quickDays(f, el.dataset.v); break; }
     case "looksel": state.settings.look = el.dataset.v; saveDevice(); render(); break;
+    case "fontsel": state.settings.font = el.dataset.v; saveDevice(); applyFont(); render(); break;
     case "nfvib": state.settings.nfDev = { ...(state.settings.nfDev || {}), vib: el.dataset.v }; saveDevice(); render(); break;
     case "nfopen":
       ui.nfOnly = el.dataset.k;
