@@ -257,6 +257,35 @@ function viewDesignCard() {
 }
 
 // Alle Designs direkt auf der Seite (kein eigenes Fenster mehr)
+// KI-Key: nur Status lesen (Zeitpunkt), den Key selbst kann die App nicht auslesen
+let keyStatusText = "Status wird geladen …";
+let keyStatusLoaded = false;
+async function refreshKeyStatus() {
+  if (!sb || !session) { keyStatusText = "Anmelden, um den Key zu speichern."; return; }
+  try {
+    const { data, error } = await sb.from("user_secrets").select("updated_at").eq("user_id", session.user.id).maybeSingle();
+    if (error) throw error;
+    keyStatusText = data ? `✓ Key gespeichert (${new Date(data.updated_at).toLocaleString("de-DE")})` : "Kein Key gespeichert.";
+  } catch (_) { keyStatusText = "Status gerade nicht abrufbar."; }
+  const el = document.getElementById("geminiStatus");
+  if (el) el.textContent = keyStatusText;
+}
+async function saveGeminiKey(key) {
+  if (!sb || !session) { showToast("Zum Speichern bitte anmelden"); return false; }
+  const { error } = await sb.from("user_secrets").upsert(
+    { user_id: session.user.id, gemini_key: key, updated_at: new Date().toISOString() },
+    { onConflict: "user_id" });
+  if (error) { showToast("Speichern fehlgeschlagen"); return false; }
+  return true;
+}
+async function deleteGeminiKey() {
+  if (!sb || !session) return;
+  const { error } = await sb.from("user_secrets").delete().eq("user_id", session.user.id);
+  if (error) { showToast("Entfernen fehlgeschlagen"); return; }
+  showToast("Key entfernt");
+  refreshKeyStatus();
+}
+
 // Auswahl aller Designs (eingebaute und eigene) für die Tageszeit-Abschnitte
 function allPresetOpts(selected) {
   const all = [
@@ -2332,6 +2361,17 @@ function settingsPages() {
       <button class="btn ghost" data-act="zoomstep" data-v="reset">Standard</button>
     </div>`;
 
+  // KI-Assistent: Gemini-Key, wird auf dem Server gespeichert und ist für andere nicht lesbar
+  if (ui.setPage === "ki" && !keyStatusLoaded) { keyStatusLoaded = true; setTimeout(refreshKeyStatus, 0); }
+  pages.ki = [`<div class="card"><h3>Gemini-Key</h3>
+      <p class="muted" style="margin-top:0">Den kostenlosen Key holst du bei Google AI Studio. Er wird auf dem Server gespeichert, nicht auf diesem Gerät, und ist danach nicht mehr auslesbar. Auf allen deinen angemeldeten Geräten steht er dann zur Verfügung.</p>
+      <div id="geminiStatus" class="muted" style="margin-bottom:10px">${keyStatusText}</div>
+      <form data-form="geminikey" class="row" style="gap:8px">
+        <input name="key" type="password" autocomplete="off" placeholder="Key einfügen" style="flex:1" required>
+        <button class="btn">Speichern</button>
+      </form>
+      <div class="row" style="margin-top:10px"><button class="btn ghost" data-act="geminidel">Key entfernen</button></div>
+    </div>`];
   // Erscheinungsbild: Modus, Designs, Schrift, Farben
   pages.darst = [
     `<div class="card"><h3>Hell oder dunkel</h3>
@@ -2477,6 +2517,7 @@ const SETTINGS_LIST = [
   { k: "stunden", t: "Stundenplan", d: "Semester, Stundenplan-Datei, Kopfzeile, Höhe", w: "stundenplan semester ics termine kopfzeile höhe zoom ferien feiertage vorlesungsfrei", ic: "📅", col: "#0ea5e9" },
   { k: "benach", t: "Benachrichtigungen", d: "Module, Mensa, Fristen, Ruhezeit, Tests", w: "benachrichtigung mensa fristen modul ruhezeit test vorwarnzeit push", ic: "🔔", col: "#f59e0b" },
   { k: "navi", t: "Bedienung", d: "Startseite, Reiterleiste, Werkzeuge", w: "bedienung startseite reiterleiste navigation haken werkzeuge rückgängig layout", ic: "🧭", col: "#8b5cf6" },
+  { k: "ki", t: "KI-Assistent", d: "Gemini-Key für Mensa, Erinnerungen und mehr", w: "ki ai gemini key schlüssel api assistent mensa erinnerung", ic: "✨", col: "#6366f1" },
   { k: "daten", t: "Daten & Cloud", d: "Sicherung, Cloud-Sync, Papierkorb, Zurücksetzen", w: "backup sicherung export import papierkorb zurücksetzen cloud sync anmelden", ic: "☁️", col: "#10b981" },
 ];
 
@@ -4156,6 +4197,7 @@ document.addEventListener("click", async (e) => {
     case "qkkind": { const f = el.closest("form"); if (f) quickKind(f, el.dataset.v); break; }
     case "qkday": { const f = el.closest("form"); if (f) quickDays(f, el.dataset.v); break; }
     case "looksel": state.settings.look = el.dataset.v; saveDevice(); render(); break;
+    case "geminidel": if (await appConfirm("Gemini-Key wirklich entfernen?", "Entfernen")) deleteGeminiKey(); break;
     case "fontsel": state.settings.font = el.dataset.v; saveDevice(); applyFont(); render(); break;
     case "nfvib": state.settings.nfDev = { ...(state.settings.nfDev || {}), vib: el.dataset.v }; saveDevice(); render(); break;
     case "nfopen":
@@ -4617,6 +4659,17 @@ document.addEventListener("submit", async (e) => {
   if (!f.dataset.form) return;
   e.preventDefault();
   const data = Object.fromEntries(new FormData(f));
+
+  if (f.dataset.form === "geminikey") {
+    const key = (data.key || "").trim();
+    if (!key) return;
+    if (await saveGeminiKey(key)) {
+      showToast("✓ Key gespeichert");
+      keyStatusText = "✓ Key gespeichert";
+      render();
+    }
+    return;
+  }
 
   if (f.dataset.form === "appprompt") {
     const r = modalResolve;
