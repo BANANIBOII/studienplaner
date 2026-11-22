@@ -4848,6 +4848,31 @@ async function checkPushState() {
   } catch (_) { pushState = { checked: true, active: false }; }
   if (ui.tab === "einstellungen") render();
 }
+// Welche eigenen Erinnerungen heute schon verschickt wurden (für „verpasst“ / „gesendet“)
+let todaySent = { day: "", keys: new Set(), at: 0 };
+async function loadTodaySent() {
+  const day = iso(new Date());
+  if (!sb || !session || (todaySent.day === day && Date.now() - todaySent.at < 60000)) return;
+  const { data, error } = await sb.from("sent_notifications").select("key").like("key", `cu:%:${day}`);
+  if (error) return;
+  todaySent = { day, keys: new Set((data || []).map((r) => r.key)), at: Date.now() };
+  if (ui.tab === "einstellungen" && ui.nfOnly === "custom") render();
+}
+// Status einer eigenen Erinnerung für heute: gesendet, verpasst oder noch offen
+function customTodayStatus(c) {
+  const now = new Date();
+  const day = iso(now);
+  const dueToday = c.date ? c.date === day : Array.isArray(c.days) && c.days.includes(now.getDay());
+  if (!c.on || !dueToday) return "";
+  const [h, m] = String(c.time || "").split(":").map(Number);
+  if (Number.isNaN(h)) return "";
+  const t0 = h * 60 + m, nowMin = now.getHours() * 60 + now.getMinutes();
+  if (todaySent.day !== day) return "";
+  if (todaySent.keys.has(`cu:${c.id}:${day}`)) return `<span class="st ok">heute gesendet</span>`;
+  if (nowMin >= t0 + 120) return `<span class="st miss">heute verpasst</span>`;
+  if (nowMin >= t0) return `<span class="st wait">wird gerade gesendet…</span>`;
+  return `<span class="st wait">heute um ${c.time}</span>`;
+}
 function pushWarnHTML() {
   if (!pushState.checked || pushState.active || !pushSupported()) return "";
   return `<div class="card push-warn"><b>Benachrichtigungen sind auf diesem Gerät aus.</b>
@@ -5005,11 +5030,13 @@ function deviceNotifyHTML() {
 }
 function customNotifyHTML() {
   const todayIso = iso(new Date());
+  loadTodaySent();
   const list = customList().filter((c) => !c.date || c.date >= todayIso);
   const fixed = list.length
     ? list.map((c) => `<div class="listrow" style="align-items:center;gap:8px">
         <div class="grow"><b>${esc(c.title || "Erinnerung")}</b>
-          <div class="muted" style="font-size:13px">${esc(c.time)} · ${c.date ? "einmalig am " + fmtD(parseIso(c.date)) : daysLabel(c.days)}${c.body ? " · " + esc(c.body) : ""}</div></div>
+          <div class="muted" style="font-size:13px">${esc(c.time)} · ${c.date ? "einmalig am " + fmtD(parseIso(c.date)) : daysLabel(c.days)}${c.body ? " · " + esc(c.body) : ""}</div>
+          ${customTodayStatus(c)}</div>
         <input type="checkbox" data-cnon="${c.id}" ${c.on ? "checked" : ""} title="an/aus">
         <button class="btn ghost" data-act="cnedit" data-id="${c.id}">Bearbeiten</button>
       </div>`).join("")
@@ -5643,3 +5670,4 @@ updateOnlineBanner(!navigator.onLine);
 })();
 
 checkPushState();
+setTimeout(loadTodaySent, 1500);

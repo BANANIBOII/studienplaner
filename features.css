@@ -1338,3 +1338,9 @@ body:not(.dark) { --elev: 0 8px 24px rgba(20, 60, 60, .1); }
 
 /* ---------- Kleiner Knopf für Hinzufügen (z. B. „+ Link“) ---------- */
 .btn.btn-sm { padding: 6px 12px; font-size: 13px; border-radius: 999px; }
+
+/* ---------- Status eigener Erinnerungen heute ---------- */
+.st { display: inline-block; margin-top: 4px; font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 999px; }
+.st.ok { background: color-mix(in srgb, #22c55e 18%, transparent); color: #22c55e; }
+.st.miss { background: color-mix(in srgb, #ef4444 18%, transparent); color: #ef4444; }
+.st.wait { background: var(--accent-soft); color: var(--accent); }
