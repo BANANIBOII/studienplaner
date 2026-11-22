@@ -1495,10 +1495,15 @@ body:not(.dark) { --elev: 0 8px 24px rgba(20, 60, 60, .1); }
 }
 /* scale statt transform: die Einblend-Animationen setzen transform und würden die Verkleinerung überdecken */
 .card:active, .modcard:active, .listrow:active, .ev:active, .dchip:active, .mday:active, .plan-corner:active, .look-opt:active {
-  scale: .75;
+  scale: .85;
   filter: brightness(.92);
   transition-duration: .1s, .1s, .1s, .2s;
 }
 @media (prefers-reduced-motion: reduce) {
   .card:active, .modcard:active, .listrow:active, .ev:active, .dchip:active, .mday:active, .plan-corner:active, .look-opt:active { scale: 1; }
 }
+
+/* ===== Kurzes Antippen: alles Antippbare wird kurz kleiner und federt zurück ===== */
+@keyframes tapPulse { 0% { scale: 1; } 35% { scale: .85; } 100% { scale: 1; } }
+.tap-pulse { animation: tapPulse .32s var(--ease-spring); }
+@media (prefers-reduced-motion: reduce) { .tap-pulse { animation: none; } }

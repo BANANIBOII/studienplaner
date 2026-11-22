@@ -2479,6 +2479,22 @@ function cloudSection() {
 // Zurück-Taste: ein Fenster schließt zuerst, dann erst die Seite (siehe popstate weiter unten)
 let ignorePop = 0;   // Anzahl selbst ausgelöster history.back()-Aufrufe, die nicht als Zurück gelten
 let modalTok = 0;    // verhindert, dass ein ausblendendes Fenster ein neu geöffnetes wieder entfernt
+// Kurzes Antippen: alles Antippbare wird kurz kleiner und federt zurück (nicht beim Wischen oder Scrollen)
+const TAP_SEL = "button, a, [data-act], .card, .modcard, .listrow, .ev, .dchip, .mday, .plan-corner, .look-opt, .tabbar button, .item";
+let tapStart = null;
+document.addEventListener("pointerdown", (e) => {
+  tapStart = { x: e.clientX, y: e.clientY, el: e.target.closest ? e.target.closest(TAP_SEL) : null };
+}, true);
+document.addEventListener("pointerup", (e) => {
+  const s = tapStart;
+  tapStart = null;
+  if (!s || !s.el || Math.hypot(e.clientX - s.x, e.clientY - s.y) > 10 || s.el.matches("input, textarea, select")) return;
+  const el = s.el;
+  el.classList.remove("tap-pulse");
+  void el.offsetWidth; // Neustart der Animation
+  el.classList.add("tap-pulse");
+  el.addEventListener("animationend", () => el.classList.remove("tap-pulse"), { once: true });
+}, true);
 // Pop-ups wachsen aus dem zuletzt angetippten Element heraus und schrumpfen beim Schließen dorthin
 let tapOrigin = null, modalFrom = null, modalTintName = null;
 document.addEventListener("pointerdown", (e) => {
