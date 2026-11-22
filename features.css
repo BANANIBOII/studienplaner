@@ -1488,3 +1488,16 @@ body:not(.dark) { --elev: 0 8px 24px rgba(20, 60, 60, .1); }
 .month.anim-fold .mday { animation-duration: .42s; }
 .plan-top-wrap { transition-duration: .46s; }
 .btn:active, .tabbar button:active, .hist-btn:active { transition-duration: .16s; }
+
+/* ===== Antipp-Rückmeldung: beim Drücken wird das Element leicht kleiner und etwas dunkler ===== */
+.card, .modcard, .listrow, .ev, .dchip, .mday, .plan-corner, .look-opt {
+  transition: transform .18s var(--ease-ios), background-color .2s ease, filter .2s ease, border-color .2s ease;
+}
+.card:active, .modcard:active, .listrow:active, .ev:active, .dchip:active, .mday:active, .plan-corner:active, .look-opt:active {
+  transform: scale(.975);
+  filter: brightness(.95);
+  transition-duration: .08s, .08s, .08s, .2s;
+}
+@media (prefers-reduced-motion: reduce) {
+  .card:active, .modcard:active, .listrow:active, .ev:active, .dchip:active, .mday:active, .plan-corner:active, .look-opt:active { transform: none; }
+}
