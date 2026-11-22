@@ -479,7 +479,7 @@ function undo() {
     futMeta = [...futMeta, meta];
     ui.tab = meta.tab || ui.tab;
     ui.modOpen = meta.modOpen;
-    showToast(`Rückgängig: ${meta.label}<small>Zu: ${TAB_NAMES[ui.tab] || ui.tab}</small>`, 9000);
+    showToast(`Rückgängig: ${meta.label} · Zu: ${TAB_NAMES[ui.tab] || ui.tab}`, 9000);
   }
   state = normalize(JSON.parse(prev));
   state.history = hist.slice(0, -1);
@@ -891,33 +891,6 @@ function dashDayButton(now) {
 // ---------- Suche ----------
 function searchBtnHTML() {
   return `<button class="btn ghost search-btn" data-act="search">🔍 Suchen in To-Dos, Terminen und Protokollen</button>`;
-}
-function openSearch() {
-  openModal(`
-    <h3>Suche</h3>
-    <input id="searchQ" type="search" placeholder="Suchen …" autocomplete="off" style="width:100%">
-    <div id="searchRes" style="margin-top:10px;max-height:55vh;overflow:auto">${searchResultsHTML("")}</div>
-    <div class="row"><button class="btn ghost" data-act="mclose">Schließen</button></div>`);
-}
-function searchResultsHTML(raw) {
-  const q = raw.trim().toLowerCase();
-  if (q.length < 2) return `<div class="muted">Mindestens zwei Buchstaben eingeben.</div>`;
-  const hit = (s) => String(s || "").toLowerCase().includes(q);
-  const todos = state.todos.filter((t) => hit(t.title)).slice(0, 15).map((t) =>
-    `<button class="listrow-btn" data-act="todoopen" data-id="${t.id}">${esc(t.title)} <span class="muted">· ${CAT_LABEL[t.type] || "To-Do"}${t.date ? " · " + dateText(t) : ""}</span></button>`);
-  const evs = state.events.filter((e) => hit(e.name) || hit(dozentOf(e)) || hit(e.room)).slice(0, 15).map((e) =>
-    `<button class="listrow-btn" data-act="evinfo" data-id="${e.id}">${esc(e.name)} <span class="muted">· ${esc(e.date)} · ${esc(dozentOf(e) || e.room || "")}</span></button>`);
-  const prot = [];
-  for (const [name, m] of Object.entries(state.modules)) {
-    for (const n of m.notes || []) {
-      if (hit(n.done) || hit(n.todo)) prot.push(`<button class="listrow-btn" data-act="gotoprot" data-m="${enc(name)}">${esc(name)} <span class="muted">· ${esc(n.date)} · ${esc((n.done || n.todo || "").slice(0, 60))}</span></button>`);
-    }
-    for (const tp of m.topics || []) {
-      if (hit(tp.title)) prot.push(`<button class="listrow-btn" data-act="gotoprot" data-m="${enc(name)}">${esc(name)} · Thema <span class="muted">${esc(tp.title)}</span></button>`);
-    }
-  }
-  const all = [...todos, ...evs, ...prot.slice(0, 15)];
-  return all.length ? all.join("") : `<div class="muted">Nichts gefunden.</div>`;
 }
 
 // Suche: Ergebnisse direkt beim Tippen aktualisieren
@@ -2595,14 +2568,6 @@ function openRueckblick() {
     ${sec("Protokolle", d.notes.map(({ name, n }) => `<div class="note"><div class="muted">${fmtD(parseIso(n.date))} · <b>${esc(name)}</b></div>${esc(n.done)}${n.todo ? `<div class="muted" style="margin-top:6px">Noch zu lernen: ${esc(n.todo)}</div>` : ""}</div>`))}
     ${sec("Termine", d.termine.map((e) => `<div class="listrow" data-act="modgo" data-m="${enc(e.name)}" style="cursor:pointer"><span class="bar" style="background:${colorOf(e.name)}"></span><div class="grow"><b>${esc(e.name)}</b><div class="muted">${fmtD(parseIso(e.date))} · ${fmtMin(e.start)}${e.room ? " · " + esc(e.room) : ""}</div></div></div>`))}
     <div class="sheet-actions"><button class="btn ghost" data-act="mclose">Schließen</button></div>`);
-}
-function showToast(html, ms = 5000) {
-  let t = document.getElementById("toast");
-  if (!t) { t = document.createElement("div"); t.id = "toast"; document.body.appendChild(t); }
-  t.innerHTML = html;
-  t.classList.add("show");
-  clearTimeout(t._h);
-  t._h = setTimeout(() => t.classList.remove("show"), ms);
 }
 document.addEventListener("change", (e) => {
   const k = e.target.dataset && e.target.dataset.sf;
@@ -5553,6 +5518,7 @@ if ("serviceWorker" in navigator) {
 // Maus: sofort ziehen. Handy: kurz gedrückt halten, dann ziehen (Scrollen bleibt sonst möglich).
 let drag = null;
 let suppressClick = false;
+let zoomTimer = null;
 
 document.addEventListener("pointerdown", (e) => {
   if ((ui.tab !== "kalender" && ui.tab !== "stundenplan") || e.button > 0 || e.target.closest(".modal")) return;
@@ -5777,7 +5743,7 @@ document.addEventListener("touchend", () => {
 }, { passive: true });
 
 // 5) Kurze Rückmeldung nach dem Speichern eines Formulars
-function showToast(text) {
+function showToast(text, ms = 1300) {
   let el = document.getElementById("appToast");
   if (!el) { el = document.createElement("div"); el.id = "appToast"; document.body.appendChild(el); }
   el.textContent = text;
@@ -5785,7 +5751,7 @@ function showToast(text) {
   void el.offsetWidth;
   el.classList.add("show");
   clearTimeout(el._t);
-  el._t = setTimeout(() => el.classList.remove("show"), 1300);
+  el._t = setTimeout(() => el.classList.remove("show"), ms);
 }
 document.addEventListener("submit", () => showToast("✓ Gespeichert"));
 
