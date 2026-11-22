@@ -1374,3 +1374,11 @@ body:not(.dark) { --elev: 0 8px 24px rgba(20, 60, 60, .1); }
 .pm-mark { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; align-items: center; margin-bottom: 8px; }
 .pm-mark input[data-mark="label"] { grid-column: 1 / 3; }
 .pm-mark .menu-btn { grid-row: 1 / 3; grid-column: 3; }
+
+/* ---------- Sync-Punkt am Profilknopf ---------- */
+.profile-btn { position: relative; }
+.profile-btn::after { content: ""; position: absolute; right: 0; bottom: 0; width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--card); background: #facc15; }
+.profile-btn[data-sync="ok"]::after { background: #22c55e; }
+.profile-btn[data-sync="err"]::after { background: #ef4444; }
+.profile-btn[data-sync="local"]::after { background: #94a3b8; }
+.nextfire { font-size: 12px; margin-top: 2px; }

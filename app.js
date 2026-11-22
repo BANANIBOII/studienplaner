@@ -2555,6 +2555,8 @@ document.addEventListener("touchend", (e) => {
   if (Math.abs(dx) > 50 && Math.abs(dx) > 1.5 * Math.abs(dy)) mensaStep(dx < 0 ? 1 : -1);
 }, { passive: true });
 document.addEventListener("touchcancel", () => { mensaTouch = null; }, { passive: true });
+// Hinweis: Die Speisedaten sagen nicht, ob ein Gericht vegetarisch ist. Das wird anhand des Namens geschätzt.
+const MEAT_RE = /(fleisch|schwein|rind|hähnchen|huhn|pute|geflügel|fisch|lachs|speck|wurst|schinken|kalb|lamm|hack|gyros|döner|salami|ente|bratwurst)/i;
 function mensaCardHTML() {
   const target = mensaTarget();
   const today = iso(new Date());
@@ -2566,9 +2568,11 @@ function mensaCardHTML() {
   if (offDay) {
     body = `<div class="muted">Keine Daten verfügbar.</div>`;
   } else if (fresh && fresh.gerichte && fresh.gerichte.length) {
-    body = fresh.gerichte.map((g) =>
+    const shown = ui.mensaNoMeat ? fresh.gerichte.filter((g) => !MEAT_RE.test(g.name)) : fresh.gerichte;
+    body = (shown.length ? shown : fresh.gerichte).map((g) =>
       `<div class="mensa-row"><span class="muted">${esc(g.label)}</span><span><b>${esc(g.name)}</b></span><span class="mensa-price">${esc(g.preis.stud)}</span></div>`
-    ).join("") + `<div class="muted" style="font-size:12px;margin-top:8px">Preise für Studierende</div>`;
+    ).join("") + `<div class="muted" style="font-size:12px;margin-top:8px">Preise für Studierende</div>
+      <button class="btn ghost btn-sm" data-act="mensafilter" style="margin-top:8px">${ui.mensaNoMeat ? "Alle anzeigen" : "Nur ohne Fleisch (geschätzt)"}</button>`;
   } else if (fresh) {
     body = `<div class="muted">${esc(fresh.hinweis || "Kein Speiseplan für diesen Tag.")}</div>`;
   } else if (mensaErr) {
@@ -3732,6 +3736,7 @@ document.addEventListener("click", async (e) => {
     case "dprev": navigate(-1); break;
     case "dnext": navigate(1); break;
     case "planmenu": openPlanMenu(); break;
+    case "mensafilter": ui.mensaNoMeat = !ui.mensaNoMeat; render(); break;
     case "planedit": clearModalQuiet(); ui.planEdit = true; render(); break;
     case "planeditdone": ui.planEdit = false; render(); break;
     case "evdrop": {
@@ -4659,6 +4664,9 @@ function cloudConfigured() {
 
 function setStatus(text) {
   document.querySelectorAll(".syncStatus").forEach((el) => (el.textContent = text));
+  // Kleiner Punkt am Profilknopf: grün = gespeichert, gelb = arbeitet, rot = Fehler, grau = nur auf diesem Gerät
+  const mode = text === "synchron" ? "ok" : text === "Sync-Fehler" ? "err" : text === "lokal" ? "local" : "busy";
+  document.querySelectorAll(".profile-btn").forEach((el) => (el.dataset.sync = mode));
 }
 
 function initCloud() {
@@ -4864,6 +4872,27 @@ async function loadTodaySent() {
   if (ui.tab === "einstellungen" && ui.nfOnly === "custom") render();
 }
 // Status einer eigenen Erinnerung für heute: gesendet, verpasst oder noch offen
+// Wann die Erinnerung als Nächstes kommt
+function nextCustomFire(c) {
+  if (!c.on) return "";
+  const now = new Date();
+  const [h, m] = String(c.time || "").split(":").map(Number);
+  if (Number.isNaN(h)) return "";
+  const at = (d) => { const x = new Date(d); x.setHours(h, m, 0, 0); return x; };
+  let when = null;
+  if (c.date) { const x = at(parseIso(c.date)); if (x >= now) when = x; }
+  else if (Array.isArray(c.days) && c.days.length) {
+    for (let k = 0; k < 8 && !when; k++) {
+      const d = new Date(now); d.setDate(now.getDate() + k);
+      const x = at(d);
+      if (c.days.includes(d.getDay()) && x >= now) when = x;
+    }
+  }
+  if (!when) return "";
+  const isToday = iso(when) === iso(now);
+  const day = isToday ? "heute" : when.toLocaleDateString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit" });
+  return `<div class="muted nextfire">Nächste: ${day} · ${esc(c.time)}</div>`;
+}
 function customTodayStatus(c) {
   const now = new Date();
   const day = iso(now);
@@ -5041,7 +5070,7 @@ function customNotifyHTML() {
     ? list.map((c) => `<div class="listrow" style="align-items:center;gap:8px">
         <div class="grow"><b>${esc(c.title || "Erinnerung")}</b>
           <div class="muted" style="font-size:13px">${esc(c.time)} · ${c.date ? "einmalig am " + fmtD(parseIso(c.date)) : daysLabel(c.days)}${c.body ? " · " + esc(c.body) : ""}</div>
-          ${customTodayStatus(c)}</div>
+          ${customTodayStatus(c)}${nextCustomFire(c)}</div>
         <input type="checkbox" data-cnon="${c.id}" ${c.on ? "checked" : ""} title="an/aus">
         <button class="btn ghost" data-act="cnedit" data-id="${c.id}">Bearbeiten</button>
       </div>`).join("")
@@ -5209,6 +5238,12 @@ function handleLaunch() {
   const tab = p.get("tab");
   const focus = p.get("focus");
   const tabs = ["dashboard", "stundenplan", "kalender", "protokolle", "einstellungen"];
+  if (p.get("new") === "todo") {
+    history.replaceState(null, "", location.pathname);
+    ui.tab = "dashboard"; ui.modOpen = null;
+    render();
+    setTimeout(() => openTodoModal(null, iso(new Date())), 250);
+  }
   if (tab && tabs.includes(tab)) {
     ui.tab = tab;
     ui.modOpen = null;
