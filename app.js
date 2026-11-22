@@ -272,10 +272,13 @@ async function refreshKeyStatus() {
 }
 async function saveGeminiKey(key) {
   if (!sb || !session) { showToast("Zum Speichern bitte anmelden"); return false; }
-  const { error } = await sb.from("user_secrets").upsert(
-    { user_id: session.user.id, gemini_key: key, updated_at: new Date().toISOString() },
-    { onConflict: "user_id" });
-  if (error) { showToast("Speichern fehlgeschlagen"); return false; }
+  // Erst neu anlegen, bei vorhandenem Key ändern (Upsert braucht Leserechte, die der Key-Spalte fehlen)
+  const row = { gemini_key: key, updated_at: new Date().toISOString() };
+  let { error } = await sb.from("user_secrets").insert({ user_id: session.user.id, ...row });
+  if (error && error.code === "23505") {
+    ({ error } = await sb.from("user_secrets").update(row).eq("user_id", session.user.id));
+  }
+  if (error) { console.warn("Key speichern:", error); showToast("Speichern fehlgeschlagen"); return false; }
   return true;
 }
 async function deleteGeminiKey() {
