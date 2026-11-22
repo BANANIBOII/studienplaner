@@ -2495,10 +2495,12 @@ function growFromTap(sheet) {
   if (!s.width || !r.width) return;
   const x = r.left + r.width / 2 - (s.left + s.width / 2);
   const y = r.top + r.height / 2 - (s.top + s.height / 2);
-  const k = Math.max(0.25, Math.min(1, r.width / s.width));
-  modalFrom = { x, y, k };
+  // Breite und Höhe der Karte getrennt übernehmen, damit das Pop-up in deren Format startet
+  const sx = Math.max(0.2, Math.min(1, r.width / s.width));
+  const sy = Math.max(0.12, Math.min(1, r.height / s.height));
+  modalFrom = { x, y, sx, sy };
   sheet.animate([
-    { opacity: 0, transform: `translate(${x}px, ${y}px) scale(${k})` },
+    { opacity: 0, transform: `translate(${x}px, ${y}px) scale(${sx}, ${sy})` },
     { opacity: 1, transform: "none" },
   ], { duration: 520, easing: "cubic-bezier(.32,.72,0,1)" });
 }
@@ -2923,7 +2925,7 @@ function hideModal() {
       // Zurück in das Element schrumpfen, aus dem das Pop-up gewachsen ist
       sh.style.animation = "none";
       m.style.animation = "none";
-      sh.animate([{ opacity: 1, transform: "none" }, { opacity: 0, transform: `translate(${f.x}px, ${f.y}px) scale(${f.k})` }],
+      sh.animate([{ opacity: 1, transform: "none" }, { opacity: 0, transform: `translate(${f.x}px, ${f.y}px) scale(${f.sx}, ${f.sy})` }],
         { duration: 340, easing: "cubic-bezier(.4,0,1,1)", fill: "forwards" });
       m.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 340, easing: "ease-in", fill: "forwards" });
       setTimeout(() => { if (tok === modalTok) root.innerHTML = ""; }, 340);
