@@ -50,6 +50,30 @@
           "type": "image/png"
         }
       ]
+    },
+    {
+      "name": "KI-Chat",
+      "short_name": "KI-Chat",
+      "url": "./?kichat=1",
+      "icons": [
+        {
+          "src": "icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Mensa heute",
+      "short_name": "Mensa",
+      "url": "./?tab=dashboard&focus=mensa",
+      "icons": [
+        {
+          "src": "icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
     }
   ]
 }

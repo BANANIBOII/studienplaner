@@ -5841,6 +5841,13 @@ function handleLaunch() {
   const tab = p.get("tab");
   const focus = p.get("focus");
   const tabs = ["dashboard", "stundenplan", "kalender", "protokolle", "einstellungen"];
+  // Startbildschirm-Verknüpfung „KI-Chat“
+  if (p.get("kichat") === "1") {
+    history.replaceState(null, "", location.pathname);
+    ui.tab = "dashboard"; ui.modOpen = null;
+    render();
+    setTimeout(() => kiChatOpen(), 300);
+  }
   if (p.get("new") === "todo") {
     history.replaceState(null, "", location.pathname);
     ui.tab = "dashboard"; ui.modOpen = null;
