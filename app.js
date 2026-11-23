@@ -5373,33 +5373,88 @@ async function cloudSignOut() {
   render();
 }
 
-// Die neuere Version gewinnt. Papierkorb und Verlauf sind Teil des Stands und reisen mit.
-async function cloudPull() {
-  if (!session) return;
-  setStatus("synchronisiere …");
-  const { data, error } = await sb.from("user_data").select("data").eq("user_id", session.user.id).maybeSingle();
-  if (error) { setStatus("Sync-Fehler"); return; }
-  if (data && data.data && (data.data.updatedAt || 0) > state.updatedAt) {
-    state = normalize(data.data);
-    lastSnap = snapshot();
-    saveLocal();
-    saveDevice();
-    setStatus("synchron");
-    safeRender();
-  } else {
-    await cloudPush();
+// Abgleich pro Eintrag: Änderungen von zwei Geräten gehen nicht mehr verloren.
+// Gemeinsam ist der Stand beim letzten Abgleich (syncBase). Hat nur ein Gerät einen Eintrag geändert, gilt diese Änderung.
+// Haben beide denselben Eintrag geändert, gewinnt das Gerät, auf dem gerade gearbeitet wird.
+const SYNC_BASE_LS = "studienplaner-sync-base";
+let syncBase = (() => { try { return JSON.parse(localStorage.getItem(SYNC_BASE_LS) || "null"); } catch { return null; } })();
+let syncing = false;
+let syncAgain = false;
+const sameVal = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+const hasIds = (arr) => Array.isArray(arr) && arr.every((x) => x && typeof x === "object" && x.id !== undefined);
+function mergeList(bl, ll, rl) {
+  const byId = (arr) => new Map((arr || []).map((x) => [x.id, x]));
+  const B = byId(bl), L = byId(ll), R = byId(rl);
+  const out = [];
+  const seen = new Set();
+  for (const x of [...(ll || []), ...(rl || [])]) {
+    if (seen.has(x.id)) continue;
+    seen.add(x.id);
+    const b = B.get(x.id), l = L.get(x.id), r = R.get(x.id);
+    let keep = null;
+    if (l && r) keep = !sameVal(l, b) ? l : (!sameVal(r, b) ? r : l);
+    else if (l) keep = (!b || !sameVal(l, b)) ? l : null;   // auf dem anderen Gerät gelöscht, außer hier geändert
+    else if (r) keep = (!b || !sameVal(r, b)) ? r : null;   // hier gelöscht, außer auf dem anderen Gerät geändert
+    if (keep) out.push(keep);
   }
+  return out;
 }
-
-async function cloudPush() {
+function mergeDocs(base, local, remote) {
+  const out = {};
+  for (const k of new Set([...Object.keys(local), ...Object.keys(remote)])) {
+    const l = local[k], r = remote[k], b = base[k];
+    if (Array.isArray(l) && Array.isArray(r) && (hasIds(l) || !l.length) && (hasIds(r) || !r.length)) out[k] = mergeList(b, l, r);
+    else if (r === undefined) out[k] = l;
+    else if (l === undefined) out[k] = r;
+    else out[k] = sameVal(l, b) ? r : l;
+  }
+  return out;
+}
+// Papierkorb und Verlauf sind Teil des Stands und reisen mit; für den gemeinsamen Stand zählen sie nicht
+const docForCloud = (s) => ({ ...syncable(s), history: s.history, future: s.future, trash: s.trash });
+async function cloudSync() {
   if (!session) return;
-  const { error } = await sb.from("user_data").upsert({
-    user_id: session.user.id,
-    data: { ...syncable(state), history: state.history, future: state.future, trash: state.trash },
-    updated_at: new Date().toISOString(),
-  });
-  setStatus(error ? "Sync-Fehler" : "synchron");
+  if (syncing) { syncAgain = true; return; }
+  syncing = true;
+  setStatus("synchronisiere …");
+  try {
+    const { data, error } = await sb.from("user_data").select("data").eq("user_id", session.user.id).maybeSingle();
+    if (error) throw error;
+    const local = docForCloud(state);
+    const remote = data && data.data ? data.data : null;
+    let merged = local;
+    if (remote) {
+      merged = mergeDocs(syncBase || {}, local, remote);
+      merged.updatedAt = Math.max(local.updatedAt || 0, remote.updatedAt || 0);
+      if (!sameVal(merged, local)) {
+        // Während des Abrufs hat sich hier etwas geändert: erst den neuen Stand abgleichen
+        if (!sameVal(docForCloud(state), local)) { syncing = false; syncAgain = true; return cloudSync(); }
+        state = normalize(merged);
+        lastSnap = snapshot();
+        saveLocal();
+        saveDevice();
+        safeRender();
+      }
+    }
+    const { error: werr } = await sb.from("user_data").upsert({
+      user_id: session.user.id,
+      data: merged,
+      updated_at: new Date().toISOString(),
+    });
+    if (werr) throw werr;
+    const { history, future, trash, ...core } = merged;
+    syncBase = JSON.parse(JSON.stringify(core));
+    try { localStorage.setItem(SYNC_BASE_LS, JSON.stringify(syncBase)); } catch {}
+    setStatus("synchron");
+  } catch (_) {
+    setStatus("Sync-Fehler");
+  } finally {
+    syncing = false;
+  }
+  if (syncAgain) { syncAgain = false; cloudSync(); }
 }
+async function cloudPull() { return cloudSync(); }
+async function cloudPush() { return cloudSync(); }
 
 function scheduleCloud() {
   if (!session) return;
