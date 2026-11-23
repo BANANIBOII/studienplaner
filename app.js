@@ -1167,6 +1167,7 @@ function viewDashboard() {
           <input name="title" required placeholder="Neue Aufgabe …" style="flex:1">
           <input type="date" name="date" value="${iso(new Date())}">
           <button class="btn">+</button>
+          <button type="button" class="btn ghost" data-act="kitodo" title="Mit KI aus dem Text Datum und Uhrzeit erkennen">✨ KI</button>
         </form>
         ${open.length ? open.slice(0, 5).map(todoItem).join("") : `<div class="empty"><div class="ei">${ICON.spark}</div>Diese Woche ist nichts offen.</div>`}
         ${open.length > 8 ? `<div class="muted" style="margin-top:10px">… und ${open.length - 8} weitere im Kalender.</div>` : ""}
@@ -4206,6 +4207,36 @@ document.addEventListener("click", async (e) => {
     case "checkset": state.settings.checkSide = el.dataset.v; commit(); break;
     case "laytoggle": ui.layEdit = !ui.layEdit; render(); break;
     case "mensareload": loadMensa(true); break;
+    case "kitodo": {
+      // Freier Satz → KI erkennt Titel, Datum und Uhrzeit; vor dem Anlegen wird bestätigt
+      const form = el.closest("form");
+      const text = (form?.elements.title?.value || "").trim();
+      if (!text) { showToast("Erst eine Aufgabe eintippen"); break; }
+      if (!session) { showToast("Zum Nutzen bitte anmelden"); break; }
+      showToast("KI liest den Text …", 2000);
+      let res = null;
+      try {
+        const r = await fetch(SUPABASE_URL + "/functions/v1/ki-todo", {
+          method: "POST",
+          headers: { Authorization: "Bearer " + session.access_token, apikey: SUPABASE_ANON_KEY, "content-type": "application/json" },
+          body: JSON.stringify({ text }),
+          signal: AbortSignal.timeout(30000),
+        });
+        res = await r.json().catch(() => ({}));
+        if (!r.ok && !res.fehler) res.fehler = "fehler";
+      } catch (_) { res = { fehler: "netz" }; }
+      if (res.fehler) {
+        showToast(res.fehler === "kein-key" ? "Erst einen Gemini-Key im KI-Assistenten eintragen" : "KI gerade nicht erreichbar");
+        break;
+      }
+      const datum = res.datum || form.elements.date?.value || (res.uhrzeit ? iso(new Date()) : "");
+      const when = [datum ? parseIso(datum).toLocaleDateString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit" }) : "ohne Datum", res.uhrzeit ? "um " + res.uhrzeit + " Uhr" : ""].filter(Boolean).join(" ");
+      if (!(await appConfirm(`Aufgabe anlegen?\n\n${res.titel}\n${when}`, "Anlegen"))) break;
+      state.todos.push({ id: uid(), title: res.titel, type: "todo", priority: "mittel", date: datum, time: res.uhrzeit || "", duration: DEFAULT_DURATION, done: false });
+      form.reset(); commit();
+      showToast("✓ Aufgabe angelegt");
+      break;
+    }
     case "dtoday": ui.dayDate = iso(new Date()); ui.anim = null; render(); break;
     case "planview": planToggle(); break;
     case "mensanav": mensaStep(Number(el.dataset.v)); break;
