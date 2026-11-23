@@ -2765,6 +2765,7 @@ document.addEventListener("change", (e) => {
 const MENSA_LS = "studienplaner-mensa-v4";
 let mensaTried = null;   // Tag, für den schon geladen wurde (verhindert Schleifen)
 let mensaErr = false;
+let mensaRefreshing = false;  // läuft gerade ein Abruf (zeigt „Aktualisiere …“)
 let mensaBusy = false;
 // Speicher: je Datum ein Eintrag, nur die letzten 10 Tage
 function mensaCache() {
@@ -2858,7 +2859,7 @@ function mensaCardHTML() {
         <button class="btn ghost menu-btn" data-act="mensareload" title="Neu laden">${ICON.reload}</button>
       </span>
     </div>
-    <div style="margin-top:10px">${hinweisDatum}${body}</div>
+    <div style="margin-top:10px">${hinweisDatum}${mensaRefreshing ? `<div class="muted" style="font-size:12px;margin-bottom:6px">Aktualisiere … das kann bis zu einer Minute dauern</div>` : ""}${body}</div>
   </div>`;
 }
 async function loadMensa(force) {
@@ -2867,17 +2868,21 @@ async function loadMensa(force) {
   const cachedDay = mensaCache()[target];
   const complete = !!cachedDay && Array.isArray(cachedDay.gerichte) && cachedDay.gerichte.every((g) => Array.isArray(g.bilder));
   if (!force && ((cachedDay && complete) || mensaTried === target)) return;
-  if (mensaBusy || !cloudConfigured()) return;
+  if (!cloudConfigured()) return;
+  // Neu laden hat Vorrang: läuft gerade ein Abruf, wird er nicht stillschweigend verworfen
+  if (mensaBusy && !force) return;
   mensaBusy = true;
+  mensaRefreshing = true;
   mensaTried = target;
+  if (ui.tab === "dashboard") render();
   try {
     const r = await fetch(SUPABASE_URL + "/functions/v1/mensa?tag=" + target + (force ? "&live=1" : ""), {
       headers: { Authorization: "Bearer " + ((session && session.access_token) || SUPABASE_ANON_KEY), apikey: SUPABASE_ANON_KEY },
-      signal: AbortSignal.timeout(20000),
+      signal: AbortSignal.timeout(force ? 60000 : 25000),
     });
     const data = await r.json();
-    mensaErr = false;
     if (data && Array.isArray(data.gerichte)) {
+      mensaErr = false;
       const c = mensaCache();
       c[target] = data;
       const keep = {};
@@ -2885,9 +2890,12 @@ async function loadMensa(force) {
       localStorage.setItem(MENSA_LS, JSON.stringify(keep));
     }
   } catch {
-    mensaErr = true;
+    // Hatte der Tag schon Daten, bleiben sie stehen
+    if (!cachedDay) mensaErr = true;
+    else showToast("Aktualisieren hat nicht geklappt, der alte Stand bleibt");
   } finally {
     mensaBusy = false;
+    mensaRefreshing = false;
   }
   if (ui.tab === "dashboard") render();
 }
