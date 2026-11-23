@@ -2855,7 +2855,7 @@ async function loadMensa(force) {
   mensaBusy = true;
   mensaTried = target;
   try {
-    const r = await fetch(SUPABASE_URL + "/functions/v1/mensa?tag=" + target, {
+    const r = await fetch(SUPABASE_URL + "/functions/v1/mensa?tag=" + target + (force ? "&live=1" : ""), {
       headers: { Authorization: "Bearer " + ((session && session.access_token) || SUPABASE_ANON_KEY), apikey: SUPABASE_ANON_KEY },
       signal: AbortSignal.timeout(20000),
     });
