@@ -4208,33 +4208,17 @@ document.addEventListener("click", async (e) => {
     case "laytoggle": ui.layEdit = !ui.layEdit; render(); break;
     case "mensareload": loadMensa(true); break;
     case "kitodo": {
-      // Freier Satz → KI erkennt Titel, Datum und Uhrzeit; vor dem Anlegen wird bestätigt
-      const form = el.closest("form");
-      const text = (form?.elements.title?.value || "").trim();
-      if (!text) { showToast("Erst eine Aufgabe eintippen"); break; }
-      if (!session) { showToast("Zum Nutzen bitte anmelden"); break; }
-      showToast("KI liest den Text …", 2000);
-      let res = null;
-      try {
-        const r = await fetch(SUPABASE_URL + "/functions/v1/ki-todo", {
-          method: "POST",
-          headers: { Authorization: "Bearer " + session.access_token, apikey: SUPABASE_ANON_KEY, "content-type": "application/json" },
-          body: JSON.stringify({ text }),
-          signal: AbortSignal.timeout(30000),
-        });
-        res = await r.json().catch(() => ({}));
-        if (!r.ok && !res.fehler) res.fehler = "fehler";
-      } catch (_) { res = { fehler: "netz" }; }
-      if (res.fehler) {
-        showToast(res.fehler === "kein-key" ? "Erst einen Gemini-Key im KI-Assistenten eintragen" : "KI gerade nicht erreichbar");
-        break;
-      }
-      const datum = res.datum || form.elements.date?.value || (res.uhrzeit ? iso(new Date()) : "");
-      const when = [datum ? parseIso(datum).toLocaleDateString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit" }) : "ohne Datum", res.uhrzeit ? "um " + res.uhrzeit + " Uhr" : ""].filter(Boolean).join(" ");
-      if (!(await appConfirm(`Aufgabe anlegen?\n\n${res.titel}\n${when}`, "Anlegen"))) break;
-      state.todos.push({ id: uid(), title: res.titel, type: "todo", priority: "mittel", date: datum, time: res.uhrzeit || "", duration: DEFAULT_DURATION, done: false });
-      form.reset(); commit();
-      showToast("✓ Aufgabe angelegt");
+      // Fenster mit Textfeld öffnen
+      openModal(`<h3>KI-Aufgabe</h3>
+        <p class="muted" style="line-height:1.5">Schreib frei, z. B. „Ruf Oma morgen um 18 Uhr an“. Die KI erkennt Titel, Datum und Uhrzeit.</p>
+        <form data-form="kitodo">
+          <textarea name="text" required rows="3" maxlength="300" placeholder="Was soll ich dir eintragen?" style="width:100%"></textarea>
+          <div class="row" style="justify-content:flex-end;gap:8px;margin-top:12px">
+            <button type="button" class="btn ghost" data-act="mclose">Abbrechen</button>
+            <button class="btn">Erkennen</button>
+          </div>
+        </form>`);
+      setTimeout(() => document.querySelector('form[data-form="kitodo"] textarea')?.focus(), 50);
       break;
     }
     case "dtoday": ui.dayDate = iso(new Date()); ui.anim = null; render(); break;
@@ -4746,12 +4730,44 @@ document.addEventListener("change", async (e) => {
   }
 });
 
+// KI liest den Text, danach Bestätigung und Anlegen als Aufgabe mit Datum und Uhrzeit
+async function kiTodoFromText(text) {
+  if (!text) return;
+  if (!session) { showToast("Zum Nutzen bitte anmelden"); return; }
+  showToast("KI liest den Text …", 2000);
+  let res = null;
+  try {
+    const r = await fetch(SUPABASE_URL + "/functions/v1/ki-todo", {
+      method: "POST",
+      headers: { Authorization: "Bearer " + session.access_token, apikey: SUPABASE_ANON_KEY, "content-type": "application/json" },
+      body: JSON.stringify({ text }),
+      signal: AbortSignal.timeout(30000),
+    });
+    res = await r.json().catch(() => ({}));
+    if (!r.ok && !res.fehler) res.fehler = "fehler";
+  } catch (_) { res = { fehler: "netz" }; }
+  if (res.fehler) {
+    showToast(res.fehler === "kein-key" ? "Erst einen Gemini-Key im KI-Assistenten eintragen" : "KI gerade nicht erreichbar");
+    return;
+  }
+  const datum = res.datum || (res.uhrzeit ? iso(new Date()) : "");
+  const when = [datum ? parseIso(datum).toLocaleDateString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit" }) : "ohne Datum", res.uhrzeit ? "um " + res.uhrzeit + " Uhr" : ""].filter(Boolean).join(" ");
+  if (!(await appConfirm(`Aufgabe anlegen?\n\n${res.titel}\n${when}`, "Anlegen"))) return;
+  state.todos.push({ id: uid(), title: res.titel, type: "todo", priority: "mittel", date: datum, time: res.uhrzeit || "", duration: DEFAULT_DURATION, done: false });
+  commit();
+  showToast("✓ Aufgabe angelegt");
+}
+
 document.addEventListener("submit", async (e) => {
   const f = e.target;
   if (!f.dataset.form) return;
   e.preventDefault();
   const data = Object.fromEntries(new FormData(f));
 
+  if (f.dataset.form === "kitodo") {
+    await kiTodoFromText(String(data.text || "").trim());
+    return;
+  }
   if (f.dataset.form === "geminikey") {
     const key = (data.key || "").trim();
     if (!key) return;
