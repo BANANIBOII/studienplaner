@@ -1204,11 +1204,7 @@ body.tab-scrub .tab-pill { transition-duration: .12s; }
   backdrop-filter: blur(12px) saturate(1.15);
 }
 
-/* ---------- Rückmeldung beim Antippen: Karten und Knöpfe werden kurz kleiner ---------- */
-.card[data-act]:active, .listrow[data-act]:active, .topic-card:active, .modcard:active {
-  transform: scale(.975);
-  transition: transform .12s ease;
-}
+/* ---------- Rückmeldung beim Antippen: nur Knöpfe werden kurz kleiner (Karten bleiben ruhig) ---------- */
 .btn:active { transform: scale(.96); transition: transform .1s ease; }
 .tabbar button:active .ic { transform: scale(.9); }
 
@@ -1479,24 +1475,12 @@ body:not(.dark) { --elev: 0 8px 24px rgba(20, 60, 60, .1); }
 .plan-top-wrap { transition-duration: .46s; }
 .btn:active, .tabbar button:active, .hist-btn:active { transition-duration: .16s; }
 
-/* ===== Antipp-Rückmeldung: beim Drücken wird das Element leicht kleiner und etwas dunkler ===== */
-.card, .modcard, .listrow, .ev, .dchip, .mday, .plan-corner, .look-opt {
-  transition: scale .2s var(--ease-ios), background-color .2s ease, filter .2s ease, border-color .2s ease;
-}
-/* scale statt transform: die Einblend-Animationen setzen transform und würden die Verkleinerung überdecken */
-.card:active, .modcard:active, .listrow:active, .ev:active, .dchip:active, .mday:active, .plan-corner:active, .look-opt:active {
-  scale: .95;
-  filter: brightness(.92);
-  transition-duration: .1s, .1s, .1s, .2s;
-}
-@media (prefers-reduced-motion: reduce) {
-  .card:active, .modcard:active, .listrow:active, .ev:active, .dchip:active, .mday:active, .plan-corner:active, .look-opt:active { scale: 1; }
-}
-
-/* ===== Kurzes Antippen: alles Antippbare wird kurz kleiner und federt zurück ===== */
-@keyframes tapPulse { 0% { scale: 1; } 35% { scale: .85; } 100% { scale: 1; } }
-.tap-pulse { animation: tapPulse .32s var(--ease-spring); }
-@media (prefers-reduced-motion: reduce) { .tap-pulse { animation: none; } }
+/* ===== Kalender: Wischen zum nächsten/vorigen Monat (bzw. Woche) ===== */
+.month.cal-slide-next { animation: calSlideNext .3s cubic-bezier(.2, .8, .2, 1) both; }
+.month.cal-slide-prev { animation: calSlidePrev .3s cubic-bezier(.2, .8, .2, 1) both; }
+@keyframes calSlideNext { from { transform: translateX(14%); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes calSlidePrev { from { transform: translateX(-14%); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .month.cal-slide-next, .month.cal-slide-prev { animation: none; } }
 
 /* ===== Verschieben im Stundenplan: Vorschau der Zielzeit + sanfteres Folgen des Fingers ===== */
 .drag-ghost { transition: transform .07s linear, opacity .15s ease; animation: dragGhostIn .18s var(--ease-spring) both; }

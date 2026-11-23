@@ -2069,7 +2069,8 @@ function viewCal() {
   const monthTitle = fold
     ? `${grid0.getDate()}. ${MONTHS[grid0.getMonth()].slice(0, 3)} – ${weekEnd.getDate()}. ${MONTHS[weekEnd.getMonth()].slice(0, 3)} ${weekEnd.getFullYear()}`
     : `${MONTHS[m.getMonth()]} ${m.getFullYear()}`;
-  const animCls = ui.anim === "fold" || ui.anim === "week" ? " anim-fold" : "";
+  const animCls = ui.anim === "fold" || ui.anim === "week" ? " anim-fold"
+    : ui.anim === "slide-next" ? " cal-slide-next" : ui.anim === "slide-prev" ? " cal-slide-prev" : "";
   let cells = WEEKDAYS.map((w) => `<div class="mwd">${w}</div>`).join("");
   for (let i = 0; i < (fold ? 7 : 42); i++) {
     const d = addDays(grid0, i);
@@ -2693,21 +2694,6 @@ function cloudSection() {
 let ignorePop = 0;   // Anzahl selbst ausgelöster history.back()-Aufrufe, die nicht als Zurück gelten
 let modalTok = 0;    // verhindert, dass ein ausblendendes Fenster ein neu geöffnetes wieder entfernt
 // Kurzes Antippen: alles Antippbare wird kurz kleiner und federt zurück (nicht beim Wischen oder Scrollen)
-const TAP_SEL = "button, a, [data-act], .card, .modcard, .listrow, .ev, .dchip, .mday, .plan-corner, .look-opt, .tabbar button, .item";
-let tapStart = null;
-document.addEventListener("pointerdown", (e) => {
-  tapStart = { x: e.clientX, y: e.clientY, el: e.target.closest ? e.target.closest(TAP_SEL) : null };
-}, true);
-document.addEventListener("pointerup", (e) => {
-  const s = tapStart;
-  tapStart = null;
-  if (!s || !s.el || Math.hypot(e.clientX - s.x, e.clientY - s.y) > 10 || s.el.matches("input, textarea, select")) return;
-  const el = s.el;
-  el.classList.remove("tap-pulse");
-  void el.offsetWidth; // Neustart der Animation
-  el.classList.add("tap-pulse");
-  el.addEventListener("animationend", () => el.classList.remove("tap-pulse"), { once: true });
-}, true);
 // Pop-ups wachsen aus dem zuletzt angetippten Element heraus und schrumpfen beim Schließen dorthin
 let tapOrigin = null, modalFrom = null, modalTintName = null;
 document.addEventListener("pointerdown", (e) => {
@@ -3612,6 +3598,69 @@ document.addEventListener("touchend", () => {
 }, { passive: true });
 document.addEventListener("touchcancel", () => abortSwipe(), { passive: true });
 
+// Kalender: mit dem Finger wischen. Das Raster folgt dem Finger, beim Loslassen gleitet es weg
+// und der nächste Monat (bzw. die nächste Woche, wenn eingeklappt) kommt von der Seite.
+let calSwipe = null, calSlideBusy = false;
+function abortCalSwipe() {
+  if (calSwipe && calSwipe.grid) { calSwipe.grid.style.transition = ""; calSwipe.grid.style.transform = ""; }
+  calSwipe = null;
+}
+function calStep(dir) {
+  if (calSet().fold) {
+    const d = addDays(parseIso(ui.selDate || iso(new Date())), 7 * dir);
+    ui.selDate = iso(d);
+    ui.month = new Date(d.getFullYear(), d.getMonth(), 1);
+  } else {
+    ui.month = new Date(ui.month.getFullYear(), ui.month.getMonth() + dir, 1);
+  }
+  ui.anim = dir > 0 ? "slide-next" : "slide-prev";
+  render();
+}
+document.addEventListener("touchstart", (e) => {
+  calSwipe = null;
+  if (e.touches.length !== 1 || calSlideBusy || ui.tab !== "kalender" || ui.layEdit || document.querySelector(".modal")) return;
+  const grid = e.target.closest ? e.target.closest(".month") : null;
+  if (!grid) return;
+  calSwipe = { x: e.touches[0].clientX, y: e.touches[0].clientY, t: Date.now(), dx: 0, mode: null, grid };
+}, { passive: true });
+document.addEventListener("touchmove", (e) => {
+  const s = calSwipe;
+  if (!s) return;
+  // Halten (zum Verschieben eines To-Dos) oder zweiter Finger: kein Wischen
+  if (e.touches.length !== 1 || longFired || drag) { abortCalSwipe(); return; }
+  const dx = e.touches[0].clientX - s.x;
+  const dy = e.touches[0].clientY - s.y;
+  if (!s.mode) {
+    if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return;
+    if (Math.abs(dx) < 1.3 * Math.abs(dy)) { calSwipe = null; return; }   // senkrecht: normal scrollen
+    s.mode = "h";
+  }
+  if (e.cancelable) e.preventDefault();
+  s.dx = dx;
+  s.grid.style.transition = "none";
+  s.grid.style.transform = `translateX(${dx}px)`;
+}, { passive: false });
+document.addEventListener("touchend", () => {
+  const s = calSwipe;
+  calSwipe = null;
+  if (!s || s.mode !== "h" || longFired) { if (s) abortCalSwipe(); return; }
+  const W = s.grid.offsetWidth || 1;
+  const quick = Date.now() - s.t < 300 && Math.abs(s.dx) > 30;
+  const commit = Math.abs(s.dx) > W * 0.2 || quick;
+  const ease = "transform .22s cubic-bezier(.2, .8, .2, 1)";
+  if (!commit) {
+    s.grid.style.transition = ease;
+    s.grid.style.transform = "translateX(0)";
+    setTimeout(() => { if (s.grid.isConnected) { s.grid.style.transition = ""; s.grid.style.transform = ""; } }, 240);
+    return;
+  }
+  const dir = s.dx < 0 ? 1 : -1;   // nach links = nächster Monat/Woche
+  calSlideBusy = true;
+  s.grid.style.transition = ease;
+  s.grid.style.transform = `translateX(${-dir * W}px)`;
+  setTimeout(() => { calSlideBusy = false; calStep(dir); }, 220);
+}, { passive: true });
+
 // Gummiband (überall, wo etwas scrollt): am oberen/unteren Ende gibt der Inhalt beim Weiterziehen kurz nach
 // und federt zurück; auch wenn ein schneller Wisch (Schwung) am Ende anstößt. Nur optisch, die Scrollposition bleibt unberührt.
 // Stundenplan: das Raster (.plan-rows) bewegt sich, Wochentage und Aufgaben bleiben stehen. Andere Reiter: die ganze Seite (#app).
@@ -3655,7 +3704,7 @@ document.addEventListener("touchstart", (e) => {
 }, { passive: true });
 document.addEventListener("touchmove", (e) => {
   if (!band) return;
-  if (e.touches.length !== 1 || (swipe && swipe.mode === "h") || pinch) { band.el.style.transform = ""; band = null; return; }
+  if (e.touches.length !== 1 || (swipe && swipe.mode === "h") || (calSwipe && calSwipe.mode === "h") || pinch) { band.el.style.transform = ""; band = null; return; }
   const y = e.touches[0].clientY;
   const d = y - band.last;
   band.last = y;
