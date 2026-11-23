@@ -1,5 +1,5 @@
 // Offline-Unterstützung: lädt immer aus dem Netz, nutzt den Cache nur wenn offline.
-const CACHE = "studienplaner-v35";
+const CACHE = "studienplaner-v36";
 const FILES = ["./", "index.html", "styles.css", "features.css", "app.js", "config.js", "manifest.json", "icon.svg"];
 
 self.addEventListener("install", (e) => {
@@ -40,7 +40,7 @@ self.addEventListener("push", (e) => {
   try { data = { ...data, ...e.data.json() }; } catch (_) {}
   // „Notiz schreiben“ nur bei Modul-Erinnerungen
   const actions = data.noteUrl ? [{ action: "note", title: "Notiz schreiben" }] : [];
-  // Frist mit genau einer offenen Aufgabe: „Erledigt“ öffnet die App und hakt sie dort ab
+  // „Erledigt“: hakt die Aufgabe im Hintergrund ab (signierter Link). Ohne Link öffnet es die App.
   if (data.todoId) actions.push({ action: "done", title: "Erledigt" });
   e.waitUntil(readNfPrefs().then((prefs) => {
     const options = {
@@ -49,7 +49,7 @@ self.addEventListener("push", (e) => {
       badge: "icon.svg",
       tag: data.tag || "studienplaner",
       actions,
-      data: { url: data.url || "./", noteUrl: data.noteUrl || null, todoId: data.todoId || null },
+      data: { url: data.url || "./", noteUrl: data.noteUrl || null, todoId: data.todoId || null, doneUrl: data.doneUrl || null, doneTitle: data.doneTitle || null },
       silent: prefs.sound === false,
     };
     if (prefs.vib && VIB_PATTERN[prefs.vib] !== undefined) options.vibrate = VIB_PATTERN[prefs.vib];
@@ -61,6 +61,21 @@ self.addEventListener("push", (e) => {
 self.addEventListener("notificationclick", (e) => {
   e.notification.close();
   const d = e.notification.data || {};
+  // „Erledigt“ mit signiertem Link: im Hintergrund abhaken und eine kurze Bestätigung zeigen
+  if (e.action === "done" && d.doneUrl) {
+    e.waitUntil(fetch(d.doneUrl).then((r) => {
+      if (!r.ok) throw new Error("erledigt");
+      return self.registration.showNotification("Erledigt", {
+        body: d.doneTitle || "Aufgabe abgehakt",
+        icon: "icon.svg",
+        badge: "icon.svg",
+        tag: "done-" + (d.todoId || ""),
+        silent: true,
+        data: { url: "./?tab=kalender" },
+      });
+    }).catch(() => clients.openWindow("./?done=" + encodeURIComponent(d.todoId || ""))));
+    return;
+  }
   let target = e.action === "note" && d.noteUrl ? d.noteUrl : (d.url || "./");
   if (e.action === "done" && d.todoId) target = "./?done=" + encodeURIComponent(d.todoId);
   // Immer ein Fenster mit dem Ziel öffnen (Android holt es so zuverlässig in den Vordergrund)
