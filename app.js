@@ -4786,12 +4786,16 @@ function kiChatPaint() {
     const v = m.vorschlag;
     if (!user && v && !v.erledigt) {
       const wann = [kiDateLabel(v.datum), v.uhrzeit ? "um " + v.uhrzeit + " Uhr" : ""].filter(Boolean).join(" ");
-      const rep = v.art === "erinnerung" ? " · " + (KI_REP_LABEL[v.wiederholung] || "einmalig") : "";
+      const aendern = v.typ === "erledigt" || v.typ === "verschieben";
+      const rep = !aendern && v.art === "erinnerung" ? " · " + (KI_REP_LABEL[v.wiederholung] || "einmalig") : "";
+      const kopf = v.typ === "erledigt" ? "Als erledigt markieren" : v.typ === "verschieben" ? "Verschieben" : KI_ART_LABEL[v.art] || "Aufgabe";
+      const titel = aendern ? v.ziel_titel : v.titel;
+      const zeile = v.typ === "erledigt" ? "" : (v.typ === "verschieben" && !v.datum && !v.uhrzeit ? "" : wann);
       html += `<div class="card" style="align-self:stretch;padding:10px">
-        <div class="muted" style="font-size:12px">${esc(KI_ART_LABEL[v.art] || "Aufgabe")}</div>
-        <b>${esc(v.titel)}</b>
-        <div class="muted" style="font-size:13px">${esc(wann)}${esc(rep)}</div>
-        <button type="button" class="btn btn-sm" data-act="kichatanlegen" data-id="${esc(m.id)}" style="margin-top:6px">Anlegen</button>
+        <div class="muted" style="font-size:12px">${esc(kopf)}</div>
+        <b>${esc(titel)}</b>
+        <div class="muted" style="font-size:13px">${esc(zeile)}${esc(rep)}</div>
+        <button type="button" class="btn btn-sm" data-act="kichatanlegen" data-id="${esc(m.id)}" style="margin-top:6px">${aendern ? "Ausführen" : "Anlegen"}</button>
       </div>`;
     }
   }
@@ -4838,6 +4842,18 @@ async function kiChatAnlegen(id) {
   const m = kiChatMsgs.find((x) => String(x.id) === String(id));
   const v = m && m.vorschlag;
   if (!v || v.erledigt) return;
+  // Bestehende Aufgabe abhaken oder verschieben
+  if (v.typ === "erledigt" || v.typ === "verschieben") {
+    const t = state.todos.find((x) => x.id === v.ziel_id);
+    if (!t || t.done) { showToast("Die Aufgabe gibt es nicht mehr"); return; }
+    if (v.typ === "erledigt") { t.done = true; t.doneAt = iso(new Date()); }
+    else { if (v.datum) t.date = v.datum; if (v.uhrzeit) t.time = v.uhrzeit; }
+    await sb.from("ki_chat").update({ vorschlag: { ...v, erledigt: true } }).eq("id", m.id);
+    commit();
+    showToast("✓ Geändert");
+    await kiChatLoad();
+    return;
+  }
   if (v.art === "erinnerung") {
     const rep = v.wiederholung || "einmal";
     const c = { id: uid(), on: true, title: v.titel, body: "", time: v.uhrzeit || "08:00" };
