@@ -390,7 +390,7 @@ function designListHTML() {
 // Früher das Design-Fenster; wird nicht mehr genutzt, bleibt zur Sicherheit erhalten
 function openDesignModal() {
   openModal(`<h3>Design wählen</h3>${designListHTML()}
-    <div class="row" style="margin-top:14px"><button class="btn ghost" data-act="mclose">Schließen</button></div>`);
+    <div class="modal-foot"><button class="btn ghost" data-act="mclose">Schließen</button></div>`);
 }
 
 // Eigene Karten im Dashboard (Verknüpfungen, Notizen)
@@ -1808,12 +1808,10 @@ function openEventInfo(id) {
       ${row("Woche", info.woche || "–")}
     </div>
     ${dozentOf(ev) ? "" : `<p class="muted" style="font-size:13px">Kein Dozent hinterlegt? Termine, die vor dieser Version importiert wurden, einmal über die ICS-Datei in den Einstellungen neu importieren.</p>`}
-    <div class="sheet-actions">
-      <button type="button" class="btn ghost" data-act="evopen" data-id="${ev.id}">Bearbeiten</button>
-      <div class="right">
-        <button type="button" class="btn ghost" data-act="evnote" data-id="${ev.id}">Notizen</button>
-        <button type="button" class="btn" data-act="mclose">Schließen</button>
-      </div>
+    <div class="modal-foot">
+      <button type="button" class="btn ghost" data-act="mclose">Schließen</button>
+      <button type="button" class="btn ghost" data-act="evnote" data-id="${ev.id}">Notizen</button>
+      <button type="button" class="btn" data-act="evopen" data-id="${ev.id}">Bearbeiten</button>
     </div>`);
 }
 
@@ -2205,7 +2203,7 @@ function openModuleMenu(name) {
       <button class="btn" data-act="medit" data-m="${n}">Bearbeiten (Farbe)</button>
       <button class="btn danger" data-act="mtrash" data-m="${n}">In den Papierkorb</button>
     </div>
-    <div class="row"><button class="btn ghost" data-act="mclose">Schließen</button></div>
+    <div class="modal-foot"><button class="btn ghost" data-act="mclose">Schließen</button></div>
     <p class="muted">Die Termine im Stundenplan bleiben erhalten.</p>`);
 }
 
@@ -2752,7 +2750,7 @@ function openRueckblick() {
     ${sec("Erledigt", d.done.map((t) => `<div class="listrow" data-act="tedit" data-id="${t.id}" style="cursor:pointer"><span class="pdot" style="background:${catColor(t.type)}"></span><div class="grow"><b>${esc(t.title)}</b><div class="muted">${CAT_LABEL[t.type] || "Aufgabe"} · ${fmtD(parseIso(t.date))}</div></div></div>`))}
     ${sec("Protokolle", d.notes.map(({ name, n }) => `<div class="note"><div class="muted">${fmtD(parseIso(n.date))} · <b>${esc(name)}</b></div>${esc(n.done)}${n.todo ? `<div class="muted" style="margin-top:6px">Noch zu lernen: ${esc(n.todo)}</div>` : ""}</div>`))}
     ${sec("Termine", d.termine.map((e) => `<div class="listrow" data-act="modgo" data-m="${enc(e.name)}" style="cursor:pointer"><span class="bar" style="background:${colorOf(e.name)}"></span><div class="grow"><b>${esc(e.name)}</b><div class="muted">${fmtD(parseIso(e.date))} · ${fmtMin(e.start)}${e.room ? " · " + esc(e.room) : ""}</div></div></div>`))}
-    <div class="sheet-actions"><button class="btn ghost" data-act="mclose">Schließen</button></div>`);
+    <div class="modal-foot"><button class="btn ghost" data-act="mclose">Schließen</button></div>`);
 }
 document.addEventListener("change", (e) => {
   const k = e.target.dataset && e.target.dataset.sf;
@@ -3138,7 +3136,7 @@ function appConfirm(text, okLabel = "Löschen") {
     modalResolve = (v) => resolve(!!v);
     openModal(`<h3>Bitte bestätigen</h3>
       <p style="white-space:pre-line;line-height:1.5">${esc(text)}</p>
-      <div class="row" style="justify-content:flex-end;gap:8px;margin-top:16px">
+      <div class="modal-foot">
         <button type="button" class="btn ghost" data-act="confno">Abbrechen</button>
         <button type="button" class="btn danger" data-act="confyes">${esc(okLabel)}</button>
       </div>`);
@@ -5165,7 +5163,7 @@ function exportBackup() {
     <p class="muted">Wähle, was ins Backup soll. Nicht gewählte Teile fehlen in der Datei.</p>
     ${[["plan", "Stundenplan, Module, Aufgaben & Karten"], ["design", "Design & Darstellung"], ["einstellungen", "Einstellungen"]]
       .map(([k, l]) => `<label class="row" style="margin:10px 0"><input type="checkbox" data-exp="${k}" checked> ${l}</label>`).join("")}
-    <div class="row" style="justify-content:flex-end;gap:8px;margin-top:16px">
+    <div class="modal-foot">
       <button type="button" class="btn ghost" data-act="mclose">Abbrechen</button>
       <button type="button" class="btn" data-act="expgo">Speichern</button>
     </div>`);
@@ -5209,7 +5207,7 @@ function openImportChoice() {
   openModal(`<h3>Backup einspielen</h3>
     <p class="muted">Wähle, was aus dem Backup übernommen werden soll. Das Gewählte ersetzt die aktuellen Daten, Nicht-Gewähltes bleibt unverändert.</p>
     ${labels.map(([k, l]) => `<label class="row" style="margin:10px 0"><input type="checkbox" data-imp="${k}" checked> ${l}</label>`).join("")}
-    <div class="row" style="justify-content:flex-end;gap:8px;margin-top:16px">
+    <div class="modal-foot">
       <button type="button" class="btn ghost" data-act="mclose">Abbrechen</button>
       <button type="button" class="btn danger" data-act="impgo">Einspielen</button>
     </div>`);

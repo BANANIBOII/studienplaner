@@ -1553,3 +1553,19 @@ body.nav-bottom:not(.locked) .dash-search { display: none !important; }
 
 /* Symbol im runden KI-Knopf im selben Stil wie die übrigen Icons */
 .ki-fab svg { width: 26px; height: 26px; }
+
+/* Einheitliche Fußzeile für Pop-ups: gleich breite Knöpfe, Abbrechen/Schließen links, Hauptaktion rechts */
+.modal-foot {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+  flex-wrap: wrap;
+}
+.modal-foot > .btn {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 44px;
+  justify-content: center;
+  text-align: center;
+  white-space: nowrap;
+}
