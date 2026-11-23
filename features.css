@@ -1550,3 +1550,6 @@ body.nav-bottom:not(.locked) .dash-search { display: none !important; }
   cursor: pointer;
 }
 .ki-fab[hidden] { display: none; }
+
+/* Symbol im runden KI-Knopf im selben Stil wie die übrigen Icons */
+.ki-fab svg { width: 26px; height: 26px; }

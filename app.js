@@ -2831,7 +2831,7 @@ function mensaCardHTML() {
   } else if (fresh && fresh.gerichte && fresh.gerichte.length) {
     const shown = ui.mensaNoMeat ? fresh.gerichte.filter((g) => !(g.tags || []).some((t) => MENSA_MEAT_TAGS.includes(t))) : fresh.gerichte;
     body = (shown.length ? shown : fresh.gerichte).map((g) =>
-      `<div class="mensa-row" style="border-left:4px solid ${mensaColor(g)};padding-left:8px"><span class="muted">${esc(g.label)}</span><span><span style="margin-right:4px">${mensaIcons(g)}</span><b>${esc(g.name)}</b>${g.allergene ? `<div class="muted" style="font-size:12px">Allergene: ${esc(g.allergene)}</div>` : ""}</span><span class="mensa-price">${esc(g.preis.stud)}</span></div>`
+      `<div class="mensa-row" style="border-left:4px solid ${mensaColor(g)};padding-left:8px"><span class="muted">${esc(g.label)}</span><span><b>${esc(g.name)}</b><span style="margin-left:6px">${mensaIcons(g)}</span>${g.allergene ? `<div class="muted" style="font-size:12px">Allergene: ${esc(g.allergene)}</div>` : ""}</span><span class="mensa-price">${esc(g.preis.stud)}</span></div>`
     ).join("") + `<div class="muted" style="font-size:12px;margin-top:8px">Symbole von der Mensa-Seite · Farben: rot Fleisch, blau Fisch, grün vegetarisch, dunkelgrün vegan, gelb Dessert${fresh.symbole ? "" : " · Für diesen Tag keine Symbole erkannt"}</div>
       <div class="muted" style="font-size:12px">Preise für Studierende</div>
       ${fresh.symbole ? `<button class="btn ghost btn-sm" data-act="mensafilter" style="margin-top:8px">${ui.mensaNoMeat ? "Alle anzeigen" : "Nur ohne Fleisch"}</button>` : ""}`;
@@ -2863,7 +2863,10 @@ function mensaCardHTML() {
 }
 async function loadMensa(force) {
   const target = mensaTarget();
-  if (!force && (mensaCache()[target] || mensaTried === target)) return;
+  // Gespeicherte Tage ohne Symbol-Bilder (ältere Version) werden einmal neu geholt
+  const cachedDay = mensaCache()[target];
+  const complete = !!cachedDay && Array.isArray(cachedDay.gerichte) && cachedDay.gerichte.every((g) => Array.isArray(g.bilder));
+  if (!force && ((cachedDay && complete) || mensaTried === target)) return;
   if (mensaBusy || !cloudConfigured()) return;
   mensaBusy = true;
   mensaTried = target;
@@ -4730,7 +4733,7 @@ function kiFabSync() {
     b.className = "ki-fab";
     b.dataset.act = "kichat";
     b.setAttribute("aria-label", "KI-Chat öffnen");
-    b.textContent = "💬";
+    b.innerHTML = ICON.spark;
     document.body.appendChild(b);
   }
   b.hidden = ui.tab === "einstellungen" || !session;
