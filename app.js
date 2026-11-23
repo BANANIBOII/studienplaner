@@ -312,6 +312,60 @@ async function saveIcon(hash, tag) {
   } catch (_) { showToast("Speichern fehlgeschlagen"); }
   await loadIcons();
 }
+// Angemeldete Geräte (Sitzungen des Kontos), abrufbar über die Funktion geraete
+let geraeteData = null;
+let geraeteErr = "";
+let geraeteBusy = false;
+async function loadGeraete() {
+  if (!session || geraeteBusy) return;
+  geraeteBusy = true;
+  try {
+    const r = await fetch(SUPABASE_URL + "/functions/v1/geraete", {
+      headers: { Authorization: "Bearer " + session.access_token, apikey: SUPABASE_ANON_KEY },
+      signal: AbortSignal.timeout(15000),
+    });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.fehler || "fehler");
+    geraeteData = j.geraete || [];
+    geraeteErr = "";
+  } catch (_) { geraeteErr = "Geräte gerade nicht abrufbar."; }
+  geraeteBusy = false;
+  render();
+}
+async function geraetAbmelden(id) {
+  if (!(await appConfirm("Dieses Gerät abmelden? Dort musst du dich danach wieder anmelden.", "Abmelden"))) return;
+  try {
+    const r = await fetch(SUPABASE_URL + "/functions/v1/geraete", {
+      method: "POST",
+      headers: { Authorization: "Bearer " + session.access_token, apikey: SUPABASE_ANON_KEY, "content-type": "application/json" },
+      body: JSON.stringify({ id }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || !j.ok) throw new Error(j.fehler || "fehler");
+    showToast("✓ Gerät abgemeldet");
+  } catch (e) { showToast(String(e.message).includes("kann hier nicht") ? "Dieses Gerät kann hier nicht abgemeldet werden" : "Abmelden hat nicht geklappt"); }
+  geraeteData = null;
+  loadGeraete();
+}
+function geraeteHTML() {
+  if (!session) return `<div class="card"><h3>Angemeldete Geräte</h3><p class="muted">Anmelden, um die Geräte zu sehen.</p></div>`;
+  if (geraeteData === null && !geraeteErr) loadGeraete();
+  const zeit = (s) => (s ? new Date(s).toLocaleString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "–");
+  const liste = geraeteData
+    ? (geraeteData.length
+      ? geraeteData.map((g) => `<div class="listrow" style="align-items:center;gap:8px">
+          <div class="grow"><b>${esc(g.name)}${g.aktuell ? " · dieses Gerät" : ""}</b>
+            <div class="muted" style="font-size:13px">Zuletzt aktiv: ${esc(zeit(g.aktiv))} · angemeldet seit ${esc(zeit(g.angelegt))}</div></div>
+          ${g.aktuell ? "" : `<button class="btn ghost btn-sm" data-act="geraetabmelden" data-id="${esc(g.id)}">Abmelden</button>`}
+        </div>`).join("")
+      : `<div class="muted">Keine Anmeldungen gefunden.</div>`)
+    : `<div class="muted">${esc(geraeteErr || "Lädt …")}</div>`;
+  return `<div class="card"><h3>Angemeldete Geräte</h3>
+    <p class="muted" style="margin-top:0">Hier siehst du, wo dein Konto angemeldet ist. Ein anderes Gerät kannst du abmelden, danach muss man sich dort neu anmelden.</p>
+    ${liste}
+    <div class="row" style="margin-top:10px"><button class="btn ghost btn-sm" data-act="geraeteneu">Aktualisieren</button></div>
+  </div>`;
+}
 function iconsCardHTML() {
   if (!iconData) return `<div class="card"><h3>Erkannte Symbole</h3><p class="muted" style="margin:0">${iconErr || "Wird geladen …"}</p></div>`;
   const tagOf = new Map(iconData.icons.map((x) => [x.hash, x]));
@@ -2424,6 +2478,7 @@ function settingsPages() {
       </form>
       <div class="row" style="margin-top:10px"><button class="btn ghost" data-act="geminidel">Key entfernen</button></div>
     </div>`, iconsCardHTML()];
+  pages.geraete = [geraeteHTML()];
   // Erscheinungsbild: Modus, Designs, Schrift, Farben
   pages.darst = [
     `<div class="card"><h3>Hell oder dunkel</h3>
@@ -2570,6 +2625,7 @@ const SETTINGS_LIST = [
   { k: "benach", t: "Benachrichtigungen", d: "Module, Mensa, Fristen, Ruhezeit, Tests", w: "benachrichtigung mensa fristen modul ruhezeit test vorwarnzeit push", ic: "🔔", col: "#f59e0b" },
   { k: "navi", t: "Bedienung", d: "Startseite, Reiterleiste, Werkzeuge", w: "bedienung startseite reiterleiste navigation haken werkzeuge rückgängig layout", ic: "🧭", col: "#8b5cf6" },
   { k: "ki", t: "KI-Assistent", d: "Gemini-Key für Mensa, Erinnerungen und mehr", w: "ki ai gemini key schlüssel api assistent mensa erinnerung", ic: "✨", col: "#6366f1" },
+  { k: "geraete", t: "Angemeldete Geräte", d: "Wo du angemeldet bist, und einzelne Geräte abmelden", w: "geräte gerät angemeldet sitzung abmelden login anmeldung", ic: "📱", col: "#64748b" },
   { k: "daten", t: "Daten & Cloud", d: "Sicherung, Cloud-Sync, Papierkorb, Zurücksetzen", w: "backup sicherung export import papierkorb zurücksetzen cloud sync anmelden", ic: "☁️", col: "#10b981" },
 ];
 
@@ -4280,6 +4336,8 @@ document.addEventListener("click", async (e) => {
     case "qkday": { const f = el.closest("form"); if (f) quickDays(f, el.dataset.v); break; }
     case "looksel": state.settings.look = el.dataset.v; saveDevice(); render(); break;
     case "geminidel": if (await appConfirm("Gemini-Key wirklich entfernen?", "Entfernen")) deleteGeminiKey(); break;
+    case "geraetabmelden": await geraetAbmelden(el.dataset.id); break;
+    case "geraeteneu": geraeteData = null; geraeteErr = ""; render(); break;
     case "fontsel": state.settings.font = el.dataset.v; saveDevice(); applyFont(); render(); break;
     case "nfvib": state.settings.nfDev = { ...(state.settings.nfDev || {}), vib: el.dataset.v }; saveDevice(); render(); break;
     case "nfopen":
