@@ -967,6 +967,7 @@ function render() {
     if (newWeek) newWeek.scrollTop = keepScroll;
   }
   appEl.dataset.shownTab = ui.tab;
+  kiFabSync();
   document.documentElement.classList.toggle("plan-tab", ui.tab === "stundenplan");
   // Kopfzeile: zeigt den Titel der Seite (oder des geöffneten Bereichs)
   const headEl = document.querySelector(".topbar h1");
@@ -1167,8 +1168,6 @@ function viewDashboard() {
           <input name="title" required placeholder="Neue Aufgabe …" style="flex:1">
           <input type="date" name="date" value="${iso(new Date())}">
           <button class="btn">+</button>
-          <button type="button" class="btn ghost" data-act="kitodo" title="Eine Aufgabe per KI aus einem Satz anlegen">✨ KI</button>
-          <button type="button" class="btn ghost" data-act="kichat" title="Chat mit der KI">💬 Chat</button>
         </form>
         ${open.length ? open.slice(0, 5).map(todoItem).join("") : `<div class="empty"><div class="ei">${ICON.spark}</div>Diese Woche ist nichts offen.</div>`}
         ${open.length > 8 ? `<div class="muted" style="margin-top:10px">… und ${open.length - 8} weitere im Kalender.</div>` : ""}
@@ -4212,20 +4211,6 @@ document.addEventListener("click", async (e) => {
     case "kichatopt": kiChatSend(el.dataset.text); break;
     case "kichatanlegen": await kiChatAnlegen(el.dataset.id); break;
     case "kichatclear": await kiChatClear(); break;
-    case "kitodo": {
-      // Fenster mit Textfeld öffnen
-      openModal(`<h3>KI-Aufgabe</h3>
-        <p class="muted" style="line-height:1.5">Schreib frei, z. B. „Ruf Oma morgen um 18 Uhr an“. Die KI erkennt Titel, Datum und Uhrzeit.</p>
-        <form data-form="kitodo">
-          <textarea name="text" required rows="3" maxlength="300" placeholder="Was soll ich dir eintragen?" style="width:100%"></textarea>
-          <div class="row" style="justify-content:flex-end;gap:8px;margin-top:12px">
-            <button type="button" class="btn ghost" data-act="mclose">Abbrechen</button>
-            <button class="btn">Erkennen</button>
-          </div>
-        </form>`);
-      setTimeout(() => document.querySelector('form[data-form="kitodo"] textarea')?.focus(), 50);
-      break;
-    }
     case "dtoday": ui.dayDate = iso(new Date()); ui.anim = null; render(); break;
     case "planview": planToggle(); break;
     case "mensanav": mensaStep(Number(el.dataset.v)); break;
@@ -4735,6 +4720,22 @@ document.addEventListener("change", async (e) => {
   }
 });
 
+// Runder schwebender KI-Knopf: auf allen Seiten außer Einstellungen, nur wenn angemeldet
+function kiFabSync() {
+  let b = document.getElementById("kiFab");
+  if (!b) {
+    b = document.createElement("button");
+    b.id = "kiFab";
+    b.type = "button";
+    b.className = "ki-fab";
+    b.dataset.act = "kichat";
+    b.setAttribute("aria-label", "KI-Chat öffnen");
+    b.textContent = "💬";
+    document.body.appendChild(b);
+  }
+  b.hidden = ui.tab === "einstellungen" || !session;
+}
+
 // KI-Chat: Verlauf in der Tabelle ki_chat (nur eigene Zeilen), die Antworten kommen von der Funktion ki-chat
 let kiChatMsgs = [];
 let kiChatBusy = false;
@@ -4882,10 +4883,6 @@ document.addEventListener("submit", async (e) => {
     const t = String(data.text || "").trim();
     f.reset();
     await kiChatSend(t);
-    return;
-  }
-  if (f.dataset.form === "kitodo") {
-    await kiTodoFromText(String(data.text || "").trim());
     return;
   }
   if (f.dataset.form === "geminikey") {
