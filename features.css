@@ -1533,26 +1533,10 @@ body:not(.dark) { --elev: 0 8px 24px rgba(20, 60, 60, .1); }
 @media (max-width: 799px) { body:not(.locked) .dash-search { display: none !important; } }
 body.nav-bottom:not(.locked) .dash-search { display: none !important; }
 
-/* Runder schwebender KI-Chat-Knopf */
-.ki-fab {
-  position: fixed;
-  right: 16px;
-  bottom: calc(env(safe-area-inset-bottom, 0px) + 88px);
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
-  border: none;
-  background: #2563eb;
-  color: #fff;
-  font-size: 24px;
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25);
-  z-index: 40;
-  cursor: pointer;
-}
-.ki-fab[hidden] { display: none; }
-
-/* Symbol im runden KI-Knopf im selben Stil wie die übrigen Icons */
-.ki-fab svg { width: 26px; height: 26px; }
+/* KI-Knopf in der oberen Leiste: gleiche Form wie die Suche daneben */
+.topbar .ki-top { order: 1; display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; flex: none; margin-left: 8px; border-radius: 50%; border: 1px solid var(--line); background: transparent; color: var(--text); cursor: pointer; padding: 0; }
+.topbar .ki-top[hidden] { display: none; }
+.topbar .ki-top svg { width: 18px; height: 18px; }
 
 /* Einheitliche Fußzeile für Pop-ups: gleich breite Knöpfe, Abbrechen/Schließen links, Hauptaktion rechts */
 .modal-foot {

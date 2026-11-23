@@ -355,7 +355,8 @@ function geraeteHTML() {
     ? (geraeteData.length
       ? geraeteData.map((g) => `<div class="listrow" style="align-items:center;gap:8px">
           <div class="grow"><b>${esc(g.name)}${g.aktuell ? " · dieses Gerät" : ""}</b>
-            <div class="muted" style="font-size:13px">Zuletzt aktiv: ${esc(zeit(g.aktiv))} · angemeldet seit ${esc(zeit(g.angelegt))}</div></div>
+            <div class="muted" style="font-size:13px">Zuletzt aktiv: ${esc(zeit(g.aktiv))} · angemeldet seit ${esc(zeit(g.angelegt))}</div>
+            <div class="${g.push ? "st ok" : "muted"}" style="font-size:13px">${g.push ? "✓ Benachrichtigungen aktiv" : "Keine Benachrichtigungen auf diesem Gerät"}</div></div>
           ${g.aktuell ? "" : `<button class="btn ghost btn-sm" data-act="geraetabmelden" data-id="${esc(g.id)}">Abmelden</button>`}
         </div>`).join("")
       : `<div class="muted">Keine Anmeldungen gefunden.</div>`)
@@ -4798,19 +4799,11 @@ document.addEventListener("change", async (e) => {
   }
 });
 
-// Runder schwebender KI-Knopf: auf allen Seiten außer Einstellungen, nur wenn angemeldet
+// KI-Knopf in der oberen Leiste: auf allen Seiten außer Einstellungen, nur wenn angemeldet
 function kiFabSync() {
-  let b = document.getElementById("kiFab");
-  if (!b) {
-    b = document.createElement("button");
-    b.id = "kiFab";
-    b.type = "button";
-    b.className = "ki-fab";
-    b.dataset.act = "kichat";
-    b.setAttribute("aria-label", "KI-Chat öffnen");
-    b.innerHTML = ICON.spark;
-    document.body.appendChild(b);
-  }
+  const b = document.getElementById("kiTop");
+  if (!b) return;
+  if (!b.dataset.ready) { b.innerHTML = ICON.spark; b.dataset.ready = "1"; }
   b.hidden = ui.tab === "einstellungen" || !session;
 }
 
@@ -5653,8 +5646,9 @@ function pushCardHTML() {
   }
   return `<div class="card"><h3>Benachrichtigungen</h3>
     <p class="muted" style="margin:0 0 10px">Erinnerungen für Termine, Mensa und Fristen. Weitere Einstellungen findest du in den Unterseiten.</p>
+    <p style="margin:0 0 10px"><b>${!pushState.checked ? "Status wird geprüft …" : pushState.active ? "✓ Auf diesem Gerät aktiv" : "Auf diesem Gerät nicht aktiv"}</b></p>
     <div class="row" style="gap:6px;flex-wrap:wrap">
-      <button class="btn" data-act="pushon">Aktivieren</button>
+      <button class="btn" data-act="pushon">${pushState.checked && pushState.active ? "Erneut aktivieren" : "Aktivieren"}</button>
       <button class="btn ghost" data-act="pushoff">Deaktivieren</button>
       <button class="btn ghost" data-act="pushtest">Testnachricht senden</button>
     </div></div>`;
@@ -6014,22 +6008,61 @@ function handleLaunch() {
   }
 }
 
+// Sitzungs-ID dieses Geräts (steckt im Anmelde-Token), damit das Push-Abo einer Sitzung zugeordnet werden kann
+function aktuelleSitzung() {
+  try {
+    const b64 = session.access_token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
+    return JSON.parse(atob(b64)).session_id || null;
+  } catch (_) { return null; }
+}
+
+// Wartet höchstens ms Millisekunden; sonst Fehler mit Schritt-Namen (statt stummem Hängen)
+function pushStep(promise, ms, name) {
+  let timer;
+  const limit = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(name + " antwortet nicht (Zeitlimit)")), ms);
+  });
+  return Promise.race([promise, limit]).finally(() => clearTimeout(timer));
+}
+
 async function enablePush() {
   if (!pushSupported()) return appAlert("Benachrichtigungen werden auf diesem Gerät nicht unterstützt.");
   if (!sb || !session) return appAlert("Bitte zuerst anmelden.");
+  if (enablePush.busy) return;
+  enablePush.busy = true;
+  showToast("Benachrichtigungen werden aktiviert …", 3000);
+  let step = "Erlaubnis";
   try {
-    const perm = await Notification.requestPermission();
-    if (perm !== "granted") return appAlert("Ohne Erlaubnis kann ich keine Benachrichtigungen schicken. Du kannst sie in den Geräteeinstellungen erlauben.");
-    const reg = await navigator.serviceWorker.ready;
-    let sub = await reg.pushManager.getSubscription();
-    if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(VAPID_PUBLIC_KEY) });
-    const { error } = await sb.from("push_subscriptions").upsert(
-      { user_id: session.user.id, endpoint: sub.endpoint, subscription: sub.toJSON() },
-      { onConflict: "endpoint" });
+    const perm = await pushStep(Notification.requestPermission(), 30000, "Die Erlaubnis-Abfrage");
+    if (perm !== "granted") return appAlert("Ohne Erlaubnis kann ich keine Benachrichtigungen schicken. Du kannst sie in den Geräteeinstellungen (Website-Berechtigungen) erlauben.");
+
+    step = "Hintergrunddienst";
+    let reg = await pushStep(navigator.serviceWorker.getRegistration(), 8000, "Der Hintergrunddienst");
+    if (!reg) {
+      // Auf diesem Gerät noch nicht registriert: jetzt registrieren und den Fehler zeigen, falls es scheitert
+      reg = await pushStep(navigator.serviceWorker.register("sw.js"), 15000, "Die Registrierung");
+    }
+    reg = await pushStep(navigator.serviceWorker.ready, 10000, "Der Hintergrunddienst");
+
+    step = "Abo auf diesem Gerät";
+    let sub = await pushStep(reg.pushManager.getSubscription(), 8000, "Die Abo-Abfrage");
+    if (!sub) sub = await pushStep(reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(VAPID_PUBLIC_KEY) }), 20000, "Das Abo");
+
+    step = "Speichern";
+    const { error } = await pushStep(sb.from("push_subscriptions").upsert(
+      { user_id: session.user.id, endpoint: sub.endpoint, subscription: sub.toJSON(), sitzung: aktuelleSitzung() },
+      { onConflict: "endpoint" }), 15000, "Das Speichern");
     if (error) throw error;
+    pushState = { checked: true, active: true };
+    geraeteData = null; // Geräteliste neu laden, damit der Push-Status stimmt
+    if (ui.tab === "einstellungen") render();
     appAlert("Benachrichtigungen sind aktiv. Du bekommst morgens eine Erinnerung für Fristen von heute und morgen.");
   } catch (err) {
-    appAlert("Das hat nicht geklappt: " + (err.message || err));
+    console.error("enablePush", step, err);
+    const detail = err && err.message ? err.message : String(err);
+    appAlert(`Das hat nicht geklappt (Schritt „${step}“): ${detail}` + (swRegError ? `\nHintergrunddienst-Fehler: ${swRegError.message || swRegError}` : ""));
+  } finally {
+    enablePush.busy = false;
   }
 }
 
@@ -6058,14 +6091,18 @@ async function disablePush() {
       if (sb && session) await sb.from("push_subscriptions").delete().eq("endpoint", sub.endpoint);
       await sub.unsubscribe();
     }
+    pushState = { checked: true, active: false };
+    if (ui.tab === "einstellungen") render();
     appAlert("Benachrichtigungen sind auf diesem Gerät aus.");
   } catch (err) {
     appAlert("Das hat nicht geklappt: " + (err.message || err));
   }
 }
 
+// Fehler der Registrierung merken, damit „Aktivieren“ ihn anzeigen kann
+let swRegError = null;
 if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.register("sw.js").catch(() => {});
+  navigator.serviceWorker.register("sw.js").catch((e) => { swRegError = e; console.error("sw register", e); });
 }
 
 // ---------- Kalender: To-dos per Ziehen auf einen anderen Tag verschieben ----------
