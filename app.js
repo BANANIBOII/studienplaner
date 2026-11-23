@@ -2064,13 +2064,13 @@ function viewCal() {
   const m = ui.month;
   // Eingeklappt: nur die Woche des gewählten Tages. Aufgeklappt: ganzer Monat.
   const fold = !!cal.fold;
-  const grid0 = mondayOf(fold ? parseIso(ui.selDate || today) : new Date(m.getFullYear(), m.getMonth(), 1));
-  const weekEnd = addDays(grid0, 6);
-  const monthTitle = fold
-    ? `${grid0.getDate()}. ${MONTHS[grid0.getMonth()].slice(0, 3)} – ${weekEnd.getDate()}. ${MONTHS[weekEnd.getMonth()].slice(0, 3)} ${weekEnd.getFullYear()}`
-    : `${MONTHS[m.getMonth()]} ${m.getFullYear()}`;
-  const animCls = ui.anim === "fold" || ui.anim === "week" ? " anim-fold"
-    : ui.anim === "slide-next" ? " cal-slide-next" : ui.anim === "slide-prev" ? " cal-slide-prev" : "";
+  const anchor = fold ? parseIso(ui.selDate || today) : null;
+  const monthTitle = calTitleAt(0, m, fold, anchor);
+  const animCls = ui.anim === "fold" || ui.anim === "week" ? " anim-fold" : "";
+  // Seite pg: 0 = aktuell, -1 = davor, 1 = danach. Alle drei sind schon gebaut, damit das Wischen nahtlos ist
+  const calCells = (pg) => {
+  const grid0 = calPageStart(pg, m, fold, anchor);
+  const pm = fold ? m : new Date(m.getFullYear(), m.getMonth() + pg, 1);
   let cells = WEEKDAYS.map((w) => `<div class="mwd">${w}</div>`).join("");
   for (let i = 0; i < (fold ? 7 : 42); i++) {
     const d = addDays(grid0, i);
@@ -2099,11 +2099,13 @@ function viewCal() {
       border += `background-color:${tint};`;
     }
     const brk = breakOn(k);
-    const cls = ["mday", `style-${cal.style}`, d.getMonth() !== m.getMonth() ? "other" : "", k === today ? "today" : "", k === ui.selDate ? "sel" : "", spans0.length ? "has-span" : "", brk ? "is-break" : ""].join(" ");
+    const cls = ["mday", `style-${cal.style}`, d.getMonth() !== pm.getMonth() ? "other" : "", k === today ? "today" : "", k === ui.selDate ? "sel" : "", spans0.length ? "has-span" : "", brk ? "is-break" : ""].join(" ");
     const dots = state.events.filter((e) => e.date === k && !e.cancelled).slice(0, 3)
       .map((e) => `<i style="background:${(state.modules[e.name] || {}).color || "var(--accent)"}"></i>`).join("");
     cells += `<div class="${cls}" data-act="sel" data-d="${k}"${brk ? ` title="${esc(brk.name || "Vorlesungsfrei")}"` : ""} style="--i:${i};${border}">${calCellInner(cal.style, d, dayT, evCount)}${overlays}${dots ? `<span class="mdots">${dots}</span>` : ""}</div>`;
   }
+  return `<div class="month${pg === 0 ? animCls : ""}" data-page="${pg}">${cells}</div>`;
+  };
   const navAct = fold ? "calweek" : "mon";
   const monthCard = `<div class="card">
     <div class="row" style="justify-content:space-between;margin-bottom:10px">
@@ -2118,7 +2120,7 @@ function viewCal() {
         <button class="btn ghost menu-btn" data-act="calmenu" title="Darstellung">${ICON.more}</button>
       </div>
     </div>
-    <div class="month${animCls}">${cells}</div>
+    <div class="cal-track"><div class="cal-pages">${calCells(-1)}${calCells(0)}${calCells(1)}</div></div>
     <div class="muted" style="margin-top:10px">To-Do auf einen Tag ziehen, um das Datum zu ändern (Handy: kurz gedrückt halten)</div>
   </div>`;
 
@@ -2827,29 +2829,27 @@ function mensaTarget() {
   if (d > w.fri) d = w.fri;
   return d;
 }
-// Tag wechseln (v = ±1); 0 = heute. Außerhalb der Woche passiert nichts.
+// Tag wechseln (v = ±1 mit Animation wie im Stundenplan); 0 = heute. Außerhalb der Woche passiert nichts.
 function mensaStep(v) {
   if (v === 0) { ui.mensaDay = null; render(); return; }
-  const w = mensaWeek();
-  const d = iso(addDays(parseIso(mensaTarget()), v));
-  if (d < w.mon || d > w.fri) return;
-  ui.mensaDay = d;
-  render();
+  mensaGo(v);
 }
-// Wischen über die Mensa-Karte wechselt den Tag
-let mensaTouch = null;
-document.addEventListener("touchstart", (e) => {
-  const c = e.target.closest && e.target.closest(".mensa-card");
-  mensaTouch = c && e.touches.length === 1 ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : null;
-}, { passive: true });
-document.addEventListener("touchend", (e) => {
-  if (!mensaTouch) return;
-  const t = e.changedTouches[0];
-  const dx = t.clientX - mensaTouch.x, dy = t.clientY - mensaTouch.y;
-  mensaTouch = null;
-  if (Math.abs(dx) > 50 && Math.abs(dx) > 1.5 * Math.abs(dy)) mensaStep(dx < 0 ? 1 : -1);
-}, { passive: true });
-document.addEventListener("touchcancel", () => { mensaTouch = null; }, { passive: true });
+function mensaCanGo(dir) {
+  const w = mensaWeek();
+  const d = iso(addDays(parseIso(mensaTarget()), dir));
+  return d >= w.mon && d <= w.fri;
+}
+function mensaGo(dir) {
+  if (pagerBusy || !mensaCanGo(dir)) return;
+  pagerBusy = true;
+  const d = iso(addDays(parseIso(mensaTarget()), dir));
+  const title = document.querySelector(".mensa-title");
+  if (title) title.innerHTML = mensaTitleHTML(d);
+  const pages = document.querySelector(".mensa-pages");
+  const after = () => { pagerBusy = false; ui.mensaDay = d; render(); };
+  if (!pages) return after();
+  pagerAnimate(pages, dir > 0 ? "translateX(-66.6667%)" : "translateX(0%)", after);
+}
 // Hinweis: Die Speisedaten sagen nicht, ob ein Gericht vegetarisch ist. Das wird anhand des Namens geschätzt.
 const MEAT_RE = /(fleisch|schwein|rind|hähnchen|huhn|pute|geflügel|fisch|lachs|speck|wurst|schinken|kalb|lamm|hack|gyros|döner|salami|ente|bratwurst)/i;
 // Symbole je Gericht. Kommen aus den gespeicherten Icon-Erkennungen (Job um 8 Uhr).
@@ -2870,13 +2870,22 @@ function mensaColor(g) {
 function mensaIcons(g) {
   return (g.bilder || []).map((u) => `<img src="${esc(u)}" alt="" loading="lazy" style="width:18px;height:18px;vertical-align:middle;margin-right:3px">`).join("");
 }
-function mensaCardHTML() {
-  const target = mensaTarget();
+// Titel eines Tages (Kopfzeile der Karte; bleibt beim Wischen stehen, wie die Wochentage im Stundenplan)
+function mensaTitleHTML(day) {
   const today = iso(new Date());
-  const cached = mensaCache()[target] || null;
+  const wochentag = parseIso(day).toLocaleDateString("de-DE", { weekday: "long" });
+  const title = day === today ? "Mensa heute" : `Mensa · ${wochentag}`;
+  return `<h3 style="margin:0">${title}</h3><div class="muted" style="font-size:12px;margin-top:2px">${fmtD(parseIso(day))}</div>`;
+}
+// Inhalt eines Tages: Gerichte oder Hinweis. Tage außerhalb der Woche bleiben leer.
+function mensaBodyHTML(day, center) {
+  const w = mensaWeek();
+  if (day < w.mon || day > w.fri) return "";
+  const cached = mensaCache()[day] || null;
   // Liefert der Speiseplan für diesen Tag nichts, wird kein anderer Tag angezeigt
-  const offDay = !!(cached && cached.datum && cached.datum !== target);
+  const offDay = !!(cached && cached.datum && cached.datum !== day);
   const fresh = offDay ? null : cached;
+  const notice = center && mensaRefreshing ? `<div class="muted" style="font-size:12px;margin-bottom:6px">Aktualisiere … das kann bis zu einer Minute dauern</div>` : "";
   let body;
   if (offDay) {
     body = `<div class="muted">Keine Daten verfügbar.</div>`;
@@ -2894,24 +2903,54 @@ function mensaCardHTML() {
   } else {
     body = `<div class="muted">Speiseplan wird geladen …</div>`;
   }
-  const hinweisDatum = false
-    ? `<div class="muted" style="font-size:12px;margin-bottom:6px">Angezeigt wird ${parseIso(fresh.datum).toLocaleDateString("de-DE", { weekday: "long" })}</div>` : "";
-  const wochentag = parseIso(target).toLocaleDateString("de-DE", { weekday: "long" });
-  const title = target === today ? "Mensa heute" : `Mensa · ${wochentag}`;
-  const datumKlein = `<div class="muted" style="font-size:12px;margin-top:2px">${fmtD(parseIso(target))}</div>`;
+  return notice + body;
+}
+function mensaCardHTML() {
+  const target = mensaTarget();
+  const w = mensaWeek();
+  // Drei Tage (davor, heute, danach) sind schon gebaut; nur der mittlere ist sichtbar hoch
+  const pages = [-1, 0, 1].map((k) => {
+    const day = iso(addDays(parseIso(target), k));
+    return `<div class="mensa-page${k === 0 ? " is-center" : ""}">${mensaBodyHTML(day, k === 0)}</div>`;
+  }).join("");
+  mensaPrefetchNeighbors(target);
   return `<div class="card mensa-card" id="focus-mensa">
     <div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:6px">
-      <div><h3 style="margin:0">${title}</h3>${datumKlein}</div>
+      <div class="mensa-title">${mensaTitleHTML(target)}</div>
       <span class="row" style="gap:6px">
-        <button class="btn ghost" data-act="mensanav" data-v="-1" title="Tag zurück" ${target <= mensaWeek().mon ? "disabled style=\"opacity:.35\"" : ""}>‹</button>
+        <button class="btn ghost" data-act="mensanav" data-v="-1" title="Tag zurück" ${target <= w.mon ? "disabled style=\"opacity:.35\"" : ""}>‹</button>
         <button class="btn ghost" data-act="mensanav" data-v="0" title="Zu heute">Heute</button>
-        <button class="btn ghost" data-act="mensanav" data-v="1" title="Tag vor" ${target >= mensaWeek().fri ? "disabled style=\"opacity:.35\"" : ""}>›</button>
+        <button class="btn ghost" data-act="mensanav" data-v="1" title="Tag vor" ${target >= w.fri ? "disabled style=\"opacity:.35\"" : ""}>›</button>
         <a class="btn ghost lay-keep" href="https://werkswelt.de/?id=mohm" target="_blank" rel="noopener" title="Speiseplan auf der Website öffnen">${ICON.external}</a>
         <button class="btn ghost menu-btn" data-act="mensareload" title="Neu laden">${ICON.reload}</button>
       </span>
     </div>
-    <div style="margin-top:10px">${hinweisDatum}${mensaRefreshing ? `<div class="muted" style="font-size:12px;margin-bottom:6px">Aktualisiere … das kann bis zu einer Minute dauern</div>` : ""}${body}</div>
+    <div class="mensa-track" style="margin-top:10px"><div class="mensa-pages">${pages}</div></div>
   </div>`;
+}
+// Nachbartage im Hintergrund holen, damit beim Wischen schon Speisen da sind (höchstens alle 10 Minuten je Tag)
+const mensaPrefetchAt = new Map();
+function mensaPrefetchNeighbors(target) {
+  const w = mensaWeek();
+  for (const k of [-1, 1]) {
+    const day = iso(addDays(parseIso(target), k));
+    if (day < w.mon || day > w.fri || Date.now() - (mensaPrefetchAt.get(day) || 0) < 600000) continue;
+    const c = mensaCache()[day];
+    const complete = !!c && Array.isArray(c.gerichte) && c.gerichte.length > 0 && c.gerichte.every((g) => Array.isArray(g.bilder));
+    if (complete || !cloudConfigured()) continue;
+    mensaPrefetchAt.set(day, Date.now());
+    fetch(SUPABASE_URL + "/functions/v1/mensa?tag=" + day, {
+      headers: { Authorization: "Bearer " + ((session && session.access_token) || SUPABASE_ANON_KEY), apikey: SUPABASE_ANON_KEY },
+      signal: AbortSignal.timeout(25000),
+    }).then((r) => r.json()).then((data) => {
+      if (!data || !Array.isArray(data.gerichte)) return;
+      const cc = mensaCache();
+      cc[day] = data;
+      const keep = {};
+      Object.keys(cc).sort().slice(-10).forEach((x) => { keep[x] = cc[x]; });
+      localStorage.setItem(MENSA_LS, JSON.stringify(keep));
+    }).catch(() => {});
+  }
 }
 async function loadMensa(force) {
   const target = mensaTarget();
@@ -3598,12 +3637,91 @@ document.addEventListener("touchend", () => {
 }, { passive: true });
 document.addEventListener("touchcancel", () => abortSwipe(), { passive: true });
 
-// Kalender: mit dem Finger wischen. Das Raster folgt dem Finger, beim Loslassen gleitet es weg
-// und der nächste Monat (bzw. die nächste Woche, wenn eingeklappt) kommt von der Seite.
-let calSwipe = null, calSlideBusy = false;
-function abortCalSwipe() {
-  if (calSwipe && calSwipe.grid) { calSwipe.grid.style.transition = ""; calSwipe.grid.style.transform = ""; }
-  calSwipe = null;
+// Wischen in Kalender und Mensa wie im Stundenplan: die Seiten davor, aktuell und danach sind schon gebaut.
+// Beim Wischen gleitet die Gruppe mit dem Finger; beim Loslassen rutscht sie weiter, und danach wird die neue Mitte gezeichnet.
+let pager = null, pagerBusy = false;
+const PAGER_KIND = {
+  cal: { pages: ".cal-pages", canGo: () => true, go: (dir) => calGo(dir) },
+  mensa: { pages: ".mensa-pages", canGo: (dir) => mensaCanGo(dir), go: (dir) => mensaGo(dir) },
+};
+function pagerAnimate(pages, target, after) {
+  pages.style.transition = "transform .3s cubic-bezier(.2, .8, .2, 1)";
+  pages.style.transform = target;
+  setTimeout(after, 310);
+}
+function pagerReset(s) {
+  if (s && s.pages) { s.pages.style.transition = ""; s.pages.style.transform = ""; }
+}
+document.addEventListener("touchstart", (e) => {
+  pager = null;
+  if (e.touches.length !== 1 || pagerBusy || ui.layEdit || document.querySelector(".modal")) return;
+  const host = e.target.closest ? e.target.closest(".cal-track, .mensa-track") : null;
+  if (!host) return;
+  const kind = host.classList.contains("cal-track") ? "cal" : "mensa";
+  pager = { kind, host, pages: host.querySelector(PAGER_KIND[kind].pages), x: e.touches[0].clientX, y: e.touches[0].clientY, t: Date.now(), dx: 0, mode: null };
+}, { passive: true });
+document.addEventListener("touchmove", (e) => {
+  const s = pager;
+  if (!s) return;
+  // Halten (zum Verschieben eines To-Dos) oder zweiter Finger: kein Wischen
+  if (e.touches.length !== 1 || longFired || drag) { pagerReset(s); pager = null; return; }
+  const dx = e.touches[0].clientX - s.x;
+  const dy = e.touches[0].clientY - s.y;
+  if (!s.mode) {
+    if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return;
+    if (Math.abs(dx) < 1.3 * Math.abs(dy)) { pager = null; return; }   // senkrecht: normal scrollen
+    s.mode = "h";
+  }
+  if (e.cancelable) e.preventDefault();
+  s.dx = dx;
+  s.pages.style.transition = "none";
+  s.pages.style.transform = `translateX(calc(-33.3333% + ${dx}px))`;
+}, { passive: false });
+document.addEventListener("touchend", () => {
+  const s = pager;
+  pager = null;
+  if (!s) return;
+  if (s.mode !== "h" || longFired) { pagerReset(s); return; }
+  const W = s.host.offsetWidth || 1;
+  const quick = Date.now() - s.t < 300 && Math.abs(s.dx) > 30;
+  const commit = Math.abs(s.dx) > W * 0.2 || quick;
+  const dir = s.dx < 0 ? 1 : -1;   // nach links = nächster Monat/Tag
+  const cfg = PAGER_KIND[s.kind];
+  if (commit && cfg.canGo(dir)) { cfg.go(dir); return; }
+  // Zu wenig gewischt (oder Wochenende-Grenze): zurück in die Mitte
+  s.pages.style.transition = "transform .22s cubic-bezier(.2, .8, .2, 1)";
+  s.pages.style.transform = "";
+  setTimeout(() => { if (s.pages.isConnected) s.pages.style.transition = ""; }, 240);
+}, { passive: true });
+document.addEventListener("touchcancel", () => { pagerReset(pager); pager = null; }, { passive: true });
+
+// ---------- Kalender: Seiten und Wechsel ----------
+// Anfang der Seite pg: Woche (eingeklappt) bzw. Monatsraster (aufgeklappt)
+function calPageStart(pg, m, fold, anchor) {
+  return fold ? mondayOf(addDays(anchor, 7 * pg)) : mondayOf(new Date(m.getFullYear(), m.getMonth() + pg, 1));
+}
+// Titel der Seite pg (0 = aktuell)
+function calTitleAt(pg, m, fold, anchor) {
+  if (fold) {
+    const g = calPageStart(pg, m, true, anchor);
+    const e = addDays(g, 6);
+    return `${g.getDate()}. ${MONTHS[g.getMonth()].slice(0, 3)} – ${e.getDate()}. ${MONTHS[e.getMonth()].slice(0, 3)} ${e.getFullYear()}`;
+  }
+  const x = new Date(m.getFullYear(), m.getMonth() + pg, 1);
+  return `${MONTHS[x.getMonth()]} ${x.getFullYear()}`;
+}
+// Pfeile und Wischen: die Seite gleitet, der Titel wechselt sofort, danach wird die neue Mitte gezeichnet
+function calGo(dir) {
+  if (pagerBusy) return;
+  pagerBusy = true;
+  const cal = calSet();
+  const anchor = cal.fold ? parseIso(ui.selDate || iso(new Date())) : null;
+  const title = document.querySelector(".calTitle");
+  if (title) title.textContent = calTitleAt(dir, ui.month, !!cal.fold, anchor);
+  const pages = document.querySelector(".cal-pages");
+  const after = () => { pagerBusy = false; calStep(dir); };
+  if (!pages) return after();
+  pagerAnimate(pages, dir > 0 ? "translateX(-66.6667%)" : "translateX(0%)", after);
 }
 function calStep(dir) {
   if (calSet().fold) {
@@ -3613,53 +3731,9 @@ function calStep(dir) {
   } else {
     ui.month = new Date(ui.month.getFullYear(), ui.month.getMonth() + dir, 1);
   }
-  ui.anim = dir > 0 ? "slide-next" : "slide-prev";
+  ui.anim = null;
   render();
 }
-document.addEventListener("touchstart", (e) => {
-  calSwipe = null;
-  if (e.touches.length !== 1 || calSlideBusy || ui.tab !== "kalender" || ui.layEdit || document.querySelector(".modal")) return;
-  const grid = e.target.closest ? e.target.closest(".month") : null;
-  if (!grid) return;
-  calSwipe = { x: e.touches[0].clientX, y: e.touches[0].clientY, t: Date.now(), dx: 0, mode: null, grid };
-}, { passive: true });
-document.addEventListener("touchmove", (e) => {
-  const s = calSwipe;
-  if (!s) return;
-  // Halten (zum Verschieben eines To-Dos) oder zweiter Finger: kein Wischen
-  if (e.touches.length !== 1 || longFired || drag) { abortCalSwipe(); return; }
-  const dx = e.touches[0].clientX - s.x;
-  const dy = e.touches[0].clientY - s.y;
-  if (!s.mode) {
-    if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return;
-    if (Math.abs(dx) < 1.3 * Math.abs(dy)) { calSwipe = null; return; }   // senkrecht: normal scrollen
-    s.mode = "h";
-  }
-  if (e.cancelable) e.preventDefault();
-  s.dx = dx;
-  s.grid.style.transition = "none";
-  s.grid.style.transform = `translateX(${dx}px)`;
-}, { passive: false });
-document.addEventListener("touchend", () => {
-  const s = calSwipe;
-  calSwipe = null;
-  if (!s || s.mode !== "h" || longFired) { if (s) abortCalSwipe(); return; }
-  const W = s.grid.offsetWidth || 1;
-  const quick = Date.now() - s.t < 300 && Math.abs(s.dx) > 30;
-  const commit = Math.abs(s.dx) > W * 0.2 || quick;
-  const ease = "transform .22s cubic-bezier(.2, .8, .2, 1)";
-  if (!commit) {
-    s.grid.style.transition = ease;
-    s.grid.style.transform = "translateX(0)";
-    setTimeout(() => { if (s.grid.isConnected) { s.grid.style.transition = ""; s.grid.style.transform = ""; } }, 240);
-    return;
-  }
-  const dir = s.dx < 0 ? 1 : -1;   // nach links = nächster Monat/Woche
-  calSlideBusy = true;
-  s.grid.style.transition = ease;
-  s.grid.style.transform = `translateX(${-dir * W}px)`;
-  setTimeout(() => { calSlideBusy = false; calStep(dir); }, 220);
-}, { passive: true });
 
 // Gummiband (überall, wo etwas scrollt): am oberen/unteren Ende gibt der Inhalt beim Weiterziehen kurz nach
 // und federt zurück; auch wenn ein schneller Wisch (Schwung) am Ende anstößt. Nur optisch, die Scrollposition bleibt unberührt.
@@ -3704,7 +3778,7 @@ document.addEventListener("touchstart", (e) => {
 }, { passive: true });
 document.addEventListener("touchmove", (e) => {
   if (!band) return;
-  if (e.touches.length !== 1 || (swipe && swipe.mode === "h") || (calSwipe && calSwipe.mode === "h") || pinch) { band.el.style.transform = ""; band = null; return; }
+  if (e.touches.length !== 1 || (swipe && swipe.mode === "h") || (pager && pager.mode === "h") || pinch) { band.el.style.transform = ""; band = null; return; }
   const y = e.touches[0].clientY;
   const d = y - band.last;
   band.last = y;
@@ -4289,9 +4363,7 @@ document.addEventListener("click", async (e) => {
     }
 
     // Kalender
-    case "mon":
-      ui.month = new Date(ui.month.getFullYear(), ui.month.getMonth() + Number(el.dataset.v), 1);
-      render(); break;
+    case "mon": calGo(Number(el.dataset.v)); break;
     case "calfold": {
       const c = calSet();
       const old = document.querySelector(".month");
@@ -4308,13 +4380,7 @@ document.addEventListener("click", async (e) => {
       }
       break;
     }
-    case "calweek": {
-      const d = addDays(parseIso(ui.selDate || iso(new Date())), 7 * Number(el.dataset.v));
-      ui.selDate = iso(d);
-      ui.month = new Date(d.getFullYear(), d.getMonth(), 1);
-      ui.anim = "week";
-      render(); break;
-    }
+    case "calweek": calGo(Number(el.dataset.v)); break;
     case "calToday":
       ui.month = new Date();
       ui.selDate = iso(new Date());

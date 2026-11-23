@@ -1475,12 +1475,12 @@ body:not(.dark) { --elev: 0 8px 24px rgba(20, 60, 60, .1); }
 .plan-top-wrap { transition-duration: .46s; }
 .btn:active, .tabbar button:active, .hist-btn:active { transition-duration: .16s; }
 
-/* ===== Kalender: Wischen zum nächsten/vorigen Monat (bzw. Woche) ===== */
-.month.cal-slide-next { animation: calSlideNext .3s cubic-bezier(.2, .8, .2, 1) both; }
-.month.cal-slide-prev { animation: calSlidePrev .3s cubic-bezier(.2, .8, .2, 1) both; }
-@keyframes calSlideNext { from { transform: translateX(14%); opacity: 0; } to { transform: none; opacity: 1; } }
-@keyframes calSlidePrev { from { transform: translateX(-14%); opacity: 0; } to { transform: none; opacity: 1; } }
-@media (prefers-reduced-motion: reduce) { .month.cal-slide-next, .month.cal-slide-prev { animation: none; } }
+/* ===== Wischen wie im Stundenplan (Kalender und Mensa): drei Seiten nebeneinander, die mittlere ist sichtbar ===== */
+.cal-track, .mensa-track { overflow: hidden; touch-action: pan-y; }
+.cal-pages, .mensa-pages { display: flex; align-items: flex-start; width: 300%; transform: translateX(-33.3333%); will-change: transform; }
+.cal-pages > .month, .mensa-page { flex: 0 0 33.3333%; width: 33.3333%; min-width: 0; box-sizing: border-box; padding: 0 2px; }
+/* Nicht sichtbare Mensa-Tage nehmen keine Höhe weg; die Karte hat die Höhe des mittleren Tages */
+.mensa-page:not(.is-center) { height: 0; overflow: visible; }
 
 /* ===== Verschieben im Stundenplan: Vorschau der Zielzeit + sanfteres Folgen des Fingers ===== */
 .drag-ghost { transition: transform .07s linear, opacity .15s ease; animation: dragGhostIn .18s var(--ease-spring) both; }
