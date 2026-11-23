@@ -1167,7 +1167,8 @@ function viewDashboard() {
           <input name="title" required placeholder="Neue Aufgabe …" style="flex:1">
           <input type="date" name="date" value="${iso(new Date())}">
           <button class="btn">+</button>
-          <button type="button" class="btn ghost" data-act="kitodo" title="Mit KI aus dem Text Datum und Uhrzeit erkennen">✨ KI</button>
+          <button type="button" class="btn ghost" data-act="kitodo" title="Eine Aufgabe per KI aus einem Satz anlegen">✨ KI</button>
+          <button type="button" class="btn ghost" data-act="kichat" title="Chat mit der KI">💬 Chat</button>
         </form>
         ${open.length ? open.slice(0, 5).map(todoItem).join("") : `<div class="empty"><div class="ei">${ICON.spark}</div>Diese Woche ist nichts offen.</div>`}
         ${open.length > 8 ? `<div class="muted" style="margin-top:10px">… und ${open.length - 8} weitere im Kalender.</div>` : ""}
@@ -4207,6 +4208,10 @@ document.addEventListener("click", async (e) => {
     case "checkset": state.settings.checkSide = el.dataset.v; commit(); break;
     case "laytoggle": ui.layEdit = !ui.layEdit; render(); break;
     case "mensareload": loadMensa(true); break;
+    case "kichat": kiChatOpen(); break;
+    case "kichatopt": kiChatSend(el.dataset.text); break;
+    case "kichatanlegen": await kiChatAnlegen(el.dataset.id); break;
+    case "kichatclear": await kiChatClear(); break;
     case "kitodo": {
       // Fenster mit Textfeld öffnen
       openModal(`<h3>KI-Aufgabe</h3>
@@ -4730,6 +4735,115 @@ document.addEventListener("change", async (e) => {
   }
 });
 
+// KI-Chat: Verlauf in der Tabelle ki_chat (nur eigene Zeilen), die Antworten kommen von der Funktion ki-chat
+let kiChatMsgs = [];
+let kiChatBusy = false;
+const KI_ART_LABEL = { todo: "To-Do", abgabe: "Abgabe", klausur: "Klausur", erinnerung: "Erinnerung" };
+const KI_REP_LABEL = { einmal: "einmalig", woechentlich: "jede Woche", gerade_kw: "gerade KW", ungerade_kw: "ungerade KW" };
+const kiDateLabel = (s) => (s ? parseIso(s).toLocaleDateString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit" }) : "ohne Datum");
+function kiChatHTML() {
+  return `<h3>KI-Chat</h3>
+    <div id="kiChatBox" style="max-height:55vh;overflow:auto;display:flex;flex-direction:column;gap:8px;margin-bottom:10px"></div>
+    <form data-form="kichat" class="row" style="gap:8px">
+      <textarea name="text" required rows="2" maxlength="500" placeholder="z. B. Was ist heute fällig?" style="flex:1"></textarea>
+      <button class="btn" id="kiChatSendBtn">Senden</button>
+    </form>
+    <div style="text-align:right;margin-top:8px"><button type="button" class="btn ghost btn-sm" data-act="kichatclear">Verlauf löschen</button></div>`;
+}
+function kiChatPaint() {
+  const box = document.getElementById("kiChatBox");
+  if (!box) return;
+  if (!session) { box.innerHTML = `<div class="muted">Zum Chatten bitte anmelden.</div>`; return; }
+  let html = kiChatMsgs.length ? "" : `<div class="muted">Frag z. B. „Was ist heute fällig?“ oder sag „Erinnere mich jeden Montag um 8 Uhr an Wäsche“.</div>`;
+  const letzte = [...kiChatMsgs].reverse().find((m) => m.rolle !== "user");
+  for (const m of kiChatMsgs) {
+    const user = m.rolle === "user";
+    html += `<div style="align-self:${user ? "flex-end" : "flex-start"};max-width:85%;padding:8px 12px;border-radius:12px;background:${user ? "#2563eb" : "rgba(127,127,127,.15)"};color:${user ? "#fff" : "inherit"};white-space:pre-line;line-height:1.45">${esc(m.text)}</div>`;
+    if (!user && m === letzte && m.optionen?.length && !kiChatBusy) {
+      html += `<div class="row" style="flex-wrap:wrap;gap:6px">${m.optionen.map((o) => `<button type="button" class="btn ghost btn-sm" data-act="kichatopt" data-text="${esc(o)}">${esc(o)}</button>`).join("")}</div>`;
+    }
+    const v = m.vorschlag;
+    if (!user && v && !v.erledigt) {
+      const wann = [kiDateLabel(v.datum), v.uhrzeit ? "um " + v.uhrzeit + " Uhr" : ""].filter(Boolean).join(" ");
+      const rep = v.art === "erinnerung" ? " · " + (KI_REP_LABEL[v.wiederholung] || "einmalig") : "";
+      html += `<div class="card" style="align-self:stretch;padding:10px">
+        <div class="muted" style="font-size:12px">${esc(KI_ART_LABEL[v.art] || "Aufgabe")}</div>
+        <b>${esc(v.titel)}</b>
+        <div class="muted" style="font-size:13px">${esc(wann)}${esc(rep)}</div>
+        <button type="button" class="btn btn-sm" data-act="kichatanlegen" data-id="${esc(m.id)}" style="margin-top:6px">Anlegen</button>
+      </div>`;
+    }
+  }
+  if (kiChatBusy) html += `<div class="muted">KI denkt nach …</div>`;
+  box.innerHTML = html;
+  box.scrollTop = box.scrollHeight;
+  const btn = document.getElementById("kiChatSendBtn");
+  if (btn) btn.disabled = kiChatBusy;
+}
+async function kiChatLoad() {
+  if (sb && session) {
+    const { data, error } = await sb.from("ki_chat").select("id, rolle, text, optionen, vorschlag").eq("user_id", session.user.id).order("erstellt", { ascending: true }).order("id", { ascending: true }).limit(200);
+    if (!error) kiChatMsgs = data || [];
+  }
+  kiChatPaint();
+}
+function kiChatOpen() {
+  openModal(kiChatHTML());
+  kiChatPaint();
+  kiChatLoad();
+  setTimeout(() => document.querySelector('form[data-form="kichat"] textarea')?.focus(), 50);
+}
+async function kiChatSend(text) {
+  text = String(text || "").trim();
+  if (!text || kiChatBusy) return;
+  if (!session) { showToast("Zum Chatten bitte anmelden"); return; }
+  kiChatBusy = true;
+  kiChatMsgs = [...kiChatMsgs, { id: "tmp", rolle: "user", text }];
+  kiChatPaint();
+  try {
+    const r = await fetch(SUPABASE_URL + "/functions/v1/ki-chat", {
+      method: "POST",
+      headers: { Authorization: "Bearer " + session.access_token, apikey: SUPABASE_ANON_KEY, "content-type": "application/json" },
+      body: JSON.stringify({ text }),
+      signal: AbortSignal.timeout(60000),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || j.fehler) showToast(j.fehler === "kein-key" ? "Erst einen Gemini-Key im KI-Assistenten eintragen" : "KI gerade nicht erreichbar");
+  } catch (_) { showToast("KI gerade nicht erreichbar"); }
+  kiChatBusy = false;
+  await kiChatLoad();
+}
+async function kiChatAnlegen(id) {
+  const m = kiChatMsgs.find((x) => String(x.id) === String(id));
+  const v = m && m.vorschlag;
+  if (!v || v.erledigt) return;
+  if (v.art === "erinnerung") {
+    const rep = v.wiederholung || "einmal";
+    const c = { id: uid(), on: true, title: v.titel, body: "", time: v.uhrzeit || "08:00" };
+    if (rep === "einmal" && v.datum) c.date = v.datum;
+    else {
+      if (!v.datum) { showToast("Bitte ein Datum nennen"); return; }
+      c.days = [parseIso(v.datum).getDay()];
+      if (rep === "gerade_kw") c.kw = "even";
+      if (rep === "ungerade_kw") c.kw = "odd";
+    }
+    customList().push(c);
+  } else {
+    state.todos.push({ id: uid(), title: v.titel, type: v.art === "abgabe" || v.art === "klausur" ? v.art : "todo", priority: "mittel", date: v.datum || iso(new Date()), time: v.uhrzeit || "", duration: DEFAULT_DURATION, done: false });
+  }
+  await sb.from("ki_chat").update({ vorschlag: { ...v, erledigt: true } }).eq("id", m.id);
+  commit();
+  showToast("✓ Angelegt");
+  await kiChatLoad();
+}
+async function kiChatClear() {
+  if (!session) return;
+  if (!(await appConfirm("Den ganzen KI-Chat-Verlauf löschen?", "Löschen"))) return;
+  await sb.from("ki_chat").delete().eq("user_id", session.user.id);
+  kiChatMsgs = [];
+  showToast("Verlauf gelöscht");
+}
+
 // KI liest den Text, danach Bestätigung und Anlegen als Aufgabe mit Datum und Uhrzeit
 async function kiTodoFromText(text) {
   if (!text) return;
@@ -4764,6 +4878,12 @@ document.addEventListener("submit", async (e) => {
   e.preventDefault();
   const data = Object.fromEntries(new FormData(f));
 
+  if (f.dataset.form === "kichat") {
+    const t = String(data.text || "").trim();
+    f.reset();
+    await kiChatSend(t);
+    return;
+  }
   if (f.dataset.form === "kitodo") {
     await kiTodoFromText(String(data.text || "").trim());
     return;
