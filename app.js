@@ -281,6 +281,55 @@ async function saveGeminiKey(key) {
   if (error) { console.warn("Key speichern:", error); showToast("Speichern fehlgeschlagen"); return false; }
   return true;
 }
+// Erkannte Symbole (Bild → Merkmal): ansehen und korrigieren
+let iconData = null;
+let iconsLoaded = false;
+let iconErr = "";
+async function loadIcons() {
+  if (!session) { iconErr = "Anmelden, um die Symbole zu sehen."; render(); return; }
+  try {
+    const r = await fetch(SUPABASE_URL + "/functions/v1/mensa?icons=1", {
+      headers: { Authorization: "Bearer " + session.access_token, apikey: SUPABASE_ANON_KEY },
+      signal: AbortSignal.timeout(15000),
+    });
+    const j = await r.json();
+    if (!r.ok || !j.icons) throw new Error(j.fehler || "Fehler");
+    iconData = j;
+    iconErr = "";
+  } catch (_) { iconErr = "Symbole gerade nicht abrufbar."; }
+  render();
+}
+async function saveIcon(hash, tag) {
+  if (!session) return;
+  try {
+    const r = await fetch(SUPABASE_URL + "/functions/v1/mensa?icon=1", {
+      method: "POST",
+      headers: { Authorization: "Bearer " + session.access_token, apikey: SUPABASE_ANON_KEY, "content-type": "application/json" },
+      body: JSON.stringify({ hash, tag: tag || null }),
+    });
+    if (!r.ok) throw new Error("save");
+    showToast("✓ Symbol gespeichert");
+  } catch (_) { showToast("Speichern fehlgeschlagen"); }
+  await loadIcons();
+}
+function iconsCardHTML() {
+  if (!iconData) return `<div class="card"><h3>Erkannte Symbole</h3><p class="muted" style="margin:0">${iconErr || "Wird geladen …"}</p></div>`;
+  const tagOf = new Map(iconData.icons.map((x) => [x.hash, x]));
+  const imgOf = new Map();
+  for (const u of iconData.urls) if (!imgOf.has(u.hash)) imgOf.set(u.hash, u.url);
+  const rows = iconData.icons.map((ic) => {
+    const opts = [...iconData.tags, "keines"].map((t) => `<option value="${t}" ${(ic.tag || "keines") === t ? "selected" : ""}>${t === "keines" ? "kein Merkmal" : t}</option>`).join("");
+    return `<div class="row" style="gap:8px;align-items:center;padding:6px 0;border-top:1px solid var(--line)">
+      ${imgOf.get(ic.hash) ? `<img src="${esc(imgOf.get(ic.hash))}" alt="" style="width:28px;height:28px;object-fit:contain">` : ""}
+      <select class="grow" data-change="icontag" data-hash="${ic.hash}">${opts}</select>
+      <span class="muted" style="font-size:12px">${ic.bestaetigt ? "✓" : "KI"}</span>
+    </div>`;
+  }).join("");
+  return `<div class="card"><h3>Erkannte Symbole</h3>
+    <p class="muted" style="margin-top:0">Die KI hat diese Bilder einmal zugeordnet. Stimmt eine Zuordnung nicht, kannst du sie hier ändern. „KI“ heißt: noch nicht bestätigt.</p>
+    ${rows || '<p class="muted">Noch keine Symbole erkannt.</p>'}
+  </div>`;
+}
 async function deleteGeminiKey() {
   if (!sb || !session) return;
   const { error } = await sb.from("user_secrets").delete().eq("user_id", session.user.id);
@@ -2366,6 +2415,7 @@ function settingsPages() {
 
   // KI-Assistent: Gemini-Key, wird auf dem Server gespeichert und ist für andere nicht lesbar
   if (ui.setPage === "ki" && !keyStatusLoaded) { keyStatusLoaded = true; setTimeout(refreshKeyStatus, 0); }
+  if (ui.setPage === "ki" && !iconsLoaded) { iconsLoaded = true; setTimeout(loadIcons, 0); }
   pages.ki = [`<div class="card"><h3>Gemini-Key</h3>
       <p class="muted" style="margin-top:0">Den kostenlosen Key holst du bei Google AI Studio. Er wird auf dem Server gespeichert, nicht auf diesem Gerät, und ist danach nicht mehr auslesbar. Auf allen deinen angemeldeten Geräten steht er dann zur Verfügung.</p>
       <div id="geminiStatus" class="muted" style="margin-bottom:10px">${keyStatusText}</div>
@@ -2374,7 +2424,7 @@ function settingsPages() {
         <button class="btn">Speichern</button>
       </form>
       <div class="row" style="margin-top:10px"><button class="btn ghost" data-act="geminidel">Key entfernen</button></div>
-    </div>`];
+    </div>`, iconsCardHTML()];
   // Erscheinungsbild: Modus, Designs, Schrift, Farben
   pages.darst = [
     `<div class="card"><h3>Hell oder dunkel</h3>
@@ -2749,7 +2799,7 @@ document.addEventListener("touchend", (e) => {
 document.addEventListener("touchcancel", () => { mensaTouch = null; }, { passive: true });
 // Hinweis: Die Speisedaten sagen nicht, ob ein Gericht vegetarisch ist. Das wird anhand des Namens geschätzt.
 const MEAT_RE = /(fleisch|schwein|rind|hähnchen|huhn|pute|geflügel|fisch|lachs|speck|wurst|schinken|kalb|lamm|hack|gyros|döner|salami|ente|bratwurst)/i;
-// Symbole je Gericht. Kommen von der KI, die die Icons der Mensa-Seite liest.
+// Symbole je Gericht. Kommen aus den gespeicherten Icon-Erkennungen (Job um 8 Uhr).
 const MENSA_TAG_EMOJI = { schwein: "🐷", rind: "🐄", gefluegel: "🐔", fisch: "🐟", lamm: "🐑", vegan: "🌱", vegetarisch: "🥕", glutenfrei: "🌾" };
 const MENSA_MEAT_TAGS = ["schwein", "rind", "gefluegel", "fisch", "lamm"];
 function mensaEmoji(g) {
@@ -2769,9 +2819,9 @@ function mensaCardHTML() {
     const shown = ui.mensaNoMeat ? fresh.gerichte.filter((g) => !(g.tags || []).some((t) => MENSA_MEAT_TAGS.includes(t))) : fresh.gerichte;
     body = (shown.length ? shown : fresh.gerichte).map((g) =>
       `<div class="mensa-row"><span class="muted">${esc(g.label)}</span><span><span style="margin-right:4px">${mensaEmoji(g)}</span><b>${esc(g.name)}</b>${g.allergene ? `<div class="muted" style="font-size:12px">Allergene: ${esc(g.allergene)}</div>` : ""}</span><span class="mensa-price">${esc(g.preis.stud)}</span></div>`
-    ).join("") + `<div class="muted" style="font-size:12px;margin-top:8px">🐷 Schwein · 🐄 Rind · 🐔 Geflügel · 🐟 Fisch · 🐑 Lamm · 🌱 vegan · 🥕 vegetarisch · 🌾 glutenfrei${fresh.ki ? " · von der KI gelesen" : ` · <span>Symbole: KI nicht aktiv (Key im Menü „KI-Assistent“ prüfen)</span>`}</div>
+    ).join("") + `<div class="muted" style="font-size:12px;margin-top:8px">🐷 Schwein · 🐄 Rind · 🐔 Geflügel · 🐟 Fisch · 🐑 Lamm · 🌱 vegan · 🥕 vegetarisch · 🌾 glutenfrei${fresh.symbole ? "" : " · Für diesen Tag keine Symbole erkannt"}</div>
       <div class="muted" style="font-size:12px">Preise für Studierende</div>
-      ${fresh.ki ? `<button class="btn ghost btn-sm" data-act="mensafilter" style="margin-top:8px">${ui.mensaNoMeat ? "Alle anzeigen" : "Nur ohne Fleisch"}</button>` : ""}`;
+      ${fresh.symbole ? `<button class="btn ghost btn-sm" data-act="mensafilter" style="margin-top:8px">${ui.mensaNoMeat ? "Alle anzeigen" : "Nur ohne Fleisch"}</button>` : ""}`;
   } else if (fresh) {
     body = `<div class="muted">${esc(fresh.hinweis || "Kein Speiseplan für diesen Tag.")}</div>`;
   } else if (mensaErr) {
@@ -4540,6 +4590,10 @@ document.addEventListener("change", async (e) => {
     state.settings.fontScale = Number(t.value);
     saveDevice();
     applyTheme();
+    return;
+  }
+  if (t.dataset.change === "icontag") {
+    await saveIcon(t.dataset.hash, t.value);
     return;
   }
   if (t.dataset.change === "dynslot") {
