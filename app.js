@@ -2800,7 +2800,6 @@ document.addEventListener("touchcancel", () => { mensaTouch = null; }, { passive
 // Hinweis: Die Speisedaten sagen nicht, ob ein Gericht vegetarisch ist. Das wird anhand des Namens geschätzt.
 const MEAT_RE = /(fleisch|schwein|rind|hähnchen|huhn|pute|geflügel|fisch|lachs|speck|wurst|schinken|kalb|lamm|hack|gyros|döner|salami|ente|bratwurst)/i;
 // Symbole je Gericht. Kommen aus den gespeicherten Icon-Erkennungen (Job um 8 Uhr).
-const MENSA_TAG_EMOJI = { schwein: "🐷", rind: "🐄", gefluegel: "🐔", fisch: "🐟", lamm: "🐑", vegan: "🌱", vegetarisch: "🥕", glutenfrei: "🌾" };
 const MENSA_MEAT_TAGS = ["schwein", "rind", "gefluegel", "fisch", "lamm"];
 // Farbe je Gericht: Fleisch rot, Fisch blau, vegetarisch grün, vegan dunkelgrün, Dessert gelb
 const MENSA_COLORS = { fleisch: "#ef4444", fisch: "#3b82f6", vegetarisch: "#22c55e", vegan: "#15803d", dessert: "#eab308", sonst: "#94a3b8" };
@@ -2814,8 +2813,9 @@ function mensaColor(g) {
   if (t.includes("vegetarisch")) return MENSA_COLORS.vegetarisch;
   return MENSA_COLORS.sonst;
 }
-function mensaEmoji(g) {
-  return (g.tags || []).map((t) => MENSA_TAG_EMOJI[t]).filter(Boolean).join(" ");
+// Symbole der Mensa-Seite als Bilder (werden vom Job je Gericht mitgespeichert)
+function mensaIcons(g) {
+  return (g.bilder || []).map((u) => `<img src="${esc(u)}" alt="" loading="lazy" style="width:18px;height:18px;vertical-align:middle;margin-right:3px">`).join("");
 }
 function mensaCardHTML() {
   const target = mensaTarget();
@@ -2830,8 +2830,8 @@ function mensaCardHTML() {
   } else if (fresh && fresh.gerichte && fresh.gerichte.length) {
     const shown = ui.mensaNoMeat ? fresh.gerichte.filter((g) => !(g.tags || []).some((t) => MENSA_MEAT_TAGS.includes(t))) : fresh.gerichte;
     body = (shown.length ? shown : fresh.gerichte).map((g) =>
-      `<div class="mensa-row" style="border-left:4px solid ${mensaColor(g)};padding-left:8px"><span class="muted">${esc(g.label)}</span><span><span style="margin-right:4px">${mensaEmoji(g)}</span><b>${esc(g.name)}</b>${g.allergene ? `<div class="muted" style="font-size:12px">Allergene: ${esc(g.allergene)}</div>` : ""}</span><span class="mensa-price">${esc(g.preis.stud)}</span></div>`
-    ).join("") + `<div class="muted" style="font-size:12px;margin-top:8px">🐷 Schwein · 🐄 Rind · 🐔 Geflügel · 🐟 Fisch · 🐑 Lamm · 🌱 vegan · 🥕 vegetarisch · 🌾 glutenfrei · Farben: rot Fleisch, blau Fisch, grün vegetarisch, dunkelgrün vegan, gelb Dessert${fresh.symbole ? "" : " · Für diesen Tag keine Symbole erkannt"}</div>
+      `<div class="mensa-row" style="border-left:4px solid ${mensaColor(g)};padding-left:8px"><span class="muted">${esc(g.label)}</span><span><span style="margin-right:4px">${mensaIcons(g)}</span><b>${esc(g.name)}</b>${g.allergene ? `<div class="muted" style="font-size:12px">Allergene: ${esc(g.allergene)}</div>` : ""}</span><span class="mensa-price">${esc(g.preis.stud)}</span></div>`
+    ).join("") + `<div class="muted" style="font-size:12px;margin-top:8px">Symbole von der Mensa-Seite · Farben: rot Fleisch, blau Fisch, grün vegetarisch, dunkelgrün vegan, gelb Dessert${fresh.symbole ? "" : " · Für diesen Tag keine Symbole erkannt"}</div>
       <div class="muted" style="font-size:12px">Preise für Studierende</div>
       ${fresh.symbole ? `<button class="btn ghost btn-sm" data-act="mensafilter" style="margin-top:8px">${ui.mensaNoMeat ? "Alle anzeigen" : "Nur ohne Fleisch"}</button>` : ""}`;
   } else if (fresh) {
