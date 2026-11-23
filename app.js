@@ -2770,17 +2770,27 @@ function mensaCache() {
   try { return JSON.parse(localStorage.getItem(MENSA_LS) || "{}") || {}; } catch { return {}; }
 }
 // Wochenende ausblenden, wenn es in den Einstellungen aus ist (Sa/So → Montag)
-function mensaTarget() {
-  let d = parseIso(ui.mensaDay || iso(new Date()));
-  if (!state.settings.weekend) while (d.getDay() === 0 || d.getDay() === 6) d = addDays(d, 1);
-  return iso(d);
+// Die Website hat nur Mo–Fr einer Woche. Angezeigt wird die aktuelle Woche; am Wochenende schon die nächste.
+function mensaWeek() {
+  const t = parseIso(iso(new Date()));
+  const toMon = t.getDay() === 0 || t.getDay() === 6 ? (8 - t.getDay()) % 7 : -((t.getDay() + 6) % 7);
+  const mon = addDays(t, toMon);
+  return { mon: iso(mon), fri: iso(addDays(mon, 4)) };
 }
-// Tag wechseln (v = ±1); 0 = heute. Ausgeblendete Wochentage werden übersprungen.
+function mensaTarget() {
+  const w = mensaWeek();
+  let d = iso(parseIso(ui.mensaDay || iso(new Date())));
+  if (d < w.mon) d = w.mon;
+  if (d > w.fri) d = w.fri;
+  return d;
+}
+// Tag wechseln (v = ±1); 0 = heute. Außerhalb der Woche passiert nichts.
 function mensaStep(v) {
   if (v === 0) { ui.mensaDay = null; render(); return; }
-  let d = addDays(parseIso(mensaTarget()), v);
-  if (!state.settings.weekend) while (d.getDay() === 0 || d.getDay() === 6) d = addDays(d, v);
-  ui.mensaDay = iso(d);
+  const w = mensaWeek();
+  const d = iso(addDays(parseIso(mensaTarget()), v));
+  if (d < w.mon || d > w.fri) return;
+  ui.mensaDay = d;
   render();
 }
 // Wischen über die Mensa-Karte wechselt den Tag
@@ -2850,9 +2860,9 @@ function mensaCardHTML() {
     <div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:6px">
       <div><h3 style="margin:0">${title}</h3>${datumKlein}</div>
       <span class="row" style="gap:6px">
-        <button class="btn ghost" data-act="mensanav" data-v="-1" title="Tag zurück">‹</button>
+        <button class="btn ghost" data-act="mensanav" data-v="-1" title="Tag zurück" ${target <= mensaWeek().mon ? "disabled style=\"opacity:.35\"" : ""}>‹</button>
         <button class="btn ghost" data-act="mensanav" data-v="0" title="Zu heute">Heute</button>
-        <button class="btn ghost" data-act="mensanav" data-v="1" title="Tag vor">›</button>
+        <button class="btn ghost" data-act="mensanav" data-v="1" title="Tag vor" ${target >= mensaWeek().fri ? "disabled style=\"opacity:.35\"" : ""}>›</button>
         <a class="btn ghost lay-keep" href="https://werkswelt.de/?id=mohm" target="_blank" rel="noopener" title="Speiseplan auf der Website öffnen">${ICON.external}</a>
         <button class="btn ghost menu-btn" data-act="mensareload" title="Neu laden">${ICON.reload}</button>
       </span>
@@ -2864,7 +2874,8 @@ async function loadMensa(force) {
   const target = mensaTarget();
   // Gespeicherte Tage ohne Symbol-Bilder (ältere Version) werden einmal neu geholt
   const cachedDay = mensaCache()[target];
-  const complete = !!cachedDay && Array.isArray(cachedDay.gerichte) && cachedDay.gerichte.every((g) => Array.isArray(g.bilder));
+  // Leere Tage (noch kein Plan, als die Seite abgefragt wurde) gelten nicht als vollständig und werden erneut geholt
+  const complete = !!cachedDay && Array.isArray(cachedDay.gerichte) && cachedDay.gerichte.length > 0 && cachedDay.gerichte.every((g) => Array.isArray(g.bilder));
   if (!force && ((cachedDay && complete) || mensaTried === target)) return;
   if (!cloudConfigured()) return;
   // Neu laden hat Vorrang: läuft gerade ein Abruf, wird er nicht stillschweigend verworfen
