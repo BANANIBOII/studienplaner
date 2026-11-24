@@ -979,7 +979,17 @@ function seriesDates(first, repeat, until) {
 }
 
 // ---------- Render ----------
+// Neuzeichnen, aber nicht unter dem Finger und nicht während die Ansicht noch ausläuft.
+// Mehrere Anfragen in dieser Zeit ergeben einen einzigen Neuaufbau, sobald Ruhe ist.
+let renderQueued = false;
 function render() {
+  if (scrollBusy()) {
+    if (!renderQueued) { renderQueued = true; setTimeout(() => { renderQueued = false; render(); }, 200); }
+    return;
+  }
+  renderNow();
+}
+function renderNow() {
   applyPendingSwipe();
   syncHistoryNav();
   requestAnimationFrame(fitEventNames);
@@ -1012,7 +1022,12 @@ function render() {
   // Scroll-Position des Rasters merken, damit es nach dem Wischen nicht nach oben springt
   const oldWeek = appEl.querySelector(".plan-screen > .week");
   const keepScroll = !tabChanged && oldWeek ? oldWeek.scrollTop : null;
-  appEl.innerHTML = (ui.layEdit ? layBarHTML() : "") + (ui.planEdit && ui.tab === "stundenplan" ? planEditBarHTML() : "") + views[ui.tab]();
+  // Nur schreiben, wenn sich der Inhalt wirklich geändert hat: gleiche Ansicht bleibt unangetastet (Scroll, Fokus, Eingaben)
+  const nextHtml = (ui.layEdit ? layBarHTML() : "") + (ui.planEdit && ui.tab === "stundenplan" ? planEditBarHTML() : "") + views[ui.tab]();
+  if (tabChanged || appEl._html !== nextHtml) {
+    appEl.innerHTML = nextHtml;
+    appEl._html = nextHtml;
+  }
   if (keepScroll != null) {
     const newWeek = appEl.querySelector(".plan-screen > .week");
     // Erst die Höhe des Bereichs setzen: ohne sie ist das Raster noch voll lang, es gibt nichts zu scrollen
