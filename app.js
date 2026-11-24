@@ -1893,6 +1893,11 @@ function openEventEdit(id) {
         <div><label class="muted">Beginn</label><input type="time" name="start" required value="${fmtMin(ev.start)}"></div>
         <div><label class="muted">Ende</label><input type="time" name="end" required value="${fmtMin(ev.end)}"></div>
       </div>
+      <label class="muted">Raum oder Uhrzeit ändern für</label>
+      <select name="scope">
+        <option value="one">Nur diesen Termin</option>
+        <option value="future">Diesen und alle folgenden (gleicher Wochentag und Uhrzeit)</option>
+      </select>
       <label class="row" style="margin:12px 0"><input type="checkbox" name="cancelled" ${ev.cancelled ? "checked" : ""}> Diese Stunde fällt aus</label>
       <label class="muted">Farbe</label>
       <input type="hidden" name="color" value="${color}">
@@ -5232,6 +5237,7 @@ document.addEventListener("submit", async (e) => {
       const end = toMin(data.end);
       if (!(end > start)) { appAlert("Das Ende muss nach dem Beginn liegen."); break; }
       const old = ev.name;
+      const oldDate = ev.date, oldStart = ev.start, oldEnd = ev.end;
       const nw = (data.name || "").trim() || old;
       if (nw !== old) {
         state.events.forEach((x) => { if (x.name === old) x.name = nw; });
@@ -5249,6 +5255,17 @@ document.addEventListener("submit", async (e) => {
       ev.start = start;
       ev.end = end;
       ev.room = (data.room || "").trim();
+      // Auf Wunsch auch alle späteren Termine derselben Stunde (gleicher Wochentag, gleiche Uhrzeit)
+      if (data.scope === "future") {
+        const wd = new Date(oldDate + "T12:00:00Z").getUTCDay();
+        state.events.forEach((x) => {
+          if (x === ev || x.name !== nw || x.start !== oldStart || x.end !== oldEnd || x.date <= oldDate) return;
+          if (new Date(x.date + "T12:00:00Z").getUTCDay() !== wd) return;
+          x.room = ev.room;
+          x.start = start;
+          x.end = end;
+        });
+      }
       // Nur diese Stunde fällt aus (gilt nicht für die anderen Termine der Vorlesung)
       ev.cancelled = !!data.cancelled;
       // Kürzel gilt für alle Termine dieser Vorlesung (wie der Titel)
