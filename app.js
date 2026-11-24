@@ -1800,16 +1800,25 @@ function parseEventDesc(desc) {
 }
 
 // Termin auf einen anderen Tag gezogen: fragen, ob verschoben oder kopiert werden soll
+// Die späteren Termine derselben Stunde: gleicher Name, gleiche Uhrzeit, gleicher Wochentag
+function seriesOf(ev) {
+  const wd = parseIso(ev.date).getDay();
+  return state.events.filter((x) => x !== ev && x.name === ev.name && x.start === ev.start && x.end === ev.end
+    && x.date > ev.date && parseIso(x.date).getDay() === wd);
+}
+
 function openEventDrop(id, date, min) {
   const ev = state.events.find((x) => x.id === id);
   if (!ev) return;
   const [y, m, d] = date.split("-");
   const btn = (mode, label, cls) => `<button class="btn ${cls}" data-act="evdrop" data-mode="${mode}" data-id="${id}" data-d="${date}" data-min="${min}">${label}</button>`;
+  const later = seriesOf(ev).length;
   openModal(`
     <h3>${esc(ev.name)}</h3>
     <p class="muted">Auf ${d}.${m}.${y} · ${fmtMin(min)} Uhr</p>
     <div class="menu-list">
-      ${btn("move", "Verschieben", "")}
+      ${btn("move", "Nur diesen Termin verschieben", "")}
+      ${later ? btn("series", `Diesen und alle ${later} späteren Termine verschieben`, "") : ""}
       ${btn("copy", "Kopieren", "ghost")}
     </div>
     <div class="row"><button class="btn ghost" data-act="mclose">Abbrechen</button></div>`);
@@ -4274,7 +4283,12 @@ document.addEventListener("click", async (e) => {
       if (!ev) break;
       const start = Number(el.dataset.min), dur = ev.end - ev.start, date = el.dataset.d;
       if (el.dataset.mode === "copy") state.events.push({ ...ev, id: uid(), date, start, end: start + dur });
-      else Object.assign(ev, { date, start, end: start + dur });
+      else if (el.dataset.mode === "series") {
+        // Alle späteren Termine um dieselbe Anzahl Tage verschieben und auf die neue Uhrzeit setzen
+        const shift = Math.round((parseIso(date) - parseIso(ev.date)) / 86400000);
+        seriesOf(ev).forEach((x) => { x.date = iso(addDays(parseIso(x.date), shift)); x.start = start; x.end = start + dur; });
+        Object.assign(ev, { date, start, end: start + dur });
+      } else Object.assign(ev, { date, start, end: start + dur });
       ui.selDate = date;
       clearModalQuiet();
       commit(); break;
