@@ -6,8 +6,13 @@ self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(FILES)).then(() => self.skipWaiting()));
 });
 
+// Alte Caches (frühere Versionen) entfernen
 self.addEventListener("activate", (e) => {
-  e.waitUntil(self.clients.claim());
+  e.waitUntil(
+    caches.keys()
+      .then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
+      .then(() => self.clients.claim())
+  );
 });
 
 // Vibration und Ton pro Gerät: die App legt die Einstellung in IndexedDB ab (localStorage kann der Service Worker nicht lesen)
@@ -84,6 +89,8 @@ self.addEventListener("notificationclick", (e) => {
 
 self.addEventListener("fetch", (e) => {
   if (e.request.method !== "GET") return;
+  // Nur die App-Dateien aus dem eigenen Ursprung zwischenspeichern, nie Antworten von Supabase oder anderen Diensten
+  if (new URL(e.request.url).origin !== self.location.origin) return;
   e.respondWith(
     fetch(e.request, { cache: "no-cache" })
       .then((res) => {
