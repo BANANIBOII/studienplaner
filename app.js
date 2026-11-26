@@ -6412,6 +6412,7 @@ document.addEventListener("click", async (e) => {
 // Kein Browser-Zoom per Pinch (iPhone/Safari); die eigene Streckung des Stundenplans bleibt
 ["gesturestart", "gesturechange", "gestureend"].forEach((ev) => document.addEventListener(ev, (e) => e.preventDefault(), { passive: false }));
 // Zwei Finger auf der Seite vergrößern nicht die ganze App (Dashboard, Protokolle usw.). Der Stundenplan streckt sich selbst.
+document.addEventListener("touchstart", (e) => { if (e.touches.length > 1 && e.cancelable) e.preventDefault(); }, { passive: false });
 document.addEventListener("touchmove", (e) => { if (e.touches.length > 1 && e.cancelable) e.preventDefault(); }, { passive: false });
 
 
