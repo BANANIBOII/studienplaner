@@ -1229,7 +1229,6 @@ function viewDashboard() {
         <button class="btn ghost menu-btn" data-act="dashmenu" title="Einstellungen">${ICON.more}</button></div>
       ${todayPlanHTML()}
       ${dashDayButton(now)}
-      ${quickNoteHTML()}
       ${iso(dashDay(now)) === iso(now) ? tomorrowHTML() : ""}
     </div>`;
   const todoCard = `<div class="card todo-compact">
@@ -1315,21 +1314,6 @@ function openDashMenu() {
       <button class="btn ghost" data-act="dashreset">Standard</button>
       <button class="btn" data-act="mclose">Fertig</button>
     </div>`);
-}
-
-// Schnellnotiz direkt im Dashboard: Vorlesung wählen, Text schreiben
-// Dashboard: Notizfeld für das gerade laufende Fach (oder das angetippte Fach)
-// Dashboard: Notizfeld für das laufende Fach, wieder schließbar
-function quickNoteHTML() {
-  return ""; // Notizen öffnen sich als Popup
-  if (ui.noteFor && !ui.noteWindow) return notePanelHTML(ui.noteFor.name, ui.noteFor.date);
-  if (ui.dashNoteDismissed) return "";
-  const now = new Date();
-  const today = iso(now);
-  const nowMin = now.getHours() * 60 + now.getMinutes();
-  const running = state.events.find((e) => e.date === today && e.start <= nowMin && nowMin < e.end);
-  if (!running) return "";
-  return notePanelHTML(running.name, today);
 }
 
 // Inline-Notizfeld: Thema wählen, Text schreiben, Einträge des Tages abhaken oder ändern
