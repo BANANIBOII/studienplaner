@@ -3,8 +3,6 @@
 /* Seitenwechsel-Animation (Wochen- und Tagesansicht) */
 .anim-next { animation: slideNext .28s cubic-bezier(.2,.7,.2,1); }
 .anim-prev { animation: slidePrev .28s cubic-bezier(.2,.7,.2,1); }
-@keyframes slideNext { from { transform: translateX(40px); opacity: 0; } to { transform: none; opacity: 1; } }
-@keyframes slidePrev { from { transform: translateX(-40px); opacity: 0; } to { transform: none; opacity: 1; } }
 
 /* Langes Drücken: kein Textmarkieren und kein Kontextmenü */
 .ev, .grid, .dayhead {
@@ -441,7 +439,6 @@ html, body { overscroll-behavior-y: none; }                    /* kein Gummiband
 button, a, .tabbar button, .hist-btn { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
 .tabbar, .topbar, .sidebar, .side-foot { -webkit-user-select: none; user-select: none; }
 button:active, .tabbar button:active, .hist-btn:active { transform: scale(.94); transition: transform .08s; }
-@keyframes appIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 #app.tab-in > * { animation: appIn .2s ease-out; }
 @media (max-width: 799px) {
   /* iPhone zoomt beim Antippen eines Feldes, wenn die Schrift kleiner als 16 px ist */
@@ -455,7 +452,6 @@ input[type="checkbox"]:active { transform: scale(.9); }
 input[type="checkbox"]::after { transition: transform .22s cubic-bezier(.34, 1.56, .64, 1); }
 
 /* Fenster: gleitet von unten ein, Hintergrund blendet ab */
-@keyframes sheetUp { from { opacity: 0; transform: translateY(24px) scale(.98); } to { opacity: 1; transform: none; } }
 @keyframes fadeBg { from { opacity: 0; } to { opacity: 1; } }
 .modal { animation: fadeBg .18s ease-out; }
 .modal .sheet { animation: sheetUp .24s cubic-bezier(.2, .8, .2, 1); }
@@ -505,9 +501,6 @@ input[type="checkbox"]::after { transition: transform .22s cubic-bezier(.34, 1.5
 @media (min-width: 800px) { .phone-tools { display: none; } }
 
 /* ---------- Übergänge (ruhiger, mit Richtung) ---------- */
-@keyframes tabFwd { from { opacity: .35; transform: translateX(22px); } to { opacity: 1; transform: none; } }
-@keyframes tabBack { from { opacity: .35; transform: translateX(-22px); } to { opacity: 1; transform: none; } }
-@keyframes appIn { from { opacity: .35; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 #app.tab-in.dir-fwd > * { animation: tabFwd .42s cubic-bezier(.2,.7,.2,1) both; }
 #app.tab-in.dir-back > * { animation: tabBack .42s cubic-bezier(.2,.7,.2,1) both; }
 #app.tab-in > * { animation-duration: .42s; }
@@ -634,8 +627,6 @@ body.swiping div:has(> #app) { overflow: hidden; }
 .ev small { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* ---------- Lebendigere Animationen ---------- */
-@keyframes tabFwd { from { opacity: 0; transform: translateX(34px) scale(.985); } to { opacity: 1; transform: none; } }
-@keyframes tabBack { from { opacity: 0; transform: translateX(-34px) scale(.985); } to { opacity: 1; transform: none; } }
 #app.tab-in.dir-fwd > * { animation-name: tabFwd; animation-duration: .5s; animation-timing-function: cubic-bezier(.2,.9,.3,1.12); }
 #app.tab-in.dir-back > * { animation-name: tabBack; animation-duration: .5s; animation-timing-function: cubic-bezier(.2,.9,.3,1.12); }
 @keyframes cardPop { from { opacity: 0; transform: translateY(12px) scale(.97); } to { opacity: 1; transform: none; } }
@@ -826,8 +817,6 @@ button, .btn { min-height: 40px; }
 .pmark.band span { left: 0; right: 0; top: 50%; transform: translateY(-50%); text-align: center; }
 
 /* ===== Bewegung (einheitlich): gleiche Kurven, kurze Zeiten, kein Doppel-Effekt ===== */
-@keyframes grpFromRight { from { transform: translateX(14.2857%); } to { transform: translateX(0); } }
-@keyframes grpFromLeft { from { transform: translateX(-14.2857%); } to { transform: translateX(0); } }
 @keyframes planZoomIn { from { opacity: 0; transform: scale(.97); } to { opacity: 1; transform: none; } }
 /* Wochen-/Tageswechsel über die Pfeile: die vorgeladenen Seiten gleiten wie beim Wischen */
 .anim-next, .anim-prev { animation: none; }
@@ -836,8 +825,6 @@ button, .btn { min-height: 40px; }
 /* Wechsel Woche ↔ Tag: sanftes Einblenden statt Sprung */
 .anim-zoom { animation: planZoomIn .24s cubic-bezier(.2,.8,.2,1); }
 /* Reiterwechsel: einheitlich und kurz */
-@keyframes tabFwd { from { opacity: 0; transform: translateX(16px); } to { opacity: 1; transform: none; } }
-@keyframes tabBack { from { opacity: 0; transform: translateX(-16px); } to { opacity: 1; transform: none; } }
 #app.tab-in.dir-fwd > * { animation: tabFwd .26s cubic-bezier(.2,.8,.2,1) both; }
 #app.tab-in.dir-back > * { animation: tabBack .26s cubic-bezier(.2,.8,.2,1) both; }
 /* Wischen: kurzes Nachgleiten nach dem Loslassen */
@@ -845,7 +832,6 @@ button, .btn { min-height: 40px; }
 
 /* Fenster schließen: kurz ausblenden statt hart verschwinden */
 @keyframes fadeOutBg { from { opacity: 1; } to { opacity: 0; } }
-@keyframes sheetDown { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(16px) scale(.98); } }
 .modal.out { animation: fadeOutBg .17s ease-in forwards; pointer-events: none; }
 .modal.out .sheet { animation: sheetDown .17s ease-in forwards; }
 
@@ -984,7 +970,6 @@ body.nav-bottom:not(.locked) { padding-bottom: calc(92px + env(safe-area-inset-b
 .calTitle { transition: opacity .25s ease; }
 .month .mday { transition: background-color .25s ease, border-color .25s ease, opacity .25s ease; }
 .month.anim-fold .mday { animation: calDayIn .4s cubic-bezier(.2, .8, .2, 1) both; animation-delay: calc(min(var(--i, 0), 13) * 16ms); }
-@keyframes calDayIn { from { opacity: 0; transform: translateY(-8px) scale(.94); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) {
   .calfold svg, .month .mday, .month.anim-fold .mday { transition: none !important; animation: none !important; }
 }
@@ -1013,10 +998,6 @@ main { padding: 18px 16px 8px; }
 /* ---------- Animationen (zusammengefasst, eine Quelle) ----------
    Reiterwechsel: Inhalt gleitet in Wischrichtung ein, Karten folgen nacheinander.
    Fenster: gleiten von unten mit leichtem Schwung. Die Werte hier gelten, weil sie zuletzt stehen. */
-@keyframes tabFwd { from { opacity: 0; transform: translateX(18px); } to { opacity: 1; transform: none; } }
-@keyframes tabBack { from { opacity: 0; transform: translateX(-18px); } to { opacity: 1; transform: none; } }
-@keyframes riseIn { from { opacity: 0; transform: translateY(12px) scale(.985); } to { opacity: 1; transform: none; } }
-@keyframes sheetUp { from { opacity: 0; transform: translateY(28px) scale(.98); } to { opacity: 1; transform: none; } }
 #app.tab-in.dir-fwd > * { animation: tabFwd .32s cubic-bezier(.2, .8, .2, 1) both; }
 #app.tab-in.dir-back > * { animation: tabBack .32s cubic-bezier(.2, .8, .2, 1) both; }
 #app.tab-in .card, #app.tab-in .listrow { animation: riseIn .42s cubic-bezier(.2, .8, .2, 1) both; }
@@ -1035,9 +1016,6 @@ body.tab-scrub .tab-pill { transition-duration: .12s; }
 #app.tab-in .card:nth-child(2) { animation-delay: .07s; }
 #app.tab-in .card:nth-child(3) { animation-delay: .14s; }
 #app.tab-in .card:nth-child(n+4) { animation-delay: .2s; }
-@keyframes tabFwd { from { opacity: 0; transform: translateX(34px); } to { opacity: 1; transform: none; } }
-@keyframes tabBack { from { opacity: 0; transform: translateX(-34px); } to { opacity: 1; transform: none; } }
-@keyframes riseIn { from { opacity: 0; transform: translateY(16px) scale(.98); } to { opacity: 1; transform: none; } }
 
 /* ---------- Dashboard: Layout ruhiger (Handy einspaltig, kompakte Begrüßung, Suche als Pille) ---------- */
 .hero-stats { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
@@ -1160,7 +1138,6 @@ body.tab-scrub .tab-pill { transition-duration: .12s; }
   animation: popIn .26s cubic-bezier(.2, .9, .3, 1.05) both;
 }
 .modal.out .sheet { animation: popOut .17s ease-in forwards; }
-@keyframes popIn { from { opacity: 0; transform: translateY(14px) scale(.96); } to { opacity: 1; transform: none; } }
 @keyframes popOut { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(10px) scale(.97); } }
 
 /* ---------- Symbole (eigene Linien-Zeichnungen) ---------- */
@@ -1403,11 +1380,7 @@ body:not(.dark) { --elev: 0 8px 24px rgba(20, 60, 60, .1); }
 /* ===== Animationen: ein Tempo, eine Kurve, nur Position und Transparenz =====
    Dieser Block steht am Ende und überschreibt die älteren Definitionen (die dieselben Namen mehrfach nutzen). */
 :root { --ease-out: cubic-bezier(.2, .8, .2, 1); }
-@keyframes tabFwd  { from { opacity: 0; transform: translate3d(24px, 0, 0); } to { opacity: 1; transform: none; } }
-@keyframes tabBack { from { opacity: 0; transform: translate3d(-24px, 0, 0); } to { opacity: 1; transform: none; } }
-@keyframes riseIn  { from { opacity: 0; transform: translate3d(0, 10px, 0); } to { opacity: 1; transform: none; } }
 @keyframes appIn   { from { opacity: 0; transform: translate3d(0, 6px, 0); } to { opacity: 1; transform: none; } }
-@keyframes sheetUp { from { opacity: 0; transform: translate3d(0, 20px, 0); } to { opacity: 1; transform: none; } }
 @keyframes popIn   { from { opacity: 0; transform: translate3d(0, 12px, 0) scale(.97); } to { opacity: 1; transform: none; } }
 @keyframes slideNext { from { transform: translate3d(32px, 0, 0); opacity: 0; } to { transform: none; opacity: 1; } }
 @keyframes slidePrev { from { transform: translate3d(-32px, 0, 0); opacity: 0; } to { transform: none; opacity: 1; } }
