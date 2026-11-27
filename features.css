@@ -1525,3 +1525,7 @@ html, body { touch-action: pan-x pan-y; }
 .now-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .now-info b { font-size: 1.1rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .now-card .btn { flex-shrink: 0; }
+
+/* KI-Knopf: Punkt bei ungelesener Antwort */
+.ki-top { position: relative; }
+.ki-top.has-unread::after { content: ""; position: absolute; top: 4px; right: 4px; width: 9px; height: 9px; border-radius: 50%; background: #ef4444; box-shadow: 0 0 0 2px var(--bg); }
