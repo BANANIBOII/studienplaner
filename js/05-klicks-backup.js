@@ -904,11 +904,18 @@ async function kiChatSend(text) {
 }
 function kiUnsentGet() { try { return JSON.parse(localStorage.getItem("studienplaner-ki-unsent") || "[]"); } catch (_) { return []; } }
 function kiUnsentSet(a) { try { localStorage.setItem("studienplaner-ki-unsent", JSON.stringify(a)); } catch (_) {} }
-function kiReadGet() { try { return localStorage.getItem("studienplaner-ki-gelesen") || ""; } catch (_) { return ""; } }
+// Gelesen-Stand liegt in den Einstellungen und wird mit dem Konto synchronisiert (gilt auf allen Geräten)
+function kiReadGet() { return String(state.settings.kiGelesen || ""); }
 function kiLastAnswer() { return [...kiServerMsgs].reverse().find((m) => m.rolle !== "user"); }
 function kiMarkRead() {
   const last = kiLastAnswer();
-  try { if (last) localStorage.setItem("studienplaner-ki-gelesen", String(last.id)); } catch (_) {}
+  if (!last || kiReadGet() === String(last.id)) { kiFabSync(); return; }
+  state.settings.kiGelesen = String(last.id);
+  // Kein Eintrag im Rückgängig-Verlauf, nur speichern und synchronisieren
+  lastSnap = snapshot();
+  state.updatedAt = Date.now();
+  saveLocal();
+  scheduleCloud();
   kiFabSync();
 }
 async function kiChatRetry(id) {
