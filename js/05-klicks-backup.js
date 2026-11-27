@@ -819,7 +819,7 @@ function kiChatPaint() {
   const letzte = [...kiChatMsgs].reverse().find((m) => m.rolle !== "user");
   for (const m of kiChatMsgs) {
     const user = m.rolle === "user";
-    html += `<div style="align-self:${user ? "flex-end" : "flex-start"};max-width:85%;padding:8px 12px;border-radius:12px;background:${user ? "#2563eb" : "rgba(127,127,127,.15)"};color:${user ? "#fff" : "inherit"};white-space:pre-line;line-height:1.45">${esc(m.text)}</div>`;
+    html += `<div style="align-self:${user ? "flex-end" : "flex-start"};max-width:85%;padding:8px 12px;border-radius:12px;background:${user ? "#2563eb" : "rgba(127,127,127,.15)"};color:${user ? "#fff" : "inherit"};white-space:pre-line;line-height:1.45">${esc(m.text)}${m.fehler ? `<div style="font-size:12px;opacity:.85;margin-top:4px">Nicht gesendet: ${esc(m.fehler)}</div>` : ""}</div>`;
     if (!user && m === letzte && m.optionen?.length && !kiChatBusy) {
       html += `<div class="row" style="flex-wrap:wrap;gap:6px">${m.optionen.map((o) => `<button type="button" class="btn ghost btn-sm" data-act="kichatopt" data-text="${esc(o)}">${esc(o)}</button>`).join("")}</div>`;
     }
@@ -865,6 +865,7 @@ async function kiChatSend(text) {
   kiChatBusy = true;
   kiChatMsgs = [...kiChatMsgs, { id: "tmp", rolle: "user", text }];
   kiChatPaint();
+  let fehler = "";
   try {
     const r = await fetch(SUPABASE_URL + "/functions/v1/ki-chat", {
       method: "POST",
@@ -873,10 +874,18 @@ async function kiChatSend(text) {
       signal: AbortSignal.timeout(60000),
     });
     const j = await r.json().catch(() => ({}));
-    if (!r.ok || j.fehler) showToast(j.fehler === "kein-key" ? "Erst einen Gemini-Key im KI-Assistenten eintragen" : "KI gerade nicht erreichbar");
-  } catch (_) { showToast("KI gerade nicht erreichbar"); }
+    if (!r.ok || j.fehler) {
+      fehler = j.fehler === "kein-key" ? "Erst einen Gemini-Key im KI-Assistenten eintragen" : "KI gerade nicht erreichbar";
+      showToast(fehler);
+    }
+  } catch (_) { fehler = "KI gerade nicht erreichbar"; showToast(fehler); }
   kiChatBusy = false;
   await kiChatLoad();
+  // Schlägt das Senden fehl, bleibt die Nachricht sichtbar (sonst verschwindet sie beim Neuladen)
+  if (fehler) {
+    kiChatMsgs = [...kiChatMsgs, { id: "fehler-" + Date.now(), rolle: "user", text, fehler }];
+    kiChatPaint();
+  }
 }
 async function kiChatAnlegen(id) {
   const m = kiChatMsgs.find((x) => String(x.id) === String(id));
