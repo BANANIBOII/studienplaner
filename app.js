@@ -5065,34 +5065,6 @@ async function kiChatClear() {
   showToast("Verlauf gelöscht");
 }
 
-// KI liest den Text, danach Bestätigung und Anlegen als Aufgabe mit Datum und Uhrzeit
-async function kiTodoFromText(text) {
-  if (!text) return;
-  if (!session) { showToast("Zum Nutzen bitte anmelden"); return; }
-  showToast("KI liest den Text …", 2000);
-  let res = null;
-  try {
-    const r = await fetch(SUPABASE_URL + "/functions/v1/ki-todo", {
-      method: "POST",
-      headers: { Authorization: "Bearer " + session.access_token, apikey: SUPABASE_ANON_KEY, "content-type": "application/json" },
-      body: JSON.stringify({ text }),
-      signal: AbortSignal.timeout(30000),
-    });
-    res = await r.json().catch(() => ({}));
-    if (!r.ok && !res.fehler) res.fehler = "fehler";
-  } catch (_) { res = { fehler: "netz" }; }
-  if (res.fehler) {
-    showToast(res.fehler === "kein-key" ? "Erst einen Gemini-Key im KI-Assistenten eintragen" : "KI gerade nicht erreichbar");
-    return;
-  }
-  const datum = res.datum || (res.uhrzeit ? iso(new Date()) : "");
-  const when = [datum ? parseIso(datum).toLocaleDateString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit" }) : "ohne Datum", res.uhrzeit ? "um " + res.uhrzeit + " Uhr" : ""].filter(Boolean).join(" ");
-  if (!(await appConfirm(`Aufgabe anlegen?\n\n${res.titel}\n${when}`, "Anlegen"))) return;
-  state.todos.push({ id: uid(), title: res.titel, type: "todo", priority: "mittel", date: datum, time: res.uhrzeit || "", duration: DEFAULT_DURATION, done: false });
-  commit();
-  showToast("✓ Aufgabe angelegt");
-}
-
 document.addEventListener("submit", async (e) => {
   const f = e.target;
   if (!f.dataset.form) return;
