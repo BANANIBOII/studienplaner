@@ -805,6 +805,7 @@ function kiFabSync() {
 // KI-Chat: Verlauf in der Tabelle ki_chat (nur eigene Zeilen), die Antworten kommen von der Funktion ki-chat
 let kiChatMsgs = [];
 let kiServerMsgs = [];
+const DATUM_OK = /^\d{4}-\d{2}-\d{2}$/;
 let kiLastPaint = "";
 let kiChatBusy = false;
 const KI_ART_LABEL = { todo: "To-Do", abgabe: "Abgabe", klausur: "Klausur", erinnerung: "Erinnerung" };
@@ -833,7 +834,9 @@ function kiChatPaint() {
       html += `<div class="row" style="flex-wrap:wrap;gap:6px">${m.optionen.map((o) => `<button type="button" class="btn ghost btn-sm" data-act="kichatopt" data-text="${esc(o)}">${esc(o)}</button>`).join("")}</div>`;
     }
     const v = m.vorschlag;
-    if (!user && v && !v.erledigt) {
+    if (!user && v && !v.erledigt && ["termin_ausfall", "termin_verschieben", "notiz"].includes(v.typ)) {
+      html += kiSonderKarte(m, v);
+    } else if (!user && v && !v.erledigt) {
       const wann = [kiDateLabel(v.datum), v.uhrzeit ? "um " + v.uhrzeit + " Uhr" : ""].filter(Boolean).join(" ");
       const aendern = v.typ === "erledigt" || v.typ === "verschieben";
       const rep = !aendern && v.art === "erinnerung" ? " · " + (KI_REP_LABEL[v.wiederholung] || "einmalig") : "";
@@ -888,7 +891,7 @@ async function kiChatSend(text) {
     const r = await fetch(SUPABASE_URL + "/functions/v1/ki-chat", {
       method: "POST",
       headers: { Authorization: "Bearer " + session.access_token, apikey: SUPABASE_ANON_KEY, "content-type": "application/json" },
-      body: JSON.stringify({ text }),
+      body: JSON.stringify({ text, mensa: kiMensaDays() }),
       signal: AbortSignal.timeout(60000),
     });
     const j = await r.json().catch(() => ({}));
@@ -901,6 +904,52 @@ async function kiChatSend(text) {
   // Schlägt das Senden fehl, bleibt die Nachricht als „nicht gesendet“ stehen (auch nach Neustart der App)
   if (fehler) kiUnsentSet([...kiUnsentGet(), { id: "u" + Date.now(), text, fehler }]);
   await kiChatLoad();
+}
+// Speiseplan der nächsten Tage aus dem Mensa-Cache, damit die KI Fragen zur Mensa beantworten kann
+function kiMensaDays() {
+  const c = mensaCache();
+  const out = [];
+  for (let k = 0; k < 3; k++) {
+    const day = iso(addDays(new Date(), k));
+    const t = c[day];
+    if (t && Array.isArray(t.gerichte) && t.gerichte.length && (!t.datum || t.datum === day)) {
+      out.push({ datum: day, gerichte: t.gerichte.map((g) => g.name).filter(Boolean) });
+    }
+  }
+  return out;
+}
+// Termin-Änderung anwenden: Vorlesung in dem Zeitraum ausfallen lassen, optional einen Ersatztermin anlegen
+function kiTerminAnwenden(v) {
+  const treffer = state.events.filter((e) => e.name === v.modul && !e.cancelled && e.date >= v.von && e.date <= v.bis);
+  if (!treffer.length) return false;
+  const vorlage = treffer[0];
+  const wd = parseIso(vorlage.date).getDay();
+  state.events.forEach((x) => {
+    if (x.name === vorlage.name && x.start === vorlage.start && x.end === vorlage.end && x.date >= v.von && x.date <= v.bis && parseIso(x.date).getDay() === wd) x.cancelled = true;
+  });
+  if (v.ersatz_datum) {
+    const start = v.ersatz_uhrzeit ? toMin(v.ersatz_uhrzeit) : vorlage.start;
+    state.events.push({ ...vorlage, id: uid(), date: v.ersatz_datum, start, end: start + (vorlage.end - vorlage.start), cancelled: false });
+  }
+  return true;
+}
+// Vorschlagskarte für Termin-Änderungen und Notizen
+function kiSonderKarte(m, v) {
+  let kopf, titel, zeile;
+  if (v.typ === "notiz") {
+    kopf = "Notiz"; titel = v.modul; zeile = `${kiDateLabel(v.datum)} · ${v.text}`;
+  } else {
+    kopf = v.typ === "termin_verschieben" ? "Vorlesung verschieben" : "Vorlesung ausfallen lassen";
+    titel = v.modul;
+    const zeitraum = v.von === v.bis ? kiDateLabel(v.von) : `${kiDateLabel(v.von)} – ${kiDateLabel(v.bis)}`;
+    zeile = zeitraum + (v.ersatz_datum ? ` → Ersatz ${kiDateLabel(v.ersatz_datum)}${v.ersatz_uhrzeit ? " um " + v.ersatz_uhrzeit : ""}` : "");
+  }
+  return `<div class="card" style="align-self:stretch;padding:10px">
+        <div class="muted" style="font-size:12px">${esc(kopf)}</div>
+        <b>${esc(titel)}</b>
+        <div class="muted" style="font-size:13px">${esc(zeile)}</div>
+        <button type="button" class="btn btn-sm" data-act="kichatanlegen" data-id="${esc(m.id)}" style="margin-top:6px">${v.typ === "notiz" ? "Anlegen" : "Ausführen"}</button>
+      </div>`;
 }
 function kiUnsentGet() { try { return JSON.parse(localStorage.getItem("studienplaner-ki-unsent") || "[]"); } catch (_) { return []; } }
 function kiUnsentSet(a) { try { localStorage.setItem("studienplaner-ki-unsent", JSON.stringify(a)); } catch (_) {} }
@@ -954,6 +1003,10 @@ function kiChatEdit(id) {
         <div><label class="muted">Datum</label><input type="date" name="datum" value="${esc(v.datum || "")}"></div>
         <div><label class="muted">Uhrzeit</label><input type="time" name="uhrzeit" value="${esc(v.uhrzeit || "")}"></div>
       </div>
+      <div class="grid2" style="margin-top:8px">
+        <div><label class="muted">Priorität</label><select name="prioritaet">${["hoch", "mittel", "niedrig"].map((k) => `<option value="${k}"${k === (v.prioritaet || "mittel") ? " selected" : ""}>${k}</option>`).join("")}</select></div>
+        <div><label class="muted">Dauer (Min.)</label><input type="number" name="dauer" min="0" max="600" value="${v.dauer > 0 ? v.dauer : ""}" placeholder="Standard"></div>
+      </div>
       <label class="muted" style="margin-top:8px">Wiederholung (nur Erinnerungen)</label>
       <select name="wiederholung">${Object.keys(KI_REP_LABEL).map((k) => `<option value="${k}"${k === (v.wiederholung || "einmal") ? " selected" : ""}>${KI_REP_LABEL[k]}</option>`).join("")}</select>
       <div class="modal-foot">
@@ -967,6 +1020,20 @@ async function kiChatAnlegen(id) {
   const v = m && m.vorschlag;
   if (!v || v.erledigt) return;
   let ziel = {};
+  if (["termin_ausfall", "termin_verschieben", "notiz"].includes(v.typ)) {
+    if (v.typ === "notiz") {
+      ensureModule(v.modul).notes.push({ id: uid(), date: v.datum, done: v.text, todo: "", created: Date.now() });
+      ziel = { ziel_datum: v.datum };
+    } else {
+      if (!kiTerminAnwenden(v)) { showToast("Diese Vorlesung gibt es in dem Zeitraum nicht"); return; }
+      ziel = { ziel_datum: v.ersatz_datum || v.von };
+    }
+    await sb.from("ki_chat").update({ vorschlag: { ...v, erledigt: true, ...ziel } }).eq("id", m.id);
+    commit();
+    showToast("✓ Angelegt");
+    await kiChatLoad();
+    return;
+  }
   // Bestehende Aufgabe abhaken oder verschieben
   if (v.typ === "erledigt" || v.typ === "verschieben") {
     const t = state.todos.find((x) => x.id === v.ziel_id);
@@ -992,7 +1059,7 @@ async function kiChatAnlegen(id) {
     customList().push(c);
   } else {
     const tid = uid();
-    state.todos.push({ id: tid, title: v.titel, type: v.art === "abgabe" || v.art === "klausur" ? v.art : "todo", priority: "mittel", date: v.datum || iso(new Date()), time: v.uhrzeit || "", duration: DEFAULT_DURATION, done: false });
+    state.todos.push({ id: tid, title: v.titel, type: v.art === "abgabe" || v.art === "klausur" ? v.art : "todo", priority: v.prioritaet || "mittel", date: v.datum || iso(new Date()), time: v.uhrzeit || "", duration: v.dauer > 0 ? v.dauer : DEFAULT_DURATION, done: false });
     ziel = { ziel_id: tid, ziel_datum: v.datum || iso(new Date()) };
   }
   await sb.from("ki_chat").update({ vorschlag: { ...v, erledigt: true, ...ziel } }).eq("id", m.id);
@@ -1025,7 +1092,7 @@ document.addEventListener("submit", async (e) => {
     const v = m && m.vorschlag;
     const titel = String(data.titel || "").trim();
     if (!v || v.erledigt || !titel || !session) return;
-    const neu = { ...v, art: data.art || v.art, titel, datum: data.datum || "", uhrzeit: data.uhrzeit || "", wiederholung: data.wiederholung || "einmal" };
+    const neu = { ...v, art: data.art || v.art, titel, datum: data.datum || "", uhrzeit: data.uhrzeit || "", wiederholung: data.wiederholung || "einmal", prioritaet: data.prioritaet || "mittel", dauer: Number(data.dauer) > 0 ? Math.min(600, Math.round(Number(data.dauer))) : 0 };
     await sb.from("ki_chat").update({ vorschlag: neu }).eq("id", m.id);
     kiChatOpen();
     return;
@@ -1182,6 +1249,10 @@ document.addEventListener("submit", async (e) => {
         if (parseIso(x.date).getDay() !== wd) return;
         x.cancelled = cancel;
       });
+      if (cancel && DATUM_OK.test(data.ersatz_datum || "")) {
+        const start = data.ersatz_uhrzeit ? toMin(data.ersatz_uhrzeit) : ev.start;
+        state.events.push({ ...ev, id: uid(), date: data.ersatz_datum, start, end: start + (ev.end - ev.start), cancelled: false });
+      }
       closeModal(); commit(); break;
     }
     case "evedit": {

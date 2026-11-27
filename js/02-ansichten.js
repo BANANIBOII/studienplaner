@@ -854,6 +854,11 @@ function openCancelRange(id) {
         <div><label class="muted">Bis</label><input type="date" name="bis" required value="${bisDefault}"></div>
       </div>
       <p class="muted" style="font-size:13px">Gilt für alle Termine dieser Vorlesung im Zeitraum (gleicher Wochentag und Uhrzeit).</p>
+      <label class="muted" style="margin-top:8px">Ersatztermin (optional, nur bei „Fällt aus“)</label>
+      <div class="grid2">
+        <div><input type="date" name="ersatz_datum"></div>
+        <div><input type="time" name="ersatz_uhrzeit"></div>
+      </div>
       <div class="modal-foot">
         <button type="button" class="btn ghost" data-act="mclose">Abbrechen</button>
         <button class="btn">Übernehmen</button>
