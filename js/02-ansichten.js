@@ -138,6 +138,28 @@ function dayProgressHTML(todays, now) {
   return `<div class="day-progress"><div class="dp-label"><span>${past} von ${todays.length} Terminen vorbei</span><b>${pct} %</b></div><div class="dp-bar"><div style="width:${pct}%"></div></div></div>`;
 }
 
+// Dashboard: laufende oder nächste Vorlesung heute mit Raum, Restzeit und Notiz-Knopf
+function nowLectureHTML(now) {
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  const evs = state.events
+    .filter((e) => e.date === iso(now) && !e.cancelled && e.end != null)
+    .sort((a, b) => a.start - b.start);
+  const running = evs.find((e) => e.start <= nowMin && nowMin < e.end);
+  const next = running ? null : evs.find((e) => e.start > nowMin);
+  const ev = running || next;
+  if (!ev) return "";
+  const min = running ? ev.end - nowMin : ev.start - nowMin;
+  const restTxt = running ? `noch ${min} Min` : `in ${min} Min`;
+  return `<div class="card now-card">
+    <div class="now-info">
+      <span class="muted">${running ? "Läuft jetzt" : "Als Nächstes"} · ${restTxt}</span>
+      <b>${esc(ev.name)}</b>
+      <span class="muted">${fmtMin(ev.start)}–${fmtMin(ev.end)}${ev.room ? " · " + esc(ev.room) : ""}</span>
+    </div>
+    <button class="btn" data-act="evnote" data-id="${ev.id}">Notiz</button>
+  </div>`;
+}
+
 function viewDashboard() {
   const now = new Date();
   const today = iso(now);
@@ -178,8 +200,10 @@ function viewDashboard() {
   const mensaCard = mensaCardHTML();
   const nextCard = nextDeadlineCard();
   const rueckCard = rueckblickCard();
-  const flow = `<div style="margin-bottom:18px">${nextCard}</div><div class="dash-main">${planCard}<div class="dash-side">${todoCard}${countCard}</div></div><div style="margin-top:18px">${mensaCard}</div><div style="margin-top:18px">${rueckCard}</div><div style="margin-top:18px">${linksCard}</div>`;
+  const nowCard = nowLectureHTML(now);
+  const flow = `${nowCard ? `<div style="margin-bottom:18px">${nowCard}</div>` : ""}<div style="margin-bottom:18px">${nextCard}</div><div class="dash-main">${planCard}<div class="dash-side">${todoCard}${countCard}</div></div><div style="margin-top:18px">${mensaCard}</div><div style="margin-top:18px">${rueckCard}</div><div style="margin-top:18px">${linksCard}</div>`;
   h += searchBtnHTML() + laid("dash", [
+    { id: "now", w: 12, h: 4, html: nowCard },
     { id: "plan", w: 7, nw: 7, h: 20, html: planCard },
     { id: "todo", w: 5, nw: 5, h: 12, html: todoCard },
     { id: "count", w: 5, nw: 5, h: 8, html: countCard },
@@ -806,8 +830,35 @@ function openEventInfo(id) {
     <div class="modal-foot">
       <button type="button" class="btn ghost" data-act="mclose">Schließen</button>
       <button type="button" class="btn ghost" data-act="evnote" data-id="${ev.id}">Notizen</button>
+      <button type="button" class="btn ghost" data-act="evcancel" data-id="${ev.id}">Ausfall</button>
       <button type="button" class="btn" data-act="evopen" data-id="${ev.id}">Bearbeiten</button>
     </div>`);
+}
+
+// Ausfall für einen Zeitraum: gilt für alle Termine derselben Vorlesung (gleicher Wochentag, gleiche Uhrzeit)
+function openCancelRange(id) {
+  const ev = state.events.find((x) => x.id === id);
+  if (!ev) return;
+  const bisDefault = iso(addDays(parseIso(ev.date), 14));
+  openModal(`
+    <h3>Ausfall eintragen</h3>
+    <p class="muted">${esc(ev.name)} · ${fmtMin(ev.start)}–${fmtMin(ev.end)}</p>
+    <form data-form="cancelrange" data-id="${ev.id}">
+      <label class="muted">Aktion</label>
+      <select name="mode">
+        <option value="cancel">Fällt aus</option>
+        <option value="restore">Findet wieder statt</option>
+      </select>
+      <div class="grid2" style="margin-top:10px">
+        <div><label class="muted">Von</label><input type="date" name="von" required value="${ev.date}"></div>
+        <div><label class="muted">Bis</label><input type="date" name="bis" required value="${bisDefault}"></div>
+      </div>
+      <p class="muted" style="font-size:13px">Gilt für alle Termine dieser Vorlesung im Zeitraum (gleicher Wochentag und Uhrzeit).</p>
+      <div class="modal-foot">
+        <button type="button" class="btn ghost" data-act="mclose">Abbrechen</button>
+        <button class="btn">Übernehmen</button>
+      </div>
+    </form>`);
 }
 
 function openEventEdit(id) {

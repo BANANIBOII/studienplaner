@@ -1519,3 +1519,9 @@ body.nav-bottom:not(.locked) .dash-search { display: none !important; }
 /* Zwei-Finger-Zoom der Seite aus: touch-action erlaubt nur Schwenken (auch wenn schon gescrollt wird).
    Die Stunden-Streckung im Stundenplan läuft über eigene Touch-Ereignisse in app.js. */
 html, body { touch-action: pan-x pan-y; }
+
+/* Dashboard: laufende / nächste Vorlesung */
+.now-card { display: flex; align-items: center; justify-content: space-between; gap: 12px; border-left: 6px solid var(--accent); }
+.now-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.now-info b { font-size: 1.1rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.now-card .btn { flex-shrink: 0; }

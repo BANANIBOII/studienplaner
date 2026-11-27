@@ -173,6 +173,7 @@ document.addEventListener("click", async (e) => {
       break;
     }
     case "evopen": openEventEdit(id); break;
+    case "evcancel": openCancelRange(id); break;
     case "npclose":
       closeModal();
       ui.noteFor = null;
@@ -1068,6 +1069,22 @@ document.addEventListener("submit", async (e) => {
         id: uid(), name, date: d, start, end, room: (data.room || "").trim(), desc: "",
       }));
       if (data.protokoll) ensureModule(name);
+      closeModal(); commit(); break;
+    }
+    case "cancelrange": {
+      const ev = state.events.find((x) => x.id === f.dataset.id);
+      if (!ev) break;
+      let von = data.von || ev.date;
+      let bis = data.bis || von;
+      if (bis < von) [von, bis] = [bis, von];
+      const wd = parseIso(ev.date).getDay();
+      const cancel = data.mode !== "restore";
+      state.events.forEach((x) => {
+        if (x.name !== ev.name || x.start !== ev.start || x.end !== ev.end) return;
+        if (x.date < von || x.date > bis) return;
+        if (parseIso(x.date).getDay() !== wd) return;
+        x.cancelled = cancel;
+      });
       closeModal(); commit(); break;
     }
     case "evedit": {
