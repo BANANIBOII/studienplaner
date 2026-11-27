@@ -1,6 +1,6 @@
 // Offline-Unterstützung: lädt immer aus dem Netz, nutzt den Cache nur wenn offline.
-const CACHE = "studienplaner-v38";
-const FILES = ["./", "index.html", "styles.css", "features.css", "app.js", "config.js", "manifest.json", "icon.svg"];
+const CACHE = "studienplaner-v39";
+const FILES = ["./", "index.html", "styles.css", "features.css", "js/01-kern.js", "js/02-ansichten.js", "js/03-einstellungen.js", "js/04-gesten-kalender.js", "js/05-klicks-backup.js", "js/06-cloud-start.js", "config.js", "manifest.json", "icon.svg"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(FILES)).then(() => self.skipWaiting()));
